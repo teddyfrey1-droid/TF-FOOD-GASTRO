@@ -9,6 +9,7 @@ const LINKS = [
   { href: '/admin/produits', label: 'Produits' },
   { href: '/admin/calculateur', label: 'Calculateur' },
   { href: '/admin/chiffre-affaires', label: "Chiffre d'affaires" },
+  { href: '/admin/historique', label: 'Historique' },
 ];
 
 export function AdminNav() {

@@ -5,3 +5,4 @@ export * from './forecast';
 export * from './targets';
 export * from './reorder';
 export * from './consumption';
+export * from './anomalies';

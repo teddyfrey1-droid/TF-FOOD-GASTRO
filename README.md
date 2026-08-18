@@ -167,7 +167,30 @@ un comptage incomplet.
 
 ---
 
-## 4. Qui voit quoi
+## 4. Ce que le directeur peut regarder
+
+- **Tableau de bord** : le CA prévisionnel du jour, l'état des deux comptages,
+  et un rappel tant que des données provisoires traînent en base.
+- **Historique** : tous les comptages sur une période, filtrables par session et
+  par employé. Le détail d'un comptage montre saladbar / frigo / total, **la
+  cible et le seuil tels qu'ils étaient ce jour-là**, la relance demandée et
+  celle réellement cochée.
+- **Anomalies** : session manquante, comptage validé en moins de deux minutes,
+  variation d'un facteur 3 par rapport à la veille, produit tombé à zéro
+  (rupture avérée), et produit jamais passé sous son seuil en dix comptages
+  (cible probablement trop haute).
+- **Consommation réelle** : combien de gastros partent réellement au service du
+  midi, pour 1 000 € de chiffre d'affaires, face au ratio théorique du
+  calculateur. Un bouton permet d'appliquer le ratio constaté.
+- **Exports CSV** : la période complète ou une session précise, au format que
+  votre Excel français ouvre sans rien reformater.
+
+> La consommation réelle a besoin des **deux** comptages validés le même jour
+> **et** du CA du midi saisi. Sans le CA du midi, la colonne reste vide.
+
+---
+
+## 5. Qui voit quoi
 
 | | Employé | Directeur / Propriétaire |
 |---|---|---|
@@ -185,7 +208,7 @@ automatiquement par une cinquantaine de tests de sécurité (voir §6).
 
 ---
 
-## 5. Installation
+## 6. Installation
 
 ### Prérequis
 
@@ -227,7 +250,7 @@ pnpm typecheck    # vérification TypeScript
 
 ---
 
-## 6. Comptes et rôles
+## 7. Comptes et rôles
 
 Trois rôles : `employee`, `manager`, `owner`.
 
@@ -243,14 +266,14 @@ update public.profiles set role = 'owner' where id = '<uuid du compte>';
 
 ---
 
-## 7. Tests
+## 8. Tests
 
 Le cœur métier est testé deux fois, parce qu'il existe en deux exemplaires :
 en TypeScript (pour le simulateur du back-office) et en SQL (pour la validation
 d'un comptage). Les deux doivent donner exactement le même résultat.
 
 ```bash
-pnpm test       # 98 tests TypeScript : logique de calcul, steppers, lecture des CSV
+pnpm test       # 117 tests TypeScript : calcul, steppers, anomalies, CSV
 pnpm db:test    # tests SQL : calcul, sécurité RLS, journal d'audit
 ```
 
@@ -274,7 +297,7 @@ Sont notamment couverts :
 
 ---
 
-## 8. Organisation du code
+## 9. Organisation du code
 
 ```
 src/lib/mep/          Le calcul métier, pur et sans base de données
@@ -296,7 +319,7 @@ scripts/              Imports CSV et rejeu de la base
 
 ---
 
-## 9. Charger vos données
+## 10. Charger vos données
 
 ### Le calculateur
 
@@ -334,14 +357,14 @@ de doublon.
 
 ---
 
-## 10. État d'avancement
+## 11. État d'avancement
 
 | Phase | Contenu | État |
 |---|---|---|
 | 0 | Fondations : schéma, RLS, tests de sécurité, seed, authentification | ✅ |
 | 1 | Back-office : produits, calculateur, simulateur, CA, imports CSV | ✅ |
 | 2 | Parcours employé : comptage aux steppers, rapport de relance | ✅ |
-| 3 | Historique, exports, consommation réelle, détection d'anomalies | à venir |
+| 3 | Historique, exports, consommation réelle, détection d'anomalies | ✅ |
 | 4 | PWA : installation iOS, mode hors ligne, rappels, impression | à venir |
 
 **Hors périmètre de la version 1 :** la gestion des DLC et la production en
@@ -349,7 +372,7 @@ avance pour le lendemain.
 
 ---
 
-## 11. Données encore à fournir
+## 12. Données encore à fournir
 
 Le jeu de démonstration contient des valeurs **provisoires**, signalées par la
 mention « à confirmer » à côté de chaque format GN. Elles ne doivent pas servir
