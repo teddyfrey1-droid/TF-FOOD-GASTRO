@@ -213,7 +213,7 @@ en TypeScript (pour le simulateur du back-office) et en SQL (pour la validation
 d'un comptage). Les deux doivent donner exactement le même résultat.
 
 ```bash
-pnpm test       # 69 tests TypeScript sur toute la logique de calcul
+pnpm test       # 93 tests TypeScript : logique de calcul et lecture des CSV
 pnpm db:test    # tests SQL : calcul, sécurité RLS, journal d'audit
 ```
 
@@ -247,22 +247,62 @@ src/lib/mep/          Le calcul métier, pur et sans base de données
                         targets     cible et seuil
                         reorder     décision de relance et tri du rapport
                         consumption consommation réelle du midi
+src/lib/admin/        Lectures du back-office et simulateur
 src/lib/supabase/     Connexion à la base (navigateur, serveur, administration)
 src/app/              Pages : connexion, accueil, comptage, back-office
+src/components/admin/ Écrans du back-office
 supabase/migrations/  Schéma versionné
 supabase/tests/       Tests SQL (calcul, sécurité, audit)
 tests/                Tests TypeScript
-scripts/db-test.sh    Rejoue schéma + seed + tests
+scripts/              Imports CSV et rejeu de la base
 ```
 
 ---
 
-## 8. État d'avancement
+## 8. Charger vos données
+
+### Le calculateur
+
+Exportez le Google Sheet en CSV, puis :
+
+```bash
+pnpm import:calculateur --file data/calculateur.csv --dry-run   # simulation
+pnpm import:calculateur --file data/calculateur.csv             # pour de vrai
+```
+
+`--dry-run` lit le fichier, signale les produits introuvables, les valeurs qui
+ne tombent pas sur un demi-gastro et les trous entre tranches de CA — sans rien
+écrire. Modèle de fichier : `data/calculateur.example.csv`.
+
+L'import est **versionné** : les anciennes règles sont closes à la veille, pas
+effacées. Ajoutez `--date 2026-09-01` pour faire entrer un nouveau calculateur
+en vigueur à une date précise.
+
+### Le chiffre d'affaires
+
+```bash
+pnpm import:ca --file data/ca-n-1.csv --dry-run
+pnpm import:ca --file data/ca-n-1.csv
+pnpm import:ca --file data/ca-2026.csv --actuals   # le CA réel de cette année
+```
+
+Modèle : `data/ca-n-1.example.csv`. Les dates sont acceptées en `2025-08-19`
+comme en `19/08/2025`, et les montants en `3 200,50` comme en `3200.50`.
+
+Les deux scripts sont **ré-exécutables** : relancer le même fichier ne crée pas
+de doublon.
+
+> Les fichiers `data/*.csv` ne sont pas versionnés dans Git — ce sont vos
+> données commerciales. Seuls les modèles `*.example.csv` le sont.
+
+---
+
+## 9. État d'avancement
 
 | Phase | Contenu | État |
 |---|---|---|
 | 0 | Fondations : schéma, RLS, tests de sécurité, seed, authentification | ✅ |
-| 1 | Back-office : produits, calculateur, simulateur, CA, imports CSV | à venir |
+| 1 | Back-office : produits, calculateur, simulateur, CA, imports CSV | ✅ |
 | 2 | Parcours employé : comptage aux steppers, rapport de relance | à venir |
 | 3 | Historique, exports, consommation réelle, détection d'anomalies | à venir |
 | 4 | PWA : installation iOS, mode hors ligne, rappels, impression | à venir |
@@ -272,7 +312,7 @@ avance pour le lendemain.
 
 ---
 
-## 9. Données encore à fournir
+## 10. Données encore à fournir
 
 Le jeu de démonstration contient des valeurs **provisoires**, signalées par la
 mention « à confirmer » à côté de chaque format GN. Elles ne doivent pas servir

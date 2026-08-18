@@ -316,5 +316,69 @@ begin
 end
 $$;
 
+
+-- ---------------------------------------------------------------------
+-- Versionnage : deux versions ne doivent jamais s'appliquer le même jour
+--
+-- Reproduit ce que fait le back-office quand on modifie une cellule du
+-- calculateur : la version en cours est close à hier, une nouvelle est
+-- ouverte aujourd'hui.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  v_saumon uuid;
+  v_rule   uuid;
+  v_count  int;
+begin
+  select id into v_saumon from public.products where name = 'Saumon';
+
+  -- La règle qui couvre 3 520 € aujourd'hui.
+  select id into v_rule
+  from public.calculator_rules
+  where product_id = v_saumon
+    and mode = 'bracket'
+    and 3520 >= coalesce(ca_min, -1)
+    and 3520 <  coalesce(ca_max, 1e9)
+    and valid_from <= current_date
+    and (valid_to is null or valid_to >= current_date)
+  limit 1;
+
+  -- On la clôt à hier et on ouvre une nouvelle version aujourd'hui.
+  update public.calculator_rules set valid_to = current_date - 1 where id = v_rule;
+
+  insert into public.calculator_rules (product_id, mode, ca_min, ca_max, target_qty, valid_from)
+  select product_id, mode, ca_min, ca_max, 10, current_date
+  from public.calculator_rules where id = v_rule;
+
+  select count(*)::int into v_count
+  from public.calculator_rules
+  where product_id = v_saumon
+    and mode = 'bracket'
+    and 3520 >= coalesce(ca_min, -1)
+    and 3520 <  coalesce(ca_max, 1e9)
+    and valid_from <= current_date
+    and (valid_to is null or valid_to >= current_date);
+
+  perform pg_temp.check_equal(
+    'Une seule version de règle s''applique aujourd''hui', v_count, 1);
+
+  perform pg_temp.check_equal(
+    'La nouvelle version pilote la cible du jour',
+    (select target from public.mep_product_targets(current_date, 'morning') where product_name = 'Saumon'),
+    10.0::numeric);
+
+  perform pg_temp.check_equal(
+    'L''ancienne version reste consultable pour les dates passées',
+    (select count(*)::int from public.calculator_rules
+     where id = v_rule and valid_to = current_date - 1),
+    1);
+
+  -- Nettoyage : on rétablit l'état d'origine.
+  delete from public.calculator_rules
+  where product_id = v_saumon and valid_from = current_date and target_qty = 10;
+  update public.calculator_rules set valid_to = null where id = v_rule;
+end
+$$;
+
 \echo ''
 \echo '===== TESTS DE CALCUL : TOUS PASSÉS ====='
