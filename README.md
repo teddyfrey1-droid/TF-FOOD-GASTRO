@@ -42,15 +42,28 @@ L'employé compte les deux zones séparément — la vitrine réfrigérée en ha
 réserve en bas — et l'application fait l'addition. C'est le **total** qui est
 comparé au seuil et à la cible.
 
-### Les deux comptages
+### Les deux comptages, les deux services
 
-- **Le matin**, avant l'ouverture : la mise en place de la journée.
-- **L'après-midi**, après le rush du midi : ce qui a été consommé, et ce qu'il
-  faut relancer pour le soir.
+La journée se déroule ainsi :
+
+```
+comptage MATIN → production → SERVICE DU MIDI
+  → comptage APRÈS-MIDI → production → SERVICE DU SOIR
+    → (ce qui reste n'est pas jeté) → comptage du LENDEMAIN MATIN
+```
+
+Les deux comptages ne servent pas à faire des statistiques : ils servent à
+**remettre le stock à niveau avant chaque service**, pour ne jamais tomber à
+court de grenade ou d'avocat, ni au midi ni au soir.
 
 Par défaut la cible est **la même aux deux moments** : on remet simplement à
-niveau. Un réglage permettra plus tard de l'abaisser le soir si on constate de
-la surproduction.
+niveau. Le réglage « coefficient de l'après-midi » permet de l'abaisser pour le
+soir si celui-ci consomme moins — et l'application vous dit maintenant de
+combien (voir §4).
+
+Ce qui reste après le service du soir **n'est pas jeté** : il constitue la base
+du lendemain. C'est ce qui rend la mesure de la consommation possible sans
+aucun comptage supplémentaire.
 
 ---
 
@@ -123,10 +136,17 @@ entier : 5 gastros de saumon à 6 minutes le gastro font 30 minutes.
 
 ### Étape 7 — Mesurer ce qui part réellement
 
-Les deux comptages encadrent le service du midi : la différence donne la
-consommation réelle, sans rien demander de plus à l'employé. Rapportée au
-chiffre d'affaires du jour, elle permet à terme de recalibrer le calculateur
-sur du constaté plutôt que sur du ressenti. Voir §4.
+Les comptages encadrent chaque service, donc la consommation se déduit sans
+rien demander de plus à l'employé :
+
+```
+consommé au MIDI = (stock du matin      + produit le matin)      − stock d'après-midi
+consommé au SOIR = (stock d'après-midi  + produit l'après-midi)  − stock du lendemain matin
+```
+
+La seconde ligne fonctionne **parce que les invendus du soir ne sont pas
+jetés** : le stock du lendemain matin est exactement ce qui restait à la
+fermeture. Voir §4.
 
 ### Ce qui protège l'historique
 
@@ -191,42 +211,47 @@ effacées : le téléphone est parfois partagé.
   variation d'un facteur 3 par rapport à la veille, produit tombé à zéro
   (rupture avérée), et produit jamais passé sous son seuil en dix comptages
   (cible probablement trop haute).
-- **Consommation réelle** : combien de gastros partent réellement au service du
-  midi, pour 1 000 € de chiffre d'affaires de la journée. Un bouton permet
-  d'appliquer le ratio constaté au calculateur.
+- **Consommation réelle** : combien de gastros partent réellement à chaque
+  service, midi et soir séparément, et ce que ça représente pour 1 000 € de
+  chiffre d'affaires. Un bouton permet d'appliquer le ratio constaté au
+  calculateur.
 - **Exports CSV** : la période complète ou une session précise, au format que
   votre Excel français ouvre sans rien reformater.
 
 ### Comment la consommation est mesurée
 
-Les deux comptages encadrent le service du midi, ce qui donne une mesure
-directe :
+Tout est mesuré, rien n'est estimé :
 
 ```
-consommé au midi = (stock du matin + ce qui a été produit le matin) − stock d'après-midi
+consommé au MIDI = (stock du matin      + produit le matin)      − stock d'après-midi
+consommé au SOIR = (stock d'après-midi  + produit l'après-midi)  − stock du lendemain matin
 ```
 
-Le chiffre d'affaires étant enregistré **à la journée**, la colonne de
-référence est :
+Le service du soir se mesure grâce au **comptage du lendemain matin** : comme
+les invendus ne sont pas jetés, ce qu'on retrouve le matin est exactement ce
+qui restait à la fermeture. Aucun comptage supplémentaire n'est demandé à
+personne.
 
-> **gastros consommés au midi, pour 1 000 € de chiffre d'affaires de la journée**
+L'écran affiche donc, produit par produit :
 
-Rien n'y est estimé : même numérateur, même dénominateur, tous les jours. C'est
-ce chiffre qui se compare d'une semaine à l'autre et qui montre si un produit
-part plus vite qu'avant.
+| Colonne | Ce qu'elle dit |
+|---|---|
+| **Midi** | gastros consommés au déjeuner, en moyenne |
+| **Soir** | gastros consommés au dîner, en moyenne |
+| **Soir / midi** | lequel des deux services consomme le plus |
+| **Journée** | consommation totale pour 1 000 € de chiffre d'affaires |
+| **Cible calculateur** | ce que le calculateur prévoit, pour comparaison |
+| **Marge** | l'écart entre les deux |
 
-Pour le comparer à la **cible du calculateur**, en revanche, il faut une
-information de plus : le calculateur dimensionne une journée entière, alors que
-la mesure ne couvre que le midi. Il faut donc savoir quelle part du chiffre
-d'affaires se fait au déjeuner. Ce réglage se saisit dans
-**Chiffre d'affaires → Réglages**.
+> Une journée est entièrement mesurée quand elle a ses deux comptages validés,
+> son chiffre d'affaires saisi, **et** le comptage du lendemain matin. La
+> journée d'hier n'est donc complète qu'à partir de ce matin — c'est le nombre
+> entre parenthèses dans la colonne « Jours ».
 
-Tant qu'il n'est pas renseigné, la colonne « journée entière » reste vide :
-**aucun chiffre n'est inventé**. Et si vous vous mettez un jour à saisir le CA
-du midi séparément, il prime automatiquement et le réglage devient inutile.
-
-> La consommation a besoin des **deux** comptages validés le même jour et du
-> chiffre d'affaires du jour saisi.
+**Le coefficient de l'après-midi se règle tout seul.** L'écran vous dit
+combien le soir consomme par rapport au midi. Si le soir ne fait que 70 % du
+midi, vous pouvez abaisser le coefficient d'autant : les cibles du soir
+baissent, et la surproduction avec. C'est mesuré, pas ressenti.
 
 **Lire la colonne « Marge ».** C'est l'écart entre la cible du calculateur et
 la consommation constatée. Une marge **positive** est normale : la cible
@@ -361,7 +386,7 @@ en TypeScript (pour le simulateur du back-office) et en SQL (pour la validation
 d'un comptage). Les deux doivent donner exactement le même résultat.
 
 ```bash
-pnpm test       # 129 tests TypeScript : calcul, steppers, consommation, anomalies, CSV
+pnpm test       # 133 tests TypeScript : calcul, steppers, consommation, anomalies, CSV
 pnpm db:test    # tests SQL : calcul, sécurité RLS, audit, comptage, rappels
 ```
 

@@ -4,50 +4,52 @@ import type { ConsumptionReport } from '@/lib/admin/history';
 import { ApplyObservedRatioButton } from './apply-observed-ratio';
 
 /**
- * §5.7 — Ce que la cuisine consomme réellement, face à ce que le calculateur
- * prévoit.
+ * §5.7 — Ce que la cuisine consomme réellement à chaque service, face à ce que
+ * le calculateur prévoit.
  *
- * Le chiffre d'affaires étant enregistré à la journée, la colonne de
- * référence est la consommation du midi rapportée au CA de la journée :
- * entièrement mesurée. L'extrapolation sur la journée entière, elle, dépend
- * d'un réglage et est signalée comme telle.
+ * Tout ici est mesuré : les deux comptages encadrent le service du midi, et le
+ * comptage du lendemain matin ferme celui du soir puisque les invendus ne sont
+ * pas jetés.
  */
 export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
-  const withData = report.rows.filter((row) => row.sampleDays > 0);
+  const withData = report.rows.filter((row) => row.completeDays > 0 || row.lunchOnlyDays > 0);
 
   if (withData.length === 0) {
     return (
       <Card className="space-y-2 p-8 text-center text-sm">
         <p>Pas encore de consommation mesurable.</p>
         <p className="text-muted-foreground">
-          Il faut, pour une même journée : le comptage du matin validé, celui de l&apos;après-midi
-          validé, et le <strong>chiffre d&apos;affaires de la journée</strong> saisi dans
-          l&apos;onglet Chiffre d&apos;affaires.
+          Il faut, pour une même journée : les <strong>deux comptages validés</strong> et le{' '}
+          <strong>chiffre d&apos;affaires du jour</strong> saisi. Le service du soir se mesure
+          grâce au comptage du <strong>lendemain matin</strong> — c&apos;est lui qui dit ce qui
+          restait après la fermeture.
         </p>
       </Card>
     );
   }
 
-  const canExtrapolate = report.lunchShare !== null || report.hasMeasuredLunchRevenue;
+  const eveningRatio = report.overallEveningRatio;
 
   return (
     <div className="space-y-3">
       <p className="text-muted-foreground text-sm">
-        Gastros consommés pendant le service du midi, rapportés au chiffre d&apos;affaires de la
-        journée. Calculé sur les jours où les deux comptages ont été validés et où le CA du jour
-        est connu.
+        Gastros réellement consommés à chaque service, en moyenne sur la période.{' '}
+        {report.completeDays} journée{report.completeDays > 1 ? 's' : ''} entièrement mesurée
+        {report.completeDays > 1 ? 's' : ''}.
       </p>
 
-      {!canExtrapolate ? (
-        <Card className="border-amber-500/40 bg-amber-500/5 p-4 text-sm">
+      {eveningRatio !== null ? (
+        <Card className="p-4 text-sm">
           <p>
-            La colonne <strong>« journée entière »</strong> reste vide : elle demande de savoir
-            quelle part du chiffre d&apos;affaires se fait au déjeuner.
+            Sur cette période, le service du soir consomme{' '}
+            <strong>{Math.round(eveningRatio * 100)} %</strong> de ce que consomme le midi.
           </p>
           <p className="text-muted-foreground mt-2">
-            Renseignez-la dans <strong>Chiffre d&apos;affaires → Réglages</strong>. C&apos;est ce
-            qui permet de comparer la consommation réelle à la cible du calculateur, laquelle
-            dimensionne une journée complète.
+            {eveningRatio < 0.9
+              ? `Le soir est plus calme que le midi. Vous pouvez abaisser le « coefficient de l'après-midi » vers ${eveningRatio.toFixed(2).replace('.', ',')} dans Chiffre d'affaires → Réglages : les cibles du soir baisseront d'autant, et la surproduction avec.`
+              : eveningRatio > 1.1
+                ? `Le soir consomme plus que le midi. Un coefficient d'après-midi inférieur à 1 ferait courir un risque de rupture.`
+                : `Les deux services se valent : le coefficient d'après-midi à 1,0 est le bon réglage.`}
           </p>
         </Card>
       ) : null}
@@ -60,15 +62,24 @@ export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
                 Produit
               </th>
               <th scope="col" className="px-3 py-3 text-right font-semibold">
-                Consommé au midi
+                Midi
                 <span className="text-muted-foreground block text-[11px] font-normal">
-                  / 1 000 € de CA journée · mesuré
+                  gastros / jour
                 </span>
               </th>
               <th scope="col" className="px-3 py-3 text-right font-semibold">
-                Journée entière
+                Soir
                 <span className="text-muted-foreground block text-[11px] font-normal">
-                  {report.hasMeasuredLunchRevenue ? 'depuis le CA du midi' : 'estimé'}
+                  gastros / jour
+                </span>
+              </th>
+              <th scope="col" className="px-3 py-3 text-right font-semibold">
+                Soir / midi
+              </th>
+              <th scope="col" className="px-3 py-3 text-right font-semibold">
+                Journée
+                <span className="text-muted-foreground block text-[11px] font-normal">
+                  / 1 000 € de CA
                 </span>
               </th>
               <th scope="col" className="px-3 py-3 text-right font-semibold">
@@ -91,10 +102,16 @@ export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
                   {row.productName}
                 </th>
                 <td className="px-3 py-2 text-right font-medium tabular-nums">
-                  {formatQty(row.lunchPerDaily1000)}
+                  {formatQty(row.lunchAvg)}
+                </td>
+                <td className="px-3 py-2 text-right font-medium tabular-nums">
+                  {formatQty(row.eveningAvg)}
                 </td>
                 <td className="text-muted-foreground px-3 py-2 text-right tabular-nums">
-                  {formatQty(row.fullDayPer1000)}
+                  {row.eveningRatio === null ? '—' : formatPercent(row.eveningRatio, 0)}
+                </td>
+                <td className="px-3 py-2 text-right tabular-nums">
+                  {formatQty(row.dailyPer1000)}
                 </td>
                 <td className="text-muted-foreground px-3 py-2 text-right tabular-nums">
                   {formatQty(row.theoreticalPer1000)}
@@ -111,14 +128,20 @@ export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
                     : `${row.deviation >= 0 ? '+' : ''}${formatPercent(row.deviation, 0)}`}
                 </td>
                 <td className="text-muted-foreground px-3 py-2 text-right text-xs tabular-nums">
-                  {row.sampleDays}
+                  {row.completeDays}
+                  {row.lunchOnlyDays > 0 ? (
+                    <span title="journées où seul le midi a pu être mesuré">
+                      {' '}
+                      (+{row.lunchOnlyDays})
+                    </span>
+                  ) : null}
                 </td>
                 <td className="px-4 py-2 text-right">
-                  {row.fullDayPer1000 !== null ? (
+                  {row.dailyPer1000 !== null ? (
                     <ApplyObservedRatioButton
                       productId={row.productId}
                       productName={row.productName}
-                      observedPer1000={row.fullDayPer1000}
+                      observedPer1000={row.dailyPer1000}
                     />
                   ) : null}
                 </td>
@@ -130,15 +153,17 @@ export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
 
       <div className="text-muted-foreground space-y-1 text-xs">
         <p>
-          <strong>Marge</strong> = écart entre la cible du calculateur et la consommation
-          constatée. Une marge positive est normale : la cible intègre volontairement de la
-          sécurité. Une marge <span className="text-destructive font-medium">négative</span>{' '}
-          signale une cible trop basse — on a consommé plus que prévu, donc frôlé la rupture.
+          <strong>Soir</strong> se mesure grâce au comptage du lendemain matin : ce qui restait à
+          la fermeture n&apos;étant pas jeté, le stock du lendemain dit exactement ce qui est parti
+          le soir. La colonne <strong>Jours</strong> compte les journées entièrement mesurées ; le
+          nombre entre parenthèses, celles où seul le midi a pu l&apos;être — typiquement la
+          journée d&apos;hier, dont le lendemain n&apos;est pas encore compté.
         </p>
         <p>
-          « Cible calculateur » n&apos;est renseignée que pour les produits réglés au ratio.
-          Appliquer le ratio constaté bascule le produit en mode ratio et crée une nouvelle version
-          du calculateur — l&apos;historique n&apos;est pas réécrit.
+          <strong>Marge</strong> = écart entre la cible du calculateur et la consommation d&apos;une
+          journée. Une marge positive est normale : la cible intègre volontairement de la sécurité.
+          Une marge <span className="text-destructive font-medium">négative</span> signale une
+          cible trop basse — on a consommé plus que prévu, donc frôlé la rupture.
         </p>
       </div>
     </div>

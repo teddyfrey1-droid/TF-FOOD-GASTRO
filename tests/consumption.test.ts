@@ -1,110 +1,144 @@
 import { describe, expect, it } from 'vitest';
 import {
   averageObservedRatio,
-  computeLunchConsumption,
+  computeServiceConsumption,
+  eveningToLunchRatio,
+  lunchShareOfDay,
+  per1000,
   ratioDeviation,
-  type ConsumptionInput,
+  type ServiceConsumptionInput,
 } from '@/lib/mep/consumption';
 
-function input(overrides: Partial<ConsumptionInput> = {}): ConsumptionInput {
+/**
+ * Journée type : 5 gastros le matin, 3 produits avant le midi, 2 restants
+ * après le service ; 4 produits l'après-midi, 1 restant le lendemain matin.
+ *
+ *   midi = 5 + 3 − 2 = 6
+ *   soir = 2 + 4 − 1 = 5
+ */
+function input(overrides: Partial<ServiceConsumptionInput> = {}): ServiceConsumptionInput {
   return {
     productId: 'p1',
     stockMorning: 5,
     productionMorningDone: 3,
     stockAfternoon: 2,
+    productionAfternoonDone: 4,
+    stockNextMorning: 1,
     ...overrides,
   };
 }
 
-/**
- * Le restaurant enregistre son chiffre d'affaires À LA JOURNÉE, pas par
- * service. La consommation du midi se rapporte donc au CA du jour.
- */
-describe('§5.7 — consommation du midi', () => {
-  it('mesure la consommation entre les deux comptages', () => {
-    const result = computeLunchConsumption(input(), { dailyHt: 4000 });
-    // 5 au matin + 3 produits − 2 restants = 6 gastros partis au midi.
-    expect(result.consumedLunch).toBe(6);
+describe('§5.7 — consommation des deux services', () => {
+  it('mesure le service du midi entre les deux comptages', () => {
+    expect(computeServiceConsumption(input()).lunch).toBe(6);
   });
 
-  it('compte la production du matin réellement cochée', () => {
-    expect(
-      computeLunchConsumption(input({ productionMorningDone: 0 }), { dailyHt: 4000 })
-        .consumedLunch,
-    ).toBe(3);
+  it('mesure le service du soir grâce au comptage du lendemain matin', () => {
+    // Les invendus du soir ne sont pas jetés : le stock du lendemain matin dit
+    // exactement ce qui est parti le soir.
+    expect(computeServiceConsumption(input()).evening).toBe(5);
   });
 
-  it('rapporte la consommation au CA de la JOURNÉE, sans hypothèse', () => {
-    const result = computeLunchConsumption(input(), { dailyHt: 4000 });
-    // 6 gastros pour 4 000 € => 1,5 gastro pour 1 000 €.
-    expect(result.lunchPerDaily1000).toBe(1.5);
-    expect(result.basis).toBeNull();
+  it('totalise la journée entière', () => {
+    const result = computeServiceConsumption(input());
+    expect(result.daily).toBe(11);
+    expect(result.isComplete).toBe(true);
   });
 
-  it('n’extrapole rien tant que la part du midi est inconnue', () => {
-    const result = computeLunchConsumption(input(), { dailyHt: 4000 });
-    expect(result.fullDayPer1000).toBeNull();
-    expect(result.basis).toBeNull();
+  it('compte la production réellement cochée à chaque service', () => {
+    const result = computeServiceConsumption(
+      input({ productionMorningDone: 0, productionAfternoonDone: 0 }),
+    );
+    expect(result.lunch).toBe(3);
+    expect(result.evening).toBe(1);
   });
 
-  it('extrapole la journée entière quand la part du midi est réglée', () => {
-    const result = computeLunchConsumption(input(), { dailyHt: 4000, lunchShare: 0.6 });
-    // 1,5 mesuré au midi, qui pèse 60 % du CA => 2,5 sur la journée.
-    expect(result.fullDayPer1000).toBe(2.5);
-    expect(result.basis).toBe('estime');
+  it('ne devine pas le soir tant que le lendemain n’est pas compté', () => {
+    const result = computeServiceConsumption(input({ stockNextMorning: null }));
+    expect(result.lunch).toBe(6);
+    expect(result.evening).toBeNull();
+    expect(result.daily).toBeNull();
+    expect(result.isComplete).toBe(false);
   });
 
-  it('préfère le CA du midi réel dès qu’il est saisi', () => {
-    const result = computeLunchConsumption(input(), {
-      dailyHt: 4000,
-      lunchHt: 2400,
-      lunchShare: 0.9,
-    });
-    // Le CA du midi est connu : la part réelle (2400/4000 = 60 %) l'emporte
-    // sur le réglage à 90 %.
-    expect(result.basis).toBe('saisi');
-    expect(result.fullDayPer1000).toBe(2.5);
-  });
-
-  it('ignore une part du midi aberrante', () => {
-    for (const lunchShare of [0, -0.5, 1.5]) {
-      expect(computeLunchConsumption(input(), { dailyHt: 4000, lunchShare }).fullDayPer1000).toBeNull();
-    }
-  });
-
-  it('ne calcule aucun ratio sans CA du jour', () => {
-    const result = computeLunchConsumption(input(), { dailyHt: null, lunchShare: 0.6 });
-    expect(result.consumedLunch).toBe(6);
-    expect(result.lunchPerDaily1000).toBeNull();
-    expect(result.fullDayPer1000).toBeNull();
-  });
-
-  it('ne calcule aucun ratio sur un CA nul', () => {
-    expect(computeLunchConsumption(input(), { dailyHt: 0 }).lunchPerDaily1000).toBeNull();
+  it('gère un service qui n’a rien consommé', () => {
+    const result = computeServiceConsumption(
+      input({ stockAfternoon: 8, productionAfternoonDone: 0, stockNextMorning: 8 }),
+    );
+    expect(result.lunch).toBe(0);
+    expect(result.evening).toBe(0);
+    expect(result.daily).toBe(0);
   });
 
   it('remonte une consommation négative telle quelle, pour qu’elle soit écartée', () => {
-    // Plus de stock l'après-midi que le matin : c'est une erreur de comptage,
-    // pas une vente. La détection se fait chez l'appelant.
-    const result = computeLunchConsumption(
-      input({ stockMorning: 2, productionMorningDone: 0, stockAfternoon: 5 }),
-      { dailyHt: 4000 },
-    );
-    expect(result.consumedLunch).toBe(-3);
+    // Plus de stock le lendemain qu'après le service : erreur de comptage, ou
+    // production non cochée. Ce n'est pas une vente.
+    const result = computeServiceConsumption(input({ stockNextMorning: 20 }));
+    expect(result.evening).toBeLessThan(0);
   });
 
   it('ne dérive pas sur des demi-gastros', () => {
-    const result = computeLunchConsumption(
-      input({ stockMorning: 0.1, productionMorningDone: 0.2, stockAfternoon: 0 }),
-      { dailyHt: 1000 },
+    const result = computeServiceConsumption({
+      productId: 'p1',
+      stockMorning: 0.1,
+      productionMorningDone: 0.2,
+      stockAfternoon: 0,
+      productionAfternoonDone: 0.5,
+      stockNextMorning: 0.2,
+    });
+    expect(result.lunch).toBe(0.3);
+    expect(result.evening).toBe(0.3);
+    expect(result.daily).toBe(0.6);
+  });
+});
+
+describe('rapport au chiffre d’affaires de la journée', () => {
+  it('ramène la consommation à 1 000 € de CA', () => {
+    // 11 gastros pour 4 400 € => 2,5 pour 1 000 €.
+    expect(per1000(11, 4400)).toBe(2.5);
+  });
+
+  it('ne calcule rien sans CA', () => {
+    expect(per1000(11, null)).toBeNull();
+    expect(per1000(11, 0)).toBeNull();
+    expect(per1000(null, 4400)).toBeNull();
+  });
+});
+
+describe('équilibre entre les deux services', () => {
+  it('mesure la part du midi dans la journée', () => {
+    // 6 sur 11 => 55 %.
+    expect(lunchShareOfDay(computeServiceConsumption(input()))).toBeCloseTo(0.545, 3);
+  });
+
+  it('ne calcule pas de part sur une journée incomplète', () => {
+    expect(lunchShareOfDay(computeServiceConsumption(input({ stockNextMorning: null })))).toBeNull();
+  });
+
+  it('ne calcule pas de part quand rien n’a été consommé', () => {
+    const result = computeServiceConsumption(
+      input({ stockAfternoon: 8, productionAfternoonDone: 0, stockNextMorning: 8 }),
     );
-    expect(result.consumedLunch).toBe(0.3);
+    expect(lunchShareOfDay(result)).toBeNull();
+  });
+
+  it('compare le soir au midi — c’est le réglage du coefficient d’après-midi', () => {
+    // Le soir consomme 5 quand le midi consomme 6 : environ 83 %.
+    expect(eveningToLunchRatio(6, 5)).toBeCloseTo(0.833, 3);
+    // Services équivalents : coefficient 1,0.
+    expect(eveningToLunchRatio(6, 6)).toBe(1);
+    // Soir plus chargé : abaisser la cible du soir serait risqué.
+    expect(eveningToLunchRatio(4, 6)).toBe(1.5);
+  });
+
+  it('ne compare rien sans mesure du soir', () => {
+    expect(eveningToLunchRatio(6, null)).toBeNull();
+    expect(eveningToLunchRatio(0, 5)).toBeNull();
   });
 });
 
 describe('marge entre cible et consommation', () => {
   it('une cible au-dessus de la consommation donne une marge positive', () => {
-    // Cible 3, consommation constatée 2 => 33 % de marge.
     expect(ratioDeviation(3, 2)).toBeCloseTo(0.3333, 3);
   });
 

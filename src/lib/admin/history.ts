@@ -1,8 +1,15 @@
 import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
-import { averageObservedRatio, computeLunchConsumption, ratioDeviation } from '@/lib/mep';
+import {
+  averageObservedRatio,
+  computeServiceConsumption,
+  eveningToLunchRatio,
+  per1000,
+  ratioDeviation,
+} from '@/lib/mep';
 import { toNullableNumber, toNumber } from './mappers';
+import { addDays } from '@/lib/mep/isoWeek';
 import type { SessionKind } from '@/lib/supabase/database.types';
 
 export interface SessionSummary {
@@ -143,111 +150,105 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
 export interface ConsumptionRow {
   productId: string;
   productName: string;
-  /** MESURÉ — gastros consommés au midi pour 1 000 € de CA de la journée. */
-  lunchPerDaily1000: number | null;
-  /** ESTIMÉ — consommation ramenée à une journée entière (dépend de la part du midi). */
-  fullDayPer1000: number | null;
+  /** Gastros consommés en moyenne au service du midi. */
+  lunchAvg: number | null;
+  /** Gastros consommés en moyenne au service du soir. */
+  eveningAvg: number | null;
+  /** Consommation moyenne de la journée entière, pour 1 000 € de CA. */
+  dailyPer1000: number | null;
   /** Cible théorique du calculateur, pour les produits réglés au ratio. */
   theoreticalPer1000: number | null;
   /** Marge entre la cible et la consommation. Positive = marge de sécurité. */
   deviation: number | null;
-  sampleDays: number;
+  /** Soir / midi. Sous 1, la cible du soir peut être abaissée. */
+  eveningRatio: number | null;
+  /** Nombre de journées complètes (les deux services mesurés). */
+  completeDays: number;
+  /** Nombre de journées où seul le midi a pu être mesuré. */
+  lunchOnlyDays: number;
 }
 
-/** Vrai si au moins une valeur affichée repose sur la part du midi estimée. */
 export interface ConsumptionReport {
   rows: ConsumptionRow[];
-  /** Part du CA réalisée au midi, telle que réglée. null = non renseignée. */
-  lunchShare: number | null;
-  /** Vrai si le CA du midi est saisi et rend l'estimation inutile. */
-  hasMeasuredLunchRevenue: boolean;
+  /** Soir / midi, tous produits confondus : suggestion pour afternoon_target_ratio. */
+  overallEveningRatio: number | null;
+  /** Journées entièrement mesurées sur la période. */
+  completeDays: number;
 }
 
 /**
- * §5.7 — Consommation réelle du midi, sur une fenêtre glissante.
+ * §5.7 — Consommation réelle des deux services.
  *
- *   conso_midi = (stock_matin + production_matin_cochée) − stock_aprem
- *   conso_pour_1000€ = conso_midi / (CA_réel_midi / 1000)
- *
- * Ne retient que les jours où les DEUX comptages ont été validés et où le CA
- * du midi est connu : sans cela, le ratio n'est pas comparable.
+ * Une journée est entièrement mesurable quand elle a ses deux comptages ET
+ * que le comptage du LENDEMAIN matin existe : c'est lui qui ferme le service
+ * du soir, puisque les invendus ne sont pas jetés.
  */
 export async function getConsumption(from: string, to: string): Promise<ConsumptionReport> {
   const supabase = await createClient();
 
-  const [{ data: sessions }, { data: actuals }, { data: products }, { data: rules }, settings] =
+  // On lit un jour de plus que la période demandée : le comptage du lendemain
+  // matin est nécessaire pour clore le dernier soir.
+  const toPlusOne = addDays(to, 1);
+
+  const [{ data: sessions }, { data: actuals }, { data: products }, { data: rules }] =
     await Promise.all([
       supabase
         .from('count_sessions')
         .select('id, date, session, status')
         .gte('date', from)
-        .lte('date', to)
+        .lte('date', toPlusOne)
         .eq('status', 'submitted'),
-      supabase
-        .from('revenue_actuals')
-        .select('date, revenue_ht, revenue_lunch_ht')
-        .gte('date', from)
-        .lte('date', to),
+      supabase.from('revenue_actuals').select('date, revenue_ht').gte('date', from).lte('date', to),
       supabase.from('products').select('id, name').eq('is_active', true),
       supabase.from('calculator_rules').select('product_id, mode, qty_per_1000_eur, valid_to'),
-      supabase.from('revenue_settings').select('lunch_revenue_share').maybeSingle(),
     ]);
 
-  const lunchShare = toNullableNumber(settings.data?.lunch_revenue_share);
+  const sessionRows = sessions ?? [];
+  const sessionId = (date: string, kind: 'morning' | 'afternoon') =>
+    sessionRows.find((row) => row.date === date && row.session === kind)?.id ?? null;
 
-  const revenueByDate = new Map(
-    (actuals ?? []).map(
-      (row) =>
-        [
-          row.date,
-          {
-            daily: toNullableNumber(row.revenue_ht),
-            lunch: toNullableNumber(row.revenue_lunch_ht),
-          },
-        ] as const,
-    ),
+  const dailyRevenue = new Map(
+    (actuals ?? []).map((row) => [row.date, toNullableNumber(row.revenue_ht)] as const),
   );
 
-  const hasMeasuredLunchRevenue = [...revenueByDate.values()].some(
-    (revenue) => revenue.lunch !== null && revenue.lunch > 0,
-  );
+  // Une journée exploitable a ses deux comptages validés et son CA connu.
+  const dates = [...new Set(sessionRows.map((row) => row.date))]
+    .filter((date) => date >= from && date <= to)
+    .filter(
+      (date) =>
+        (dailyRevenue.get(date) ?? 0) > 0 &&
+        sessionId(date, 'morning') !== null &&
+        sessionId(date, 'afternoon') !== null,
+    )
+    .sort();
 
-  // Un jour est exploitable dès qu'il a ses DEUX comptages et le CA de la
-  // journée. Le CA du midi n'est plus exigé : il n'est pas enregistré.
-  const usableDates = [...new Set((sessions ?? []).map((session) => session.date))].filter(
-    (date) =>
-      (revenueByDate.get(date)?.daily ?? 0) > 0 &&
-      (sessions ?? []).some((s) => s.date === date && s.session === 'morning') &&
-      (sessions ?? []).some((s) => s.date === date && s.session === 'afternoon'),
-  );
+  const relevantSessionIds = sessionRows.map((row) => row.id);
 
-  if (usableDates.length === 0) {
-    return {
-      lunchShare,
-      hasMeasuredLunchRevenue,
-      rows: (products ?? []).map((product) => ({
-        productId: product.id,
-        productName: product.name,
-        lunchPerDaily1000: null,
-        fullDayPer1000: null,
-        theoreticalPer1000: null,
-        deviation: null,
-        sampleDays: 0,
-      })),
-    };
-  }
+  const [{ data: lines }, { data: tasks }] = relevantSessionIds.length
+    ? await Promise.all([
+        supabase
+          .from('count_lines')
+          .select('session_id, product_id, qty_total')
+          .in('session_id', relevantSessionIds),
+        supabase
+          .from('production_tasks')
+          .select('session_id, product_id, qty_to_produce, is_done')
+          .in('session_id', relevantSessionIds),
+      ])
+    : [{ data: [] }, { data: [] }];
 
-  const sessionIds = (sessions ?? [])
-    .filter((session) => usableDates.includes(session.date))
-    .map((session) => session.id);
+  const stockOf = (session: string | null, productId: string): number | null => {
+    if (!session) return null;
+    const line = (lines ?? []).find(
+      (row) => row.session_id === session && row.product_id === productId,
+    );
+    return line ? toNumber(line.qty_total, 0) : null;
+  };
 
-  const [{ data: lines }, { data: tasks }] = await Promise.all([
-    supabase.from('count_lines').select('session_id, product_id, qty_total').in('session_id', sessionIds),
-    supabase
-      .from('production_tasks')
-      .select('session_id, product_id, qty_to_produce, is_done')
-      .in('session_id', sessionIds),
-  ]);
+  const producedIn = (session: string | null, productId: string): number =>
+    (tasks ?? [])
+      .filter((task) => task.session_id === session && task.product_id === productId && task.is_done)
+      .reduce((sum, task) => sum + toNumber(task.qty_to_produce, 0), 0);
 
   const theoreticalByProduct = new Map(
     (rules ?? [])
@@ -255,62 +256,74 @@ export async function getConsumption(from: string, to: string): Promise<Consumpt
       .map((rule) => [rule.product_id, toNullableNumber(rule.qty_per_1000_eur)] as const),
   );
 
+  let overallLunch = 0;
+  let overallEvening = 0;
+  const completeDates = new Set<string>();
+
   const rows = (products ?? []).map((product) => {
-    const lunchSamples: (number | null)[] = [];
-    const fullDaySamples: (number | null)[] = [];
+    const lunchSamples: number[] = [];
+    const eveningSamples: number[] = [];
+    const dailyRatioSamples: (number | null)[] = [];
+    let lunchOnlyDays = 0;
 
-    for (const date of usableDates) {
-      const morning = (sessions ?? []).find((s) => s.date === date && s.session === 'morning');
-      const afternoon = (sessions ?? []).find((s) => s.date === date && s.session === 'afternoon');
-      if (!morning || !afternoon) continue;
+    for (const date of dates) {
+      const morning = sessionId(date, 'morning');
+      const afternoon = sessionId(date, 'afternoon');
+      const nextMorning = sessionId(addDays(date, 1), 'morning');
 
-      const stockMorning = (lines ?? []).find(
-        (line) => line.session_id === morning.id && line.product_id === product.id,
-      );
-      const stockAfternoon = (lines ?? []).find(
-        (line) => line.session_id === afternoon.id && line.product_id === product.id,
-      );
-      if (!stockMorning || !stockAfternoon) continue;
+      const stockMorning = stockOf(morning, product.id);
+      const stockAfternoon = stockOf(afternoon, product.id);
+      if (stockMorning === null || stockAfternoon === null) continue;
 
-      const producedMorning = (tasks ?? [])
-        .filter(
-          (task) =>
-            task.session_id === morning.id && task.product_id === product.id && task.is_done,
-        )
-        .reduce((sum, task) => sum + toNumber(task.qty_to_produce, 0), 0);
+      const result = computeServiceConsumption({
+        productId: product.id,
+        stockMorning,
+        productionMorningDone: producedIn(morning, product.id),
+        stockAfternoon,
+        productionAfternoonDone: producedIn(afternoon, product.id),
+        stockNextMorning: stockOf(nextMorning, product.id),
+      });
 
-      const revenue = revenueByDate.get(date);
-      const result = computeLunchConsumption(
-        {
-          productId: product.id,
-          stockMorning: toNumber(stockMorning.qty_total, 0),
-          productionMorningDone: producedMorning,
-          stockAfternoon: toNumber(stockAfternoon.qty_total, 0),
-        },
-        { dailyHt: revenue?.daily ?? null, lunchHt: revenue?.lunch ?? null, lunchShare },
-      );
+      // Une consommation négative est une erreur de comptage, pas une vente :
+      // on l'écarte plutôt que de la laisser fausser la moyenne.
+      if (result.lunch < 0) continue;
+      lunchSamples.push(result.lunch);
 
-      // Une consommation négative signale une erreur de comptage, pas une vente.
-      if (result.consumedLunch >= 0) {
-        lunchSamples.push(result.lunchPerDaily1000);
-        fullDaySamples.push(result.fullDayPer1000);
+      if (!result.isComplete || result.evening === null || result.evening < 0) {
+        lunchOnlyDays += 1;
+        continue;
       }
+
+      eveningSamples.push(result.evening);
+      dailyRatioSamples.push(per1000(result.daily, dailyRevenue.get(date) ?? null));
+      completeDates.add(date);
+
+      overallLunch += result.lunch;
+      overallEvening += result.evening;
     }
 
-    const lunchPerDaily1000 = averageObservedRatio(lunchSamples);
-    const fullDayPer1000 = averageObservedRatio(fullDaySamples);
+    const lunchAvg = averageObservedRatio(lunchSamples);
+    const eveningAvg = averageObservedRatio(eveningSamples);
+    const dailyPer1000 = averageObservedRatio(dailyRatioSamples);
     const theoretical = theoreticalByProduct.get(product.id) ?? null;
 
     return {
       productId: product.id,
       productName: product.name,
-      lunchPerDaily1000,
-      fullDayPer1000,
+      lunchAvg,
+      eveningAvg,
+      dailyPer1000,
       theoreticalPer1000: theoretical,
-      deviation: ratioDeviation(theoretical, fullDayPer1000),
-      sampleDays: lunchSamples.filter((sample) => sample !== null).length,
+      deviation: ratioDeviation(theoretical, dailyPer1000),
+      eveningRatio: eveningToLunchRatio(lunchAvg, eveningAvg),
+      completeDays: eveningSamples.length,
+      lunchOnlyDays,
     };
   });
 
-  return { rows, lunchShare, hasMeasuredLunchRevenue };
+  return {
+    rows,
+    overallEveningRatio: eveningToLunchRatio(overallLunch, overallEvening),
+    completeDays: completeDates.size,
+  };
 }

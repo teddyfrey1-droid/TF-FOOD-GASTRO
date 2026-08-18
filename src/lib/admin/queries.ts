@@ -2,7 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import { computeProductTarget, type ProductTarget, type RevenueSettings } from '@/lib/mep';
-import { groupRulesByProduct, toNullableNumber, toNumber, toProductCalcConfig } from './mappers';
+import { groupRulesByProduct, toNumber, toProductCalcConfig } from './mappers';
 import type { SessionKind, Tables } from '@/lib/supabase/database.types';
 
 /**
@@ -20,7 +20,6 @@ export async function getRevenueSettings(): Promise<RevenueSettings> {
     safetyMargin: toNumber(data?.safety_margin, 0.1),
     afternoonTargetRatio: toNumber(data?.afternoon_target_ratio, 1),
     defaultReorderRatio: toNumber(data?.default_reorder_ratio, 0.5),
-    lunchRevenueShare: toNullableNumber(data?.lunch_revenue_share),
     showTargetsToEmployees: data?.show_targets_to_employees ?? false,
     // Postgres renvoie « 07:30:00 » ; l'input type=time attend « 07:30 ».
     morningReminderTime: data?.morning_reminder_time?.slice(0, 5) ?? null,

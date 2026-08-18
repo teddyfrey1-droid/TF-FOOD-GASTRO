@@ -49,26 +49,39 @@ date ; ca_ht ; ferme(0/1)
 
 ### ✅ Découpage midi / soir — tranché
 
-Le CA est enregistré **à la journée**, avec deux comptages : le matin et après
+Le CA est enregistré **à la journée**. Le restaurant fait **deux services**
+(midi et soir), produit avant chacun, et compte deux fois : le matin et après
 le service du midi.
 
-Le §5.7 rapportait la consommation au « CA réel du midi », qui n'existe donc
-pas. L'indicateur de référence est devenu **« gastros consommés au midi pour
-1 000 € de CA de la journée »** : entièrement mesuré, aucune hypothèse, et
-directement comparable d'un jour à l'autre.
+Le §5.7 rapportait la consommation à un « CA réel du midi » qui n'existe pas.
+Plus important : les invendus du soir **ne sont pas jetés** (DLC de 2 jours),
+donc le comptage du **lendemain matin** ferme la boucle du service du soir.
 
-**Question restante :** quelle **part du chiffre d'affaires** se fait au
-déjeuner, en gros ? (0,6 = 60 %)
+La consommation des deux services est donc **entièrement mesurée**, sans
+estimation ni réglage à deviner :
 
-Cette part sert uniquement à ramener la consommation du midi à une journée
-entière, pour la comparer à la cible du calculateur — qui, elle, dimensionne un
-jour complet. Elle n'entre **jamais** dans le calcul des cibles ni des seuils.
+```
+consommé au MIDI = (stock matin      + produit le matin)      − stock après-midi
+consommé au SOIR = (stock après-midi + produit l'après-midi)  − stock lendemain matin
+```
 
-Tant qu'elle n'est pas renseignée, la colonne « journée entière » reste vide :
-le réglage est volontairement laissé à blanc plutôt que rempli d'une valeur
-inventée. Une estimation grossière suffit et pourra être affinée.
+Aucune question ne reste ouverte de ce côté. Le réglage « part du midi » que
+j'avais ajouté a été retiré : il demandait de deviner ce qui se mesure.
 
----
+**Bonus :** l'application calcule maintenant le rapport soir / midi et vous
+propose la valeur du `afternoon_target_ratio` (le coefficient qui abaisse les
+cibles du soir) sur la base du constaté.
+
+### ⚠️ Une limite à connaître
+
+La mesure du soir suppose que **rien n'est jeté** entre la fermeture et le
+lendemain matin. Si un produit part à la poubelle pour cause de DLC, la
+consommation du soir est surévaluée d'autant.
+
+La gestion des DLC étant hors périmètre v1, l'application ne peut pas faire la
+différence. En pratique l'effet reste marginal, et un écart aberrant remonte
+dans l'écran Anomalies. Si vous jetez régulièrement, dites-le-moi : une simple
+case « jeté » au comptage suffirait à corriger la mesure.
 
 ## 3. Les formats GN par produit
 
