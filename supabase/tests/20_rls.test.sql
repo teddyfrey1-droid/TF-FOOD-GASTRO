@@ -1,0 +1,346 @@
+-- =====================================================================
+-- Tests de sécurité — Row Level Security (§8)
+--
+-- « Un employé, même avec les outils de développement, ne peut accéder à
+--   aucune donnée de CA, de cible ou de seuil. »
+--
+-- Ces tests forgent de vraies sessions Postgres avec le rôle `authenticated`
+-- et un claim JWT `sub`, exactement comme le fait Supabase quand une requête
+-- arrive depuis un téléphone. Ce ne sont pas des tests de composants React.
+-- =====================================================================
+
+\set ON_ERROR_STOP on
+set client_min_messages = notice;
+
+-- ---------------------------------------------------------------------
+-- Utilitaires d'assertion
+-- ---------------------------------------------------------------------
+create or replace function pg_temp.check_equal(label text, actual anyelement, expected anyelement)
+returns void language plpgsql as $$
+begin
+  if actual is distinct from expected then
+    raise exception 'ÉCHEC — % : attendu %, obtenu %', label, expected, actual;
+  end if;
+  raise notice 'OK   — %', label;
+end;
+$$;
+
+/** Vérifie qu'une requête renvoie exactement zéro ligne. */
+create or replace function pg_temp.check_no_rows(label text, stmt text)
+returns void language plpgsql as $$
+declare n int;
+begin
+  execute format('select count(*) from (%s) as sub', stmt) into n;
+  if n <> 0 then
+    raise exception 'ÉCHEC — % : % ligne(s) visible(s), 0 attendue(s)', label, n;
+  end if;
+  raise notice 'OK   — % (0 ligne)', label;
+exception
+  when insufficient_privilege or undefined_table or undefined_function or undefined_column then
+    raise notice 'OK   — % (accès refusé : %)', label, sqlerrm;
+end;
+$$;
+
+/** Vérifie qu'une requête est bel et bien refusée. */
+create or replace function pg_temp.check_denied(label text, stmt text)
+returns void language plpgsql as $$
+begin
+  execute stmt;
+  raise exception 'ÉCHEC — % : la requête a réussi alors qu''elle devait être refusée', label;
+exception
+  when insufficient_privilege or undefined_table or undefined_function
+     or undefined_column or check_violation then
+    raise notice 'OK   — % (refusé : %)', label, sqlerrm;
+end;
+$$;
+
+/**
+ * Vérifie qu'une écriture est SANS EFFET : soit refusée, soit filtrée par la
+ * RLS et donc appliquée à zéro ligne. Le cahier des charges accepte les deux
+ * (« une erreur ou zéro ligne »), mais exige qu'il ne se passe rien.
+ */
+create or replace function pg_temp.check_no_effect(label text, stmt text)
+returns void language plpgsql as $$
+declare n int;
+begin
+  execute stmt;
+  get diagnostics n = row_count;
+  if n <> 0 then
+    raise exception 'ÉCHEC — % : % ligne(s) modifiée(s), 0 attendue(s)', label, n;
+  end if;
+  raise notice 'OK   — % (0 ligne modifiée)', label;
+exception
+  when insufficient_privilege or undefined_table or undefined_function
+     or undefined_column or check_violation then
+    raise notice 'OK   — % (refusé : %)', label, sqlerrm;
+end;
+$$;
+
+/** Vérifie qu'une requête réussit. */
+create or replace function pg_temp.check_allowed(label text, stmt text)
+returns void language plpgsql as $$
+begin
+  execute stmt;
+  raise notice 'OK   — %', label;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+-- Trois comptes : un employé, un directeur, un propriétaire.
+-- ---------------------------------------------------------------------
+insert into auth.users (id, email) values
+  ('a0000000-0000-0000-0000-00000000000e', 'karim@heiko.test'),
+  ('a0000000-0000-0000-0000-00000000000d', 'directeur@heiko.test'),
+  ('a0000000-0000-0000-0000-00000000000f', 'proprietaire@heiko.test')
+on conflict (id) do nothing;
+
+update public.profiles set full_name = 'Karim',        role = 'employee' where id = 'a0000000-0000-0000-0000-00000000000e';
+update public.profiles set full_name = 'Le directeur', role = 'manager'  where id = 'a0000000-0000-0000-0000-00000000000d';
+update public.profiles set full_name = 'Le patron',    role = 'owner'    where id = 'a0000000-0000-0000-0000-00000000000f';
+
+-- Données sensibles à protéger.
+insert into public.revenue_history (date, revenue_ht) values (date '2025-08-19', 3200)
+  on conflict (date) do update set revenue_ht = 3200;
+insert into public.revenue_actuals (date, revenue_ht, revenue_lunch_ht) values (current_date, 2900, 1800)
+  on conflict (date) do update set revenue_ht = 2900;
+insert into public.daily_forecast (date, forecast_revenue, source) values (current_date, 3200, 'manual')
+  on conflict (date) do update set forecast_revenue = 3200;
+insert into public.audit_log (action, table_name, record_id) values ('test', 'products', 'x');
+
+\echo ''
+\echo '--- 1. L''EMPLOYÉ NE VOIT AUCUNE DONNÉE DE CHIFFRE D''AFFAIRES ---'
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+
+select pg_temp.check_equal('Le rôle applicatif lu est bien employee',
+  public.current_user_role()::text, 'employee');
+select pg_temp.check_equal('is_manager() est faux pour un employé',
+  public.is_manager(), false);
+
+select pg_temp.check_no_rows('revenue_history invisible',  'select * from public.revenue_history');
+select pg_temp.check_no_rows('revenue_actuals invisible',  'select * from public.revenue_actuals');
+select pg_temp.check_no_rows('daily_forecast invisible',   'select * from public.daily_forecast');
+select pg_temp.check_no_rows('revenue_settings invisible', 'select * from public.revenue_settings');
+select pg_temp.check_no_rows('calculator_rules invisible', 'select * from public.calculator_rules');
+select pg_temp.check_no_rows('audit_log invisible',        'select * from public.audit_log');
+
+select pg_temp.check_denied('Écriture dans revenue_history refusée',
+  'insert into public.revenue_history (date, revenue_ht) values (date ''2030-01-01'', 9999)');
+select pg_temp.check_denied('Écriture dans daily_forecast refusée',
+  'insert into public.daily_forecast (date, forecast_revenue) values (date ''2030-01-01'', 9999)');
+select pg_temp.check_no_effect('Modification des réglages de CA sans effet',
+  'update public.revenue_settings set growth_rate = 5');
+select pg_temp.check_denied('Écriture dans calculator_rules refusée',
+  'insert into public.calculator_rules (product_id, mode, qty_per_1000_eur) select id, ''ratio'', 99 from public.products_for_count limit 1');
+select pg_temp.check_denied('Écriture dans audit_log refusée',
+  'insert into public.audit_log (action, table_name) values (''triche'', ''products'')');
+
+\echo ''
+\echo '--- 2. NI CIBLE NI SEUIL NE FUITENT PAR LES PRODUITS ---'
+
+select pg_temp.check_no_rows('Table products entièrement invisible', 'select * from public.products');
+
+select pg_temp.check_denied('Fonction mep_product_targets non exécutable',
+  'select * from public.mep_product_targets(current_date, ''morning'')');
+select pg_temp.check_denied('Fonction mep_forecast_revenue non exécutable',
+  'select public.mep_forecast_revenue(current_date)');
+select pg_temp.check_denied('Fonction mep_reference_revenue non exécutable',
+  'select public.mep_reference_revenue(current_date, ''morning'')');
+
+-- La vue de comptage doit exposer les produits SANS les colonnes sensibles.
+select pg_temp.check_equal('La vue de comptage expose bien les produits actifs',
+  (select count(*) > 0 from public.products_for_count), true);
+
+reset role;
+reset "request.jwt.claim.sub";
+do $$
+declare leaked text;
+begin
+  select string_agg(column_name, ', ')
+    into leaked
+  from information_schema.columns
+  where table_schema = 'public'
+    and table_name = 'products_for_count'
+    and column_name in (
+      'reorder_ratio', 'reorder_fixed', 'reorder_mode',
+      'floor_qty', 'ceiling_qty', 'urgency_level',
+      'weight_per_bac_kg', 'prep_time_min', 'production_step'
+    );
+  if leaked is not null then
+    raise exception 'ÉCHEC — colonnes sensibles exposées par products_for_count : %', leaked;
+  end if;
+  raise notice 'OK   — products_for_count ne contient aucune colonne sensible';
+end
+$$;
+
+\echo ''
+\echo '--- 3. L''EMPLOYÉ NE MANIPULE QUE SES PROPRES COMPTAGES ---'
+
+-- Une session d'hier appartenant à quelqu'un d'autre.
+insert into public.count_sessions (id, date, session, user_id, status, submitted_at)
+values ('c0000000-0000-0000-0000-000000000001', current_date - 1, 'morning',
+        'a0000000-0000-0000-0000-00000000000d', 'submitted', now())
+on conflict (id) do nothing;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+
+select pg_temp.check_no_rows('Sessions des autres jours invisibles',
+  'select * from public.count_sessions where date < current_date');
+
+select pg_temp.check_allowed('Création de sa propre session du jour',
+  'insert into public.count_sessions (id, date, session, user_id)
+   values (''c0000000-0000-0000-0000-0000000000ee'', current_date, ''afternoon'',
+           ''a0000000-0000-0000-0000-00000000000e'')');
+
+select pg_temp.check_denied('Création d''une session au nom d''un autre refusée',
+  'insert into public.count_sessions (date, session, user_id)
+   values (current_date, ''morning'', ''a0000000-0000-0000-0000-00000000000d'')');
+
+select pg_temp.check_denied('Antidater une session refusé',
+  'insert into public.count_sessions (date, session, user_id)
+   values (current_date - 5, ''morning'', ''a0000000-0000-0000-0000-00000000000e'')');
+
+select pg_temp.check_allowed('Saisie d''une ligne de comptage',
+  'insert into public.count_lines (session_id, product_id, qty_saladbar, qty_fridge)
+   select ''c0000000-0000-0000-0000-0000000000ee'', id, 2, 1
+   from public.products_for_count where name = ''Saumon''');
+
+-- Les snapshots sont écrits par le serveur : le téléphone ne doit pas
+-- pouvoir se fabriquer une cible sur mesure.
+select pg_temp.check_denied('Écriture directe d''un snapshot de cible refusée',
+  'update public.count_lines set target_snapshot = 99
+   where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
+select pg_temp.check_denied('Écriture directe d''un snapshot de seuil refusée',
+  'update public.count_lines set reorder_threshold_snapshot = 0
+   where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
+
+select pg_temp.check_allowed('Correction de sa propre quantité comptée',
+  'update public.count_lines set qty_saladbar = 3
+   where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
+
+\echo ''
+\echo '--- 4. LE RAPPORT DE RELANCE NE TRANSPORTE AUCUNE DONNÉE SENSIBLE ---'
+
+select pg_temp.check_allowed('L''employé peut valider son comptage',
+  'select * from public.mep_submit_count(''c0000000-0000-0000-0000-0000000000ee'')');
+
+reset role;
+reset "request.jwt.claim.sub";
+do $$
+declare leaked text;
+begin
+  select string_agg(p.parameter_name, ', ')
+    into leaked
+  from information_schema.parameters p
+  join information_schema.routines r
+    on r.specific_name = p.specific_name and r.specific_schema = p.specific_schema
+  where r.routine_schema = 'public'
+    and r.routine_name = 'mep_submit_count'
+    and p.parameter_mode = 'OUT'
+    and p.parameter_name in ('target', 'reorder_threshold', 'forecast_revenue', 'ca_ref', 'coverage_ratio');
+  if leaked is not null then
+    raise exception 'ÉCHEC — mep_submit_count renvoie des colonnes sensibles : %', leaked;
+  end if;
+  raise notice 'OK   — mep_submit_count ne renvoie ni cible, ni seuil, ni CA';
+end
+$$;
+
+\echo ''
+\echo '--- 5. L''EMPLOYÉ COCHE UNE TÂCHE, IL N''EN RÉÉCRIT PAS LA QUANTITÉ ---'
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+
+select pg_temp.check_allowed('Cocher une tâche de production',
+  'update public.production_tasks set is_done = true, done_at = now()
+   where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
+
+select pg_temp.check_denied('Réécrire la quantité à produire refusée',
+  'update public.production_tasks set qty_to_produce = 0
+   where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
+
+select pg_temp.check_denied('Réécrire l''urgence refusée',
+  'update public.production_tasks set urgency_level_snapshot = 1
+   where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
+
+\echo ''
+\echo '--- 6. UN EMPLOYÉ NE PEUT PAS SE PROMOUVOIR ---'
+
+select pg_temp.check_equal('Un employé ne voit que son propre profil',
+  (select count(*)::int from public.profiles), 1);
+
+select pg_temp.check_denied('Auto-promotion en owner refusée',
+  'update public.profiles set role = ''owner'' where id = ''a0000000-0000-0000-0000-00000000000e''');
+
+select pg_temp.check_denied('Auto-promotion en manager refusée',
+  'update public.profiles set role = ''manager'' where id = ''a0000000-0000-0000-0000-00000000000e''');
+
+select pg_temp.check_denied('Créer un profil administrateur refusé',
+  'insert into public.profiles (id, full_name, role)
+   values (''a0000000-0000-0000-0000-0000000000aa'', ''Faux patron'', ''owner'')');
+
+select pg_temp.check_allowed('Corriger son propre nom autorisé',
+  'update public.profiles set full_name = ''Karim B.'' where id = ''a0000000-0000-0000-0000-00000000000e''');
+
+select pg_temp.check_equal('Le rôle est resté employee après les tentatives',
+  public.current_user_role()::text, 'employee');
+
+\echo ''
+\echo '--- 7. LE DIRECTEUR, LUI, VOIT TOUT ---'
+
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+
+select pg_temp.check_equal('is_manager() est vrai pour un directeur', public.is_manager(), true);
+select pg_temp.check_equal('Le directeur lit le CA de l''an dernier',
+  (select count(*) > 0 from public.revenue_history), true);
+select pg_temp.check_equal('Le directeur lit le calculateur',
+  (select count(*) > 0 from public.calculator_rules), true);
+select pg_temp.check_equal('Le directeur lit la table products complète',
+  (select count(*) > 0 from public.products), true);
+select pg_temp.check_equal('Le directeur lit les prévisions',
+  (select count(*) > 0 from public.daily_forecast), true);
+select pg_temp.check_equal('Le directeur lit le journal d''audit',
+  (select count(*) > 0 from public.audit_log), true);
+select pg_temp.check_equal('Le directeur voit les sessions de tout le monde',
+  (select count(*) > 1 from public.count_sessions), true);
+
+select pg_temp.check_allowed('Le directeur modifie un produit',
+  'update public.products set notes = ''vérifié'' where name = ''Saumon''');
+select pg_temp.check_allowed('Le directeur promeut un employé',
+  'update public.profiles set role = ''manager'' where id = ''a0000000-0000-0000-0000-00000000000e''');
+select pg_temp.check_allowed('Le directeur rétrograde un employé',
+  'update public.profiles set role = ''employee'' where id = ''a0000000-0000-0000-0000-00000000000e''');
+
+\echo ''
+\echo '--- 8. UN COMPTE DÉSACTIVÉ PERD TOUT ---'
+
+reset role;
+reset "request.jwt.claim.sub";
+update public.profiles set is_active = false where id = 'a0000000-0000-0000-0000-00000000000d';
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+
+select pg_temp.check_equal('Un compte désactivé n''est plus manager', public.is_manager(), false);
+select pg_temp.check_no_rows('Un compte désactivé ne lit plus le CA',
+  'select * from public.revenue_history');
+
+reset role;
+reset "request.jwt.claim.sub";
+update public.profiles set is_active = true where id = 'a0000000-0000-0000-0000-00000000000d';
+
+\echo ''
+\echo '--- 9. UN VISITEUR NON AUTHENTIFIÉ N''A RIEN ---'
+
+set role anon;
+select pg_temp.check_no_rows('anon ne lit pas le CA',            'select * from public.revenue_history');
+select pg_temp.check_no_rows('anon ne lit pas le calculateur',   'select * from public.calculator_rules');
+select pg_temp.check_no_rows('anon ne lit pas les produits',     'select * from public.products');
+select pg_temp.check_no_rows('anon ne lit pas les comptages',    'select * from public.count_sessions');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
+\echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='
