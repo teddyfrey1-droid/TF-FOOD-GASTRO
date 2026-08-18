@@ -15,14 +15,20 @@ import type {
 } from './types';
 
 /**
- * Base de calcul du temps de prépa (§5.6) : `Σ besoin / production_step × prep_time_min`.
+ * Base de calcul du temps de prépa.
  *
- * ⚠️ Le cahier des charges décrit `prep_time_min` comme « temps de prépa PAR GASTRO »
- * mais donne une formule qui compte le nombre de PAS DE PRODUCTION. Avec un pas de
- * 0,5 les deux lectures diffèrent d'un facteur 2. La formule du §5.6 est appliquée
- * telle quelle ; basculer sur « par gastro » ne demande que de changer cette constante.
+ * `per_bac` : `prep_time_min` est le temps de préparation d'UN GASTRO ENTIER.
+ *             C'est la règle retenue par le restaurant.
+ * `per_production_step` : le temps vaut pour un pas de production (un demi-gastro
+ *             avec les réglages par défaut). C'est la lecture littérale de la
+ *             formule du §5.6, conservée pour pouvoir y revenir sans réécriture.
+ *
+ * La taille réelle du bac se lit dans `gn_format`, réglable produit par produit
+ * depuis le back-office : changer de format ne change pas cette base de calcul.
  */
-export const PREP_TIME_BASIS: 'per_production_step' | 'per_bac' = 'per_production_step';
+export type PrepTimeBasis = 'per_bac' | 'per_production_step';
+
+export const DEFAULT_PREP_TIME_BASIS: PrepTimeBasis = 'per_bac';
 
 /** Somme saladbar + frigo. C'est ce total qui est comparé au seuil et à la cible. */
 export function stockTotal(stock: Pick<CountedStock, 'qtySaladbar' | 'qtyFridge'>): number {
@@ -87,12 +93,13 @@ export function sortReorderDecisions(
 export function totalPrepTimeMinutes(
   decisions: readonly ReorderDecision[],
   products: ReadonlyMap<string, ProductCalcConfig>,
+  basis: PrepTimeBasis = DEFAULT_PREP_TIME_BASIS,
 ): number {
   return decisions.reduce((sum, decision) => {
     const product = products.get(decision.productId);
     if (!product?.prepTimeMin) return sum;
     const units =
-      PREP_TIME_BASIS === 'per_production_step'
+      basis === 'per_production_step'
         ? decision.qtyToProduce / product.productionStep
         : decision.qtyToProduce;
     return snap(sum + units * product.prepTimeMin);
@@ -112,6 +119,7 @@ export function buildReorderReport(
   products: readonly ProductCalcConfig[],
   targets: ReadonlyMap<string, ProductTarget>,
   stocks: ReadonlyMap<string, Pick<CountedStock, 'qtySaladbar' | 'qtyFridge'>>,
+  basis: PrepTimeBasis = DEFAULT_PREP_TIME_BASIS,
 ): ReorderReport {
   const byId = new Map(products.map((product) => [product.id, product]));
   const decisions: ReorderDecision[] = [];
@@ -135,7 +143,7 @@ export function buildReorderReport(
       decisions.filter((decision) => !decision.needsReorder),
       nameOf,
     ),
-    totalPrepTimeMinutes: totalPrepTimeMinutes(toReorder, byId),
+    totalPrepTimeMinutes: totalPrepTimeMinutes(toReorder, byId, basis),
   };
 }
 

@@ -88,25 +88,22 @@ coût et la vitesse de rotation (poissons et avocat à 5, toppings décoratifs �
 
 ## 5. Deux points du cahier des charges à trancher
 
-### 5.1 Le temps de préparation — contradiction dans le §5.6
+### 5.1 Le temps de préparation — ✅ tranché
 
-Le cahier des charges décrit `prep_time_min` comme le **temps de prépa par
-gastro**, mais donne la formule :
+Le cahier des charges décrivait `prep_time_min` comme le temps « par gastro »
+tout en donnant une formule qui comptait les pas de production (soit un facteur
+2 d'écart).
 
-```
-Σ besoin / production_step × prep_time_min
-```
+**Réponse retenue : le temps se compte par GASTRO ENTIER.** Pour 5 gastros de
+saumon à 6 minutes, le rapport affiche 30 minutes.
 
-qui compte le nombre de **pas de production**. Avec un pas de 0,5 gastro, les
-deux lectures diffèrent d'un facteur 2 : pour 5 gastros de saumon à 6 minutes,
-c'est soit 30 minutes, soit 60.
+La taille réelle du bac se lit dans `gn_format`, réglable produit par produit
+depuis le back-office. La base de calcul reste un paramètre
+(`DEFAULT_PREP_TIME_BASIS` dans `src/lib/mep/reorder.ts`) pour pouvoir revenir
+au comptage par demi-gastro sans réécriture.
 
-J'ai implémenté **la formule telle qu'elle est écrite** (60 minutes), et isolé
-le choix dans une constante `PREP_TIME_BASIS` (`src/lib/mep/reorder.ts`) pour
-pouvoir basculer en une ligne.
-
-**Question :** 6 minutes, c'est le temps pour préparer un gastro entier, ou un
-demi-gastro ?
+**Reste à fournir :** le temps de prépa réel, en minutes par gastro, pour chaque
+produit. Les valeurs du seed sont provisoires.
 
 ### 5.2 Le plafond de cible et l'arrondi
 

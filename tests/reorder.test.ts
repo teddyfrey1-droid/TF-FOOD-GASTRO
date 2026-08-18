@@ -163,7 +163,7 @@ describe('§5.6 — priorisation et badges', () => {
     expect(coverageRatio(0, 0)).toBe(1);
   });
 
-  it('cumule le temps de prépa estimé', () => {
+  it('cumule le temps de prépa, compté par gastro entier', () => {
     const saumon = product({ id: 'p1', name: 'Saumon', prepTimeMin: 6 });
     const decisions = [
       decideReorder(saumon, { productId: 'p1', target: 8, reorderThreshold: 4, hasRule: true }, {
@@ -171,8 +171,31 @@ describe('§5.6 — priorisation et badges', () => {
         qtyFridge: 0,
       }),
     ];
-    // besoin 5 gastros / pas 0,5 = 10 pas x 6 min = 60 min (formule du §5.6)
-    expect(totalPrepTimeMinutes(decisions, new Map([['p1', saumon]]))).toBe(60);
+    // besoin 5 gastros x 6 min = 30 min
+    expect(totalPrepTimeMinutes(decisions, new Map([['p1', saumon]]))).toBe(30);
+  });
+
+  it('sait encore compter par pas de production si on le lui demande', () => {
+    const saumon = product({ id: 'p1', name: 'Saumon', prepTimeMin: 6 });
+    const decisions = [
+      decideReorder(saumon, { productId: 'p1', target: 8, reorderThreshold: 4, hasRule: true }, {
+        qtySaladbar: 3,
+        qtyFridge: 0,
+      }),
+    ];
+    // 5 gastros / pas 0,5 = 10 pas x 6 min = 60 min
+    expect(totalPrepTimeMinutes(decisions, new Map([['p1', saumon]]), 'per_production_step')).toBe(60);
+  });
+
+  it('ignore les produits sans temps de prépa renseigné', () => {
+    const sansTemps = product({ id: 'p1', name: 'Grenade', prepTimeMin: null });
+    const decisions = [
+      decideReorder(sansTemps, { productId: 'p1', target: 2, reorderThreshold: 1, hasRule: true }, {
+        qtySaladbar: 0,
+        qtyFridge: 0,
+      }),
+    ];
+    expect(totalPrepTimeMinutes(decisions, new Map([['p1', sansTemps]]))).toBe(0);
   });
 });
 

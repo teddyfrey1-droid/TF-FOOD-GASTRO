@@ -117,7 +117,9 @@ Attention : **au seuil exactement, on ne relance pas.** Il faut être passé
 Les produits les plus urgents d'abord (niveau d'urgence de 1 à 5), puis les plus
 dégarnis. Un badge rouge **« RUPTURE IMMINENTE »** signale un produit tombé à
 zéro, ou un produit urgent dont il reste moins d'un quart de la cible.
-Le rapport affiche le temps de préparation total estimé.
+
+Le rapport affiche le **temps de préparation total estimé**, compté par gastro
+entier : 5 gastros de saumon à 6 minutes le gastro font 30 minutes.
 
 ### Ce qui protège l'historique
 
