@@ -18,16 +18,27 @@ export default async function HomePage() {
   const user = await requireUser();
   const supabase = await createClient();
 
-  // Un employé ne reçoit ici que SES sessions du jour (RLS).
+  // La RLS ne laisse passer que les sessions DU JOUR (§6.2 : l'accueil doit
+  // indiquer qui a fait le comptage, pas seulement s'il est fait).
   const today = new Date();
   const isoToday = today.toISOString().slice(0, 10);
 
-  const { data: sessions } = await supabase
-    .from('count_sessions')
-    .select('id, session, status, submitted_at, user_id')
-    .eq('date', isoToday);
+  const [{ data: sessions }, { data: team }] = await Promise.all([
+    supabase
+      .from('count_sessions')
+      .select('id, session, status, submitted_at, user_id')
+      .eq('date', isoToday),
+    supabase.from('team_members').select('id, full_name'),
+  ]);
 
-  const bySession = new Map((sessions ?? []).map((s) => [s.session as SessionKind, s]));
+  const nameById = new Map((team ?? []).map((member) => [member.id, member.full_name]));
+
+  const bySession = new Map(
+    (sessions ?? []).map((s) => [
+      s.session as SessionKind,
+      { ...s, authorName: nameById.get(s.user_id) ?? null },
+    ]),
+  );
 
   return (
     <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">

@@ -151,6 +151,7 @@ type CountLineRow = {
   production_needed_snapshot: number | null;
   is_not_applicable: boolean;
   not_applicable_reason: string | null;
+  counted_at: string | null;
   updated_at: string;
 };
 
@@ -263,6 +264,7 @@ export type Database = {
         | 'production_needed_snapshot'
         | 'is_not_applicable'
         | 'not_applicable_reason'
+        | 'counted_at'
       >;
       production_tasks: Table<
         ProductionTaskRow,
@@ -272,6 +274,8 @@ export type Database = {
     };
     Views: {
       products_for_count: { Row: ProductForCountRow; Relationships: [] };
+      /** Prénoms de l'équipe, sans rôle ni état d'activation. */
+      team_members: { Row: { id: string; full_name: string }; Relationships: [] };
     };
     Functions: {
       /** Cible et seuil par produit. Back-office uniquement (§5.8). */
@@ -313,12 +317,19 @@ export type Database = {
           is_done: boolean;
         }[];
       };
+      /** Temps de prépa total du rapport, en minutes. Ne divulgue pas prep_time_min. */
+      mep_reorder_prep_time: { Args: { p_session_id: string }; Returns: number };
       mep_forecast_revenue: { Args: { d: string }; Returns: number | null };
       mep_reference_revenue: {
         Args: { d: string; p_session: SessionKind };
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /** Ouvre la session du jour et crée une ligne vide par produit actif. */
+      mep_open_count_session: {
+        Args: { p_session: SessionKind; p_device_info?: Json | null };
+        Returns: string;
+      };
     };
     Enums: {
       user_role: UserRole;

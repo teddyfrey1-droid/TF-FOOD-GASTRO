@@ -130,7 +130,44 @@ mois dernier.
 
 ---
 
-## 3. Qui voit quoi
+## 3. Le parcours de l'employé
+
+1. **Connexion** par e-mail et mot de passe. La session reste ouverte : on ne
+   se reconnecte pas tous les matins.
+2. **Accueil** : la date, son prénom, et deux cartes — « Comptage du matin » et
+   « Comptage de l'après-midi » — avec leur état (*à faire*, *en cours*,
+   *fait à 08h42 par Karim*). Aucun chiffre d'affaires, aucun graphique.
+3. **Comptage** : les produits groupés par catégorie, une barre de recherche
+   collante en haut, et pour chaque produit deux compteurs côte à côte —
+   **saladbar** et **frigo** — aux boutons `−` et `+`. Le total s'affiche en
+   gras à droite, recalculé en direct. Un appui long sur la valeur ouvre le
+   pavé numérique pour les grosses quantités. Une barre indique
+   « 14 / 32 produits comptés ».
+4. **Validation** : le bouton ne s'active que lorsque tous les produits sont
+   renseignés. Un produit manquant se marque « absent » avec son motif, qui est
+   conservé.
+5. **Rapport** : la liste de ce qu'il faut relancer, la plus urgente en premier,
+   avec la quantité en gastros, le format GN, une pastille de couleur et la note
+   du produit. On coche au fur et à mesure. Les produits au-dessus de leur seuil
+   sont regroupés dans un bloc replié, discret. Si rien n'est à relancer :
+   « Tout est au niveau. Rien à relancer. »
+
+Le comptage du jour est un **travail d'équipe** : si Karim commence le matin et
+part, Sofia peut reprendre là où il s'est arrêté. Une fois validé, un comptage
+n'est plus modifiable — il devient une pièce d'historique.
+
+### Rien n'est jamais perdu
+
+Chaque saisie est écrite sur le téléphone avant d'être envoyée. En cas de
+coupure réseau — chambre froide, sous-sol — un bandeau discret affiche
+« Hors ligne — 12 saisies en attente », et tout repart automatiquement au
+retour du réseau, même si l'application a été fermée entre-temps. La validation
+attend toujours que la file soit vide : le rapport ne peut pas être calculé sur
+un comptage incomplet.
+
+---
+
+## 4. Qui voit quoi
 
 | | Employé | Directeur / Propriétaire |
 |---|---|---|
@@ -148,7 +185,7 @@ automatiquement par une cinquantaine de tests de sécurité (voir §6).
 
 ---
 
-## 4. Installation
+## 5. Installation
 
 ### Prérequis
 
@@ -190,7 +227,7 @@ pnpm typecheck    # vérification TypeScript
 
 ---
 
-## 5. Comptes et rôles
+## 6. Comptes et rôles
 
 Trois rôles : `employee`, `manager`, `owner`.
 
@@ -206,14 +243,14 @@ update public.profiles set role = 'owner' where id = '<uuid du compte>';
 
 ---
 
-## 6. Tests
+## 7. Tests
 
 Le cœur métier est testé deux fois, parce qu'il existe en deux exemplaires :
 en TypeScript (pour le simulateur du back-office) et en SQL (pour la validation
 d'un comptage). Les deux doivent donner exactement le même résultat.
 
 ```bash
-pnpm test       # 93 tests TypeScript : logique de calcul et lecture des CSV
+pnpm test       # 98 tests TypeScript : logique de calcul, steppers, lecture des CSV
 pnpm db:test    # tests SQL : calcul, sécurité RLS, journal d'audit
 ```
 
@@ -237,7 +274,7 @@ Sont notamment couverts :
 
 ---
 
-## 7. Organisation du code
+## 8. Organisation du code
 
 ```
 src/lib/mep/          Le calcul métier, pur et sans base de données
@@ -259,7 +296,7 @@ scripts/              Imports CSV et rejeu de la base
 
 ---
 
-## 8. Charger vos données
+## 9. Charger vos données
 
 ### Le calculateur
 
@@ -297,13 +334,13 @@ de doublon.
 
 ---
 
-## 9. État d'avancement
+## 10. État d'avancement
 
 | Phase | Contenu | État |
 |---|---|---|
 | 0 | Fondations : schéma, RLS, tests de sécurité, seed, authentification | ✅ |
 | 1 | Back-office : produits, calculateur, simulateur, CA, imports CSV | ✅ |
-| 2 | Parcours employé : comptage aux steppers, rapport de relance | à venir |
+| 2 | Parcours employé : comptage aux steppers, rapport de relance | ✅ |
 | 3 | Historique, exports, consommation réelle, détection d'anomalies | à venir |
 | 4 | PWA : installation iOS, mode hors ligne, rappels, impression | à venir |
 
@@ -312,7 +349,7 @@ avance pour le lendemain.
 
 ---
 
-## 10. Données encore à fournir
+## 11. Données encore à fournir
 
 Le jeu de démonstration contient des valeurs **provisoires**, signalées par la
 mention « à confirmer » à côté de chaque format GN. Elles ne doivent pas servir

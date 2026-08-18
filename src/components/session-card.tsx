@@ -9,6 +9,7 @@ interface SessionSummary {
   id: string;
   status: SessionStatus;
   submitted_at: string | null;
+  authorName: string | null;
 }
 
 /**
@@ -28,12 +29,23 @@ export function SessionCard({
 }) {
   const status = session?.status ?? null;
 
-  const label =
+  const label = status === 'submitted' ? 'Fait' : status === 'draft' ? 'En cours' : 'À faire';
+
+  // « Fait à 08h42 par Karim » : l'employé doit voir d'un coup d'œil si
+  // quelqu'un s'en est déjà chargé.
+  const detail =
     status === 'submitted'
-      ? `Fait à ${session?.submitted_at ? TIME_FORMAT.format(new Date(session.submitted_at)) : '—'}`
+      ? [
+          session?.submitted_at ? `à ${TIME_FORMAT.format(new Date(session.submitted_at))}` : null,
+          session?.authorName ? `par ${session.authorName}` : null,
+        ]
+          .filter(Boolean)
+          .join(' ')
       : status === 'draft'
-        ? 'En cours'
-        : 'À faire';
+        ? session?.authorName
+          ? `Commencé par ${session.authorName}`
+          : 'Commencé'
+        : null;
 
   return (
     <Link href={`/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}`} className="block">
@@ -42,7 +54,7 @@ export function SessionCard({
           <h2 className="text-lg font-semibold">{title}</h2>
           <Badge variant={status === 'submitted' ? 'secondary' : 'default'}>{label}</Badge>
         </div>
-        <p className="text-muted-foreground text-sm">{description}</p>
+        <p className="text-muted-foreground text-sm">{detail ?? description}</p>
       </Card>
     </Link>
   );

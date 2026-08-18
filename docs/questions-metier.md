@@ -105,7 +105,27 @@ au comptage par demi-gastro sans réécriture.
 **Reste à fournir :** le temps de prépa réel, en minutes par gastro, pour chaque
 produit. Les valeurs du seed sont provisoires.
 
-### 5.2 Le plafond de cible et l'arrondi
+### 5.2 Le comptage du jour est partagé — à confirmer
+
+Le §8 décrit l'accès employé comme « ses propres sessions du jour ». Pris à la
+lettre, cela bloque deux choses :
+
+- il n'existe qu'**une** session par (date, moment). Si Karim ouvre le comptage
+  du matin puis part, Sofia n'a plus aucun accès en écriture et ne peut plus
+  compter du tout ;
+- le §6.2 demande que l'accueil affiche « fait à 08h42 par Karim », ce qui
+  suppose de voir les sessions des collègues.
+
+**J'ai donc ouvert le comptage DU JOUR à tout employé actif**, en gardant
+intactes les deux protections qui comptent : aucun accès au CA, au calculateur,
+aux cibles ni aux seuils ; et un comptage validé n'est plus modifiable. L'auteur
+de chaque session reste enregistré et visible dans l'historique.
+
+**Question :** est-ce le bon comportement ? L'alternative serait un comptage par
+employé (chacun le sien, avec plusieurs comptages du matin le même jour), mais
+cela complique le rapport de relance — lequel des trois comptages fait foi ?
+
+### 5.3 Le plafond de cible et l'arrondi
 
 Le §5.3 impose de borner la cible **puis** de l'arrondir au demi-gastro
 supérieur. Un plafond de 8,2 gastros deviendrait donc 8,5 — au-dessus du

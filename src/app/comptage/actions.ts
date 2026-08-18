@@ -1,0 +1,161 @@
+'use server';
+
+import { revalidatePath } from 'next/cache';
+import { z } from 'zod';
+import { createClient } from '@/lib/supabase/server';
+import type { SessionKind } from '@/lib/supabase/database.types';
+
+/** Ouvre (ou retrouve) la session du jour et prépare une ligne par produit actif. */
+export async function openSession(session: SessionKind): Promise<{
+  sessionId?: string;
+  error?: string;
+}> {
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('mep_open_count_session', {
+    p_session: session,
+    p_device_info: null,
+  });
+
+  if (error) return { error: `Impossible d’ouvrir le comptage : ${error.message}` };
+  return { sessionId: data as unknown as string };
+}
+
+const lineSchema = z.object({
+  sessionId: z.uuid(),
+  productId: z.uuid(),
+  qtySaladbar: z.number().min(0).max(999),
+  qtyFridge: z.number().min(0).max(999),
+  isNotApplicable: z.boolean(),
+  notApplicableReason: z.string().trim().max(200).nullable(),
+});
+
+export type SaveLineInput = z.input<typeof lineSchema>;
+
+/**
+ * Enregistre une ligne de comptage.
+ *
+ * Le client appelle cette action à chaque changement (avec anti-rebond). En
+ * cas d'échec réseau, la saisie reste dans la file IndexedDB et sera rejouée :
+ * cette action doit donc rester **idempotente**.
+ */
+export async function saveCountLine(input: SaveLineInput): Promise<{ error?: string }> {
+  const parsed = lineSchema.safeParse(input);
+  if (!parsed.success) return { error: 'Saisie invalide.' };
+
+  const { sessionId, productId, isNotApplicable, notApplicableReason } = parsed.data;
+
+  if (isNotApplicable && !notApplicableReason) {
+    return { error: 'Indiquez pourquoi le produit n’est pas applicable.' };
+  }
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('count_lines')
+    .update({
+      // Un produit non applicable ne porte pas de quantité.
+      qty_saladbar: isNotApplicable ? 0 : parsed.data.qtySaladbar,
+      qty_fridge: isNotApplicable ? 0 : parsed.data.qtyFridge,
+      is_not_applicable: isNotApplicable,
+      not_applicable_reason: isNotApplicable ? notApplicableReason : null,
+      counted_at: new Date().toISOString(),
+    })
+    .eq('session_id', sessionId)
+    .eq('product_id', productId);
+
+  if (error) return { error: error.message };
+  return {};
+}
+
+/** Rejoue plusieurs saisies d'un coup, au retour du réseau. */
+export async function saveCountLines(
+  inputs: SaveLineInput[],
+): Promise<{ savedKeys: string[]; error?: string }> {
+  const savedKeys: string[] = [];
+
+  for (const input of inputs) {
+    const result = await saveCountLine(input);
+    if (result.error) return { savedKeys, error: result.error };
+    savedKeys.push(`${input.sessionId}:${input.productId}`);
+  }
+
+  return { savedKeys };
+}
+
+export interface ReorderItem {
+  productId: string;
+  productName: string;
+  gnFormat: string | null;
+  notes: string | null;
+  qtyToProduce: number;
+  urgencyLevel: number;
+  isCritical: boolean;
+}
+
+/**
+ * Valide le comptage. Tout le calcul (cible, seuil, besoin) se fait en base :
+ * la réponse ne contient ni CA, ni cible, ni seuil (§5.8).
+ */
+export async function submitCount(sessionId: string): Promise<{
+  items?: ReorderItem[];
+  error?: string;
+}> {
+  if (!z.uuid().safeParse(sessionId).success) return { error: 'Session invalide.' };
+
+  const supabase = await createClient();
+
+  // Refus explicite plutôt qu'un rapport partiel sur un comptage incomplet.
+  const { count: pending } = await supabase
+    .from('count_lines')
+    .select('id', { count: 'exact', head: true })
+    .eq('session_id', sessionId)
+    .is('counted_at', null);
+
+  if ((pending ?? 0) > 0) {
+    return {
+      error: `Il reste ${pending} produit${pending! > 1 ? 's' : ''} à compter.`,
+    };
+  }
+
+  const { data, error } = await supabase.rpc('mep_submit_count', { p_session_id: sessionId });
+  if (error) return { error: `Validation impossible : ${error.message}` };
+
+  revalidatePath('/');
+  revalidatePath('/comptage', 'layout');
+
+  return {
+    items: (data ?? []).map((row) => ({
+      productId: row.product_id,
+      productName: row.product_name,
+      gnFormat: row.gn_format,
+      notes: row.notes,
+      qtyToProduce: Number(row.qty_to_produce),
+      urgencyLevel: Number(row.urgency_level),
+      isCritical: row.is_critical,
+    })),
+  };
+}
+
+/** Coche ou décoche une tâche de production depuis le rapport. */
+export async function toggleProductionTask(
+  taskId: string,
+  isDone: boolean,
+): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  const { error } = await supabase
+    .from('production_tasks')
+    .update({
+      is_done: isDone,
+      done_at: isDone ? new Date().toISOString() : null,
+      done_by: isDone ? (user?.id ?? null) : null,
+    })
+    .eq('id', taskId);
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/comptage', 'layout');
+  return {};
+}
