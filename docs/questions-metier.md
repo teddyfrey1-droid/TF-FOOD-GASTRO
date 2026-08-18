@@ -44,11 +44,29 @@ date ; ca_ht ; ferme(0/1)
 **Questions :**
 
 - Sur quelle profondeur ? (12 mois glissants suffisent pour démarrer)
-- Le CA est-il découpé **midi / soir** ? Le calcul de la consommation réelle
-  (§5.7 du cahier des charges) a besoin du CA du midi seul pour être exploitable.
-  Sans lui, l'analyse de recalibrage sera moins précise.
 - Quel **taux de croissance** appliquer par rapport à l'an dernier ?
   (le cahier des charges cite +10 % en exemple, la base est à 0 % pour l'instant)
+
+### ✅ Découpage midi / soir — tranché
+
+Le CA est enregistré **à la journée**, avec deux comptages : le matin et après
+le service du midi.
+
+Le §5.7 rapportait la consommation au « CA réel du midi », qui n'existe donc
+pas. L'indicateur de référence est devenu **« gastros consommés au midi pour
+1 000 € de CA de la journée »** : entièrement mesuré, aucune hypothèse, et
+directement comparable d'un jour à l'autre.
+
+**Question restante :** quelle **part du chiffre d'affaires** se fait au
+déjeuner, en gros ? (0,6 = 60 %)
+
+Cette part sert uniquement à ramener la consommation du midi à une journée
+entière, pour la comparer à la cible du calculateur — qui, elle, dimensionne un
+jour complet. Elle n'entre **jamais** dans le calcul des cibles ni des seuils.
+
+Tant qu'elle n'est pas renseignée, la colonne « journée entière » reste vide :
+le réglage est volontairement laissé à blanc plutôt que rempli d'une valeur
+inventée. Une estimation grossière suffit et pourra être affinée.
 
 ---
 

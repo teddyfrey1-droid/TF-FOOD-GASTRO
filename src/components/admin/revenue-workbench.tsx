@@ -352,14 +352,43 @@ function SettingsForm({ settings }: { settings: RevenueSettings }) {
             </p>
           </div>
 
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="lunch_revenue_share">Part du CA réalisée au midi</Label>
+            <Input
+              id="lunch_revenue_share"
+              name="lunch_revenue_share"
+              inputMode="decimal"
+              placeholder="laisser vide si vous ne savez pas"
+              defaultValue={settings.lunchRevenueShare ?? ''}
+              className="max-w-40"
+            />
+            <p className="text-muted-foreground text-xs">
+              0,6 = 60 % du chiffre d&apos;affaires se fait au déjeuner. Comme le CA est
+              enregistré à la journée, cette part sert uniquement à ramener la consommation
+              constatée au midi à une journée entière, pour la comparer au calculateur. Laissée
+              vide, la colonne « journée entière » de l&apos;écran Consommation reste
+              vide — <strong>aucun chiffre n&apos;est inventé</strong>.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="morning_reminder_time">Rappel du matin</Label>
-            <Input id="morning_reminder_time" name="morning_reminder_time" type="time" defaultValue="07:30" />
+            <Input
+              id="morning_reminder_time"
+              name="morning_reminder_time"
+              type="time"
+              defaultValue={settings.morningReminderTime ?? '07:30'}
+            />
           </div>
 
           <div className="space-y-2">
             <Label htmlFor="afternoon_reminder_time">Rappel de l&apos;après-midi</Label>
-            <Input id="afternoon_reminder_time" name="afternoon_reminder_time" type="time" defaultValue="15:00" />
+            <Input
+              id="afternoon_reminder_time"
+              name="afternoon_reminder_time"
+              type="time"
+              defaultValue={settings.afternoonReminderTime ?? '15:00'}
+            />
           </div>
         </div>
 

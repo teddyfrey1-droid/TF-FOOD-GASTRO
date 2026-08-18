@@ -115,8 +115,18 @@ export interface RevenueSettings {
   afternoonTargetRatio: number;
   /** Ratio de seuil par défaut quand le produit n'en définit pas (défaut 0.5). */
   defaultReorderRatio: number;
+  /**
+   * Part du CA réalisée au service du midi (0 à 1).
+   * null tant qu'elle n'est pas renseignée : sert uniquement à extrapoler la
+   * consommation d'une journée entière (§5.7), jamais au calcul des cibles.
+   */
+  lunchRevenueShare: number | null;
   /** Les employés voient-ils les cibles et seuils ? (défaut false) */
   showTargetsToEmployees: boolean;
+  /** Heure du rappel de comptage du matin, au format HH:MM. */
+  morningReminderTime?: string | null;
+  /** Heure du rappel de comptage de l'après-midi, au format HH:MM. */
+  afternoonReminderTime?: string | null;
 }
 
 export const DEFAULT_REVENUE_SETTINGS: RevenueSettings = {
@@ -124,5 +134,6 @@ export const DEFAULT_REVENUE_SETTINGS: RevenueSettings = {
   safetyMargin: 0.1,
   afternoonTargetRatio: 1.0,
   defaultReorderRatio: 0.5,
+  lunchRevenueShare: null,
   showTargetsToEmployees: false,
 };

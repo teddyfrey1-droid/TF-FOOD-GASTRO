@@ -121,6 +121,13 @@ zéro, ou un produit urgent dont il reste moins d'un quart de la cible.
 Le rapport affiche le **temps de préparation total estimé**, compté par gastro
 entier : 5 gastros de saumon à 6 minutes le gastro font 30 minutes.
 
+### Étape 7 — Mesurer ce qui part réellement
+
+Les deux comptages encadrent le service du midi : la différence donne la
+consommation réelle, sans rien demander de plus à l'employé. Rapportée au
+chiffre d'affaires du jour, elle permet à terme de recalibrer le calculateur
+sur du constaté plutôt que sur du ressenti. Voir §4.
+
 ### Ce qui protège l'historique
 
 Au moment où un comptage est validé, la cible, le seuil et la quantité à
@@ -185,13 +192,46 @@ effacées : le téléphone est parfois partagé.
   (rupture avérée), et produit jamais passé sous son seuil en dix comptages
   (cible probablement trop haute).
 - **Consommation réelle** : combien de gastros partent réellement au service du
-  midi, pour 1 000 € de chiffre d'affaires, face au ratio théorique du
-  calculateur. Un bouton permet d'appliquer le ratio constaté.
+  midi, pour 1 000 € de chiffre d'affaires de la journée. Un bouton permet
+  d'appliquer le ratio constaté au calculateur.
 - **Exports CSV** : la période complète ou une session précise, au format que
   votre Excel français ouvre sans rien reformater.
 
-> La consommation réelle a besoin des **deux** comptages validés le même jour
-> **et** du CA du midi saisi. Sans le CA du midi, la colonne reste vide.
+### Comment la consommation est mesurée
+
+Les deux comptages encadrent le service du midi, ce qui donne une mesure
+directe :
+
+```
+consommé au midi = (stock du matin + ce qui a été produit le matin) − stock d'après-midi
+```
+
+Le chiffre d'affaires étant enregistré **à la journée**, la colonne de
+référence est :
+
+> **gastros consommés au midi, pour 1 000 € de chiffre d'affaires de la journée**
+
+Rien n'y est estimé : même numérateur, même dénominateur, tous les jours. C'est
+ce chiffre qui se compare d'une semaine à l'autre et qui montre si un produit
+part plus vite qu'avant.
+
+Pour le comparer à la **cible du calculateur**, en revanche, il faut une
+information de plus : le calculateur dimensionne une journée entière, alors que
+la mesure ne couvre que le midi. Il faut donc savoir quelle part du chiffre
+d'affaires se fait au déjeuner. Ce réglage se saisit dans
+**Chiffre d'affaires → Réglages**.
+
+Tant qu'il n'est pas renseigné, la colonne « journée entière » reste vide :
+**aucun chiffre n'est inventé**. Et si vous vous mettez un jour à saisir le CA
+du midi séparément, il prime automatiquement et le réglage devient inutile.
+
+> La consommation a besoin des **deux** comptages validés le même jour et du
+> chiffre d'affaires du jour saisi.
+
+**Lire la colonne « Marge ».** C'est l'écart entre la cible du calculateur et
+la consommation constatée. Une marge **positive** est normale : la cible
+intègre volontairement de la sécurité. Une marge **négative** signale une cible
+trop basse — on a consommé plus que prévu, donc frôlé la rupture.
 
 ---
 
@@ -321,7 +361,7 @@ en TypeScript (pour le simulateur du back-office) et en SQL (pour la validation
 d'un comptage). Les deux doivent donner exactement le même résultat.
 
 ```bash
-pnpm test       # 117 tests TypeScript : calcul, steppers, anomalies, CSV
+pnpm test       # 129 tests TypeScript : calcul, steppers, consommation, anomalies, CSV
 pnpm db:test    # tests SQL : calcul, sécurité RLS, audit, comptage, rappels
 ```
 

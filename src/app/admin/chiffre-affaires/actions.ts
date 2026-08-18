@@ -17,6 +17,18 @@ const settingsSchema = z.object({
     (v) => v >= 0 && v <= 1,
     'Le ratio de seuil doit être compris entre 0 et 1.',
   ),
+  // Vide = « je ne sais pas » : on préfère une colonne sans valeur à un
+  // chiffre inventé qui aurait l'air d'une mesure.
+  lunch_revenue_share: z
+    .union([z.string(), z.number(), z.null()])
+    .transform((value) => {
+      const text = String(value ?? '').trim().replace(',', '.');
+      return text === '' ? null : Number(text);
+    })
+    .refine(
+      (value) => value === null || (Number.isFinite(value) && value > 0 && value <= 1),
+      'La part du midi doit être comprise entre 0 et 1 (0,6 = 60 %).',
+    ),
   show_targets_to_employees: z.boolean(),
   morning_reminder_time: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
   afternoon_reminder_time: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
@@ -36,6 +48,7 @@ export async function saveRevenueSettings(
     safety_margin: formData.get('safety_margin') ?? '0.1',
     afternoon_target_ratio: formData.get('afternoon_target_ratio') ?? '1',
     default_reorder_ratio: formData.get('default_reorder_ratio') ?? '0.5',
+    lunch_revenue_share: formData.get('lunch_revenue_share') ?? null,
     show_targets_to_employees: formData.get('show_targets_to_employees') === 'on',
     morning_reminder_time: String(formData.get('morning_reminder_time') ?? '07:30'),
     afternoon_reminder_time: String(formData.get('afternoon_reminder_time') ?? '15:00'),

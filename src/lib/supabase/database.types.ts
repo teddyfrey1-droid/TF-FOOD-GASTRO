@@ -119,6 +119,8 @@ type RevenueSettingsRow = {
   safety_margin: number;
   afternoon_target_ratio: number;
   default_reorder_ratio: number;
+  /** Part du CA réalisée au midi (0 à 1). null = inconnue. */
+  lunch_revenue_share: number | null;
   show_targets_to_employees: boolean;
   morning_reminder_time: string;
   afternoon_reminder_time: string;

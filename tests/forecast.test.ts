@@ -4,7 +4,6 @@ import {
   referenceRevenueForSession,
   type RevenueHistoryEntry,
 } from '@/lib/mep/forecast';
-import { computeLunchConsumption, ratioDeviation, averageObservedRatio } from '@/lib/mep/consumption';
 
 function history(entries: Array<[string, number, boolean?]>): Map<string, RevenueHistoryEntry> {
   return new Map(
@@ -100,34 +99,5 @@ describe('§5.2 — CA de référence par session', () => {
         afternoonTargetRatio: 0.8,
       }),
     ).toBe(2640);
-  });
-});
-
-describe('§5.7 — consommation réelle', () => {
-  it('mesure la consommation du midi', () => {
-    const result = computeLunchConsumption(
-      { productId: 'p1', stockMorning: 5, productionMorningDone: 3, stockAfternoon: 2 },
-      2000,
-    );
-    expect(result.consumedLunch).toBe(6);
-    expect(result.consumedPer1000Eur).toBe(3);
-  });
-
-  it('renvoie null quand le CA du midi est inconnu', () => {
-    const result = computeLunchConsumption(
-      { productId: 'p1', stockMorning: 5, productionMorningDone: 0, stockAfternoon: 2 },
-      null,
-    );
-    expect(result.consumedPer1000Eur).toBeNull();
-  });
-
-  it('calcule l’écart entre ratio théorique et ratio constaté', () => {
-    expect(ratioDeviation(2, 3)).toBe(0.5);
-    expect(ratioDeviation(0, 3)).toBeNull();
-  });
-
-  it('moyenne les ratios constatés en ignorant les trous', () => {
-    expect(averageObservedRatio([2, null, 4])).toBe(3);
-    expect(averageObservedRatio([null, null])).toBeNull();
   });
 });

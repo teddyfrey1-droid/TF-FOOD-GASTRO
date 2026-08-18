@@ -144,7 +144,7 @@ export default async function HistoryPage({
         </TabsContent>
 
         <TabsContent value="consommation" className="mt-5">
-          <ConsumptionTable rows={consumption} />
+          <ConsumptionTable report={consumption} />
         </TabsContent>
       </Tabs>
     </div>
