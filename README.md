@@ -71,13 +71,24 @@ aucun comptage supplémentaire.
 
 ### Étape 1 — Le chiffre d'affaires prévu du jour
 
+Tout part de là, et c'est ce qui permet d'**anticiper la production** plutôt
+que de la subir.
+
 On regarde ce qu'a fait le restaurant **le même jour de la semaine, la même
-semaine, l'an dernier**. Pas la même date : le même jour de semaine. Un mardi se
-compare à un mardi.
+semaine, l'an dernier**. Pas la même date : le même jour de semaine. Un jeudi
+se compare à un jeudi — sans quoi on comparerait un jeudi de juin à un mercredi.
 
 ```
 CA prévu = CA de l'an dernier × (1 + taux de croissance) × coefficient du jour
 ```
+
+**Un exemple concret.** Le jeudi 26 juin 2025 a fait 2 000 €. Avec un taux de
+croissance de +25 %, le jeudi 25 juin 2026 est estimé à **2 500 €**. Le
+calculateur en déduit qu'il faut **6 gastros de saumon** au lieu des 5 qu'il
+aurait fallu pour 2 000 €.
+
+C'est tout l'intérêt : on prépare pour la journée qui vient, pas pour celle de
+l'an dernier. On ne manque pas, et on ne gâche pas.
 
 Le **coefficient** est un réglage manuel pour les cas particuliers : jour férié,
 vacances scolaires, météo, travaux, événement dans le quartier. Il vaut 1 par défaut.
@@ -85,6 +96,29 @@ vacances scolaires, météo, travaux, événement dans le quartier. Il vaut 1 pa
 Si le jour de référence de l'an dernier était un jour de fermeture, on remonte au
 même jour de la semaine précédente. Le directeur peut aussi écraser la prévision
 d'une journée à la main.
+
+### Le taux de croissance se règle sur du constaté
+
+Ce taux décide, à lui seul, s'il faut 5 ou 6 gastros de saumon. Il se modifie
+**à tout moment** dans le back-office et agit immédiatement sur les cibles du
+jour — sans jamais toucher aux comptages déjà validés.
+
+Et vous n'avez pas à le deviner. L'écran Chiffre d'affaires affiche côte à
+côte :
+
+- le **taux que vous avez réglé** ;
+- le **taux réellement constaté**, obtenu en comparant chaque journée réalisée
+  au même jour de semaine de l'an dernier.
+
+Si l'écart est net, un bouton propose d'aligner l'un sur l'autre, en disant
+lequel des deux risques vous courez :
+
+> *Vous produisez pour un chiffre d'affaires plus bas que celui réellement
+> réalisé : risque de manquer.* → **Régler sur +23 %**
+
+Le calcul agrège les montants plutôt que de moyenner des pourcentages : un
+samedi à 4 000 € pèse ainsi plus qu'un lundi à 300 €, et une journée creuse ne
+fausse pas la conclusion.
 
 ### Étape 2 — Le chiffre d'affaires de référence
 
@@ -203,6 +237,8 @@ effacées : le téléphone est parfois partagé.
 
 - **Tableau de bord** : le CA prévisionnel du jour, l'état des deux comptages,
   et un rappel tant que des données provisoires traînent en base.
+- **Chiffre d'affaires** : le taux de croissance réglé face au taux constaté,
+  le calendrier du mois avec son coefficient par jour, et la saisie du réalisé.
 - **Historique** : tous les comptages sur une période, filtrables par session et
   par employé. Le détail d'un comptage montre saladbar / frigo / total, **la
   cible et le seuil tels qu'ils étaient ce jour-là**, la relance demandée et
@@ -386,7 +422,7 @@ en TypeScript (pour le simulateur du back-office) et en SQL (pour la validation
 d'un comptage). Les deux doivent donner exactement le même résultat.
 
 ```bash
-pnpm test       # 133 tests TypeScript : calcul, steppers, consommation, anomalies, CSV
+pnpm test       # 150 tests TypeScript : calcul, croissance, steppers, consommation, CSV
 pnpm db:test    # tests SQL : calcul, sécurité RLS, audit, comptage, rappels
 ```
 

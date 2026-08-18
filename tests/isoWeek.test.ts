@@ -49,6 +49,16 @@ describe('date de référence N-1 (§5.1)', () => {
     expect(ref).toBe('2025-08-19');
   });
 
+  it('cas du restaurant : 25 juin 2026 -> 26 juin 2025', () => {
+    // Exemple donné par le restaurant. Les deux dates sont des jeudis de la
+    // semaine ISO 26 : c'est bien le JOUR DE SEMAINE qui commande, pas le
+    // quantième. Comparer un 25 juin à un 25 juin comparerait un jeudi à un
+    // mercredi — et donc un jour de semaine à un autre.
+    expect(referenceDateLastYear('2026-06-25')).toBe('2025-06-26');
+    expect(isoWeekday('2026-06-25')).toBe(isoWeekday('2025-06-26'));
+    expect(isoWeekNumber('2026-06-25')).toBe(26);
+  });
+
   it('ne renvoie jamais la même date calendaire quand le jour de semaine diffère', () => {
     const ref = referenceDateLastYear('2026-03-10'); // mardi
     expect(isoWeekday(ref)).toBe(2);

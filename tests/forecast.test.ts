@@ -4,6 +4,7 @@ import {
   referenceRevenueForSession,
   type RevenueHistoryEntry,
 } from '@/lib/mep/forecast';
+import { computeProductTarget } from '@/lib/mep/targets';
 
 function history(entries: Array<[string, number, boolean?]>): Map<string, RevenueHistoryEntry> {
   return new Map(
@@ -99,5 +100,95 @@ describe('§5.2 — CA de référence par session', () => {
         afternoonTargetRatio: 0.8,
       }),
     ).toBe(2640);
+  });
+});
+
+/**
+ * Le scénario complet décrit par le restaurant :
+ *
+ *   « si le 26 juin 2025 a fait 2 000 €, alors le 25 juin 2026 est estimé à
+ *     2 500 €, et on aura besoin de 6 gastros de saumon au lieu de 5 »
+ *
+ * C'est tout l'intérêt du calcul : anticiper la production sur un CA estimé,
+ * pour ne jamais manquer sans pour autant gâcher.
+ */
+describe('scénario du restaurant — anticiper la production sur le CA estimé', () => {
+  // Paliers d'illustration. Les bornes portent sur le CA DE RÉFÉRENCE,
+  // c'est-à-dire la prévision majorée de la marge de sécurité (+10 %) :
+  // 2 000 € prévus se lisent à 2 200 €, et 2 500 € prévus à 2 750 €.
+  const brackets = [
+    { productId: 'saumon', mode: 'bracket' as const, caMin: 0, caMax: 2000, targetQty: 4, qtyPer1000Eur: null },
+    { productId: 'saumon', mode: 'bracket' as const, caMin: 2000, caMax: 2400, targetQty: 5, qtyPer1000Eur: null },
+    { productId: 'saumon', mode: 'bracket' as const, caMin: 2400, caMax: 3000, targetQty: 6, qtyPer1000Eur: null },
+    { productId: 'saumon', mode: 'bracket' as const, caMin: 3000, caMax: null, targetQty: 8, qtyPer1000Eur: null },
+  ];
+
+  const saumon = {
+    id: 'saumon',
+    name: 'Saumon',
+    countStep: 0.5,
+    productionStep: 0.5,
+    reorderMode: 'ratio' as const,
+    reorderRatio: 0.5,
+    reorderFixed: null,
+    floorQty: 4,
+    ceilingQty: 16,
+    urgencyLevel: 5 as const,
+    prepTimeMin: 6,
+  };
+
+  const history = new Map([
+    ['2025-06-26', { date: '2025-06-26', revenueHt: 2000, isClosedDay: false }],
+  ]);
+
+  it('sans croissance, le 25 juin 2026 reprend le CA de l’an dernier', () => {
+    const forecast = computeForecast({ date: '2026-06-25', history, growthRate: 0 });
+    expect(forecast.referenceDate).toBe('2025-06-26');
+    expect(forecast.forecastRevenue).toBe(2000);
+  });
+
+  it('avec 25 % de croissance, la prévision passe à 2 500 €', () => {
+    const forecast = computeForecast({ date: '2026-06-25', history, growthRate: 0.25 });
+    expect(forecast.forecastRevenue).toBe(2500);
+  });
+
+  it('et la cible du saumon passe de 5 à 6 gastros', () => {
+    const settings = { safetyMargin: 0.1, afternoonTargetRatio: 1 };
+
+    const sansCroissance = computeProductTarget(
+      saumon,
+      brackets,
+      referenceRevenueForSession(2000, 'morning', settings), // 2 200 €
+      0.5,
+    );
+    expect(sansCroissance.target).toBe(5);
+
+    const avecCroissance = computeProductTarget(
+      saumon,
+      brackets,
+      referenceRevenueForSession(2500, 'morning', settings), // 2 750 €
+      0.5,
+    );
+    expect(avecCroissance.target).toBe(6);
+  });
+
+  it('le taux de croissance se change à tout moment et agit immédiatement', () => {
+    // Le même jour, trois taux, trois prévisions : rien n'est figé en base.
+    const taux = [0, 0.25, 0.3];
+    const previsions = taux.map(
+      (growthRate) => computeForecast({ date: '2026-06-25', history, growthRate }).forecastRevenue,
+    );
+    expect(previsions).toEqual([2000, 2500, 2600]);
+  });
+
+  it('le coefficient du jour se cumule au taux de croissance', () => {
+    // Jour férié annoncé calme : coefficient 0,8 par-dessus les +25 %.
+    const forecast = computeForecast({
+      date: '2026-06-25',
+      history,
+      growthRate: 0.25,
+      coefficient: 0.8,
+    });
+    expect(forecast.forecastRevenue).toBe(2000);
   });
 });

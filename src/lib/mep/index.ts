@@ -6,3 +6,4 @@ export * from './targets';
 export * from './reorder';
 export * from './consumption';
 export * from './anomalies';
+export * from './growth';

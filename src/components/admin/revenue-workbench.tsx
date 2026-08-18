@@ -15,7 +15,12 @@ import {
   saveRevenueSettings,
   type SettingsState,
 } from '@/app/admin/chiffre-affaires/actions';
-import type { RevenueSettings } from '@/lib/mep';
+import {
+  MIN_GROWTH_SAMPLE_DAYS,
+  shouldSuggestGrowthAdjustment,
+  type GrowthObservation,
+  type RevenueSettings,
+} from '@/lib/mep';
 
 export interface MonthDay {
   date: string;
@@ -45,11 +50,13 @@ export function RevenueWorkbench({
   monthKey,
   days,
   today,
+  growth,
 }: {
   settings: RevenueSettings;
   monthKey: string;
   days: MonthDay[];
   today: string;
+  growth: GrowthObservation;
 }) {
   return (
     <Tabs defaultValue="calendrier">
@@ -58,14 +65,130 @@ export function RevenueWorkbench({
         <TabsTrigger value="reglages">Réglages</TabsTrigger>
       </TabsList>
 
-      <TabsContent value="calendrier" className="mt-5">
+      <TabsContent value="calendrier" className="mt-5 space-y-4">
+        <GrowthCalibration settings={settings} growth={growth} />
         <MonthTable monthKey={monthKey} days={days} today={today} />
       </TabsContent>
 
-      <TabsContent value="reglages" className="mt-5">
+      <TabsContent value="reglages" className="mt-5 space-y-4">
+        <GrowthCalibration settings={settings} growth={growth} />
         <SettingsForm settings={settings} />
       </TabsContent>
     </Tabs>
+  );
+}
+
+/**
+ * Le taux de croissance décide, à lui seul, s'il faut 5 ou 6 gastros de
+ * saumon un jeudi de juin. Autant le régler sur du constaté.
+ */
+function GrowthCalibration({
+  settings,
+  growth,
+}: {
+  settings: RevenueSettings;
+  growth: GrowthObservation;
+}) {
+  if (growth.observedRate === null) {
+    return (
+      <Card className="text-muted-foreground p-4 text-sm">
+        La croissance constatée s&apos;affichera ici dès que vous aurez saisi le chiffre
+        d&apos;affaires réalisé de quelques journées : elle compare chaque jour au même jour de
+        semaine de l&apos;an dernier.
+      </Card>
+    );
+  }
+
+  const suggest = shouldSuggestGrowthAdjustment(settings.growthRate, growth);
+  const sign = (value: number) => (value >= 0 ? '+' : '');
+
+  return (
+    <Card className="space-y-3 p-5">
+      <div className="flex flex-wrap items-baseline gap-x-8 gap-y-2">
+        <div>
+          <p className="text-muted-foreground text-xs">Taux de croissance réglé</p>
+          <p className="text-2xl font-bold tabular-nums">
+            {sign(settings.growthRate)}
+            {formatPercent(settings.growthRate, 1)}
+          </p>
+        </div>
+        <div>
+          <p className="text-muted-foreground text-xs">
+            Constaté sur {growth.sampleDays} jour{growth.sampleDays > 1 ? 's' : ''}
+          </p>
+          <p className="text-2xl font-bold tabular-nums">
+            {sign(growth.observedRate)}
+            {formatPercent(growth.observedRate, 1)}
+          </p>
+        </div>
+        <p className="text-muted-foreground text-xs">
+          {formatEuro(growth.totalActual)} réalisés, contre {formatEuro(growth.totalReference)}{' '}
+          l&apos;an dernier sur les mêmes jours de semaine.
+        </p>
+      </div>
+
+      {suggest ? (
+        <ApplyGrowthRateButton observedRate={growth.observedRate} settings={settings} />
+      ) : growth.sampleDays < MIN_GROWTH_SAMPLE_DAYS ? (
+        <p className="text-muted-foreground text-xs">
+          Encore trop peu de journées pour en tirer une conclusion — au moins{' '}
+          {MIN_GROWTH_SAMPLE_DAYS} sont nécessaires.
+        </p>
+      ) : (
+        <p className="text-muted-foreground text-xs">
+          Votre réglage colle au constaté : rien à changer.
+        </p>
+      )}
+    </Card>
+  );
+}
+
+/** Aligne le taux réglé sur le taux constaté, après confirmation. */
+function ApplyGrowthRateButton({
+  observedRate,
+  settings,
+}: {
+  observedRate: number;
+  settings: RevenueSettings;
+}) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  // Arrondi au point de pourcentage : un taux à trois décimales donnerait une
+  // fausse impression de précision.
+  const rounded = Math.round(observedRate * 100) / 100;
+  const higher = rounded > settings.growthRate;
+
+  return (
+    <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+      <p className="text-sm">
+        {higher
+          ? 'Vous produisez pour un CA plus bas que celui réellement réalisé : risque de manquer.'
+          : 'Vous produisez pour un CA plus haut que celui réellement réalisé : risque de gâcher.'}
+      </p>
+      <Button
+        size="sm"
+        disabled={pending}
+        onClick={() =>
+          startTransition(async () => {
+            const form = new FormData();
+            form.set('growth_rate', String(rounded));
+            form.set('safety_margin', String(settings.safetyMargin));
+            form.set('afternoon_target_ratio', String(settings.afternoonTargetRatio));
+            form.set('default_reorder_ratio', String(settings.defaultReorderRatio));
+            form.set('morning_reminder_time', settings.morningReminderTime ?? '07:30');
+            form.set('afternoon_reminder_time', settings.afternoonReminderTime ?? '15:00');
+            if (settings.showTargetsToEmployees) form.set('show_targets_to_employees', 'on');
+
+            const result = await saveRevenueSettings({}, form);
+            setError(result.error ?? null);
+          })
+        }
+      >
+        {pending ? 'Application…' : `Régler sur ${rounded >= 0 ? '+' : ''}${Math.round(rounded * 100)} %`}
+      </Button>
+      {error ? <span className="text-destructive text-xs">{error}</span> : null}
+    </div>
   );
 }
 

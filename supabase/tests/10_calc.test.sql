@@ -36,6 +36,15 @@ select pg_temp.check_equal(
   date '2025-08-19'
 );
 
+-- Cas donné par le restaurant : « le 25 juin 2026 se compare au 26 juin 2025 ».
+-- Deux jeudis de la semaine ISO 26. Comparer les 25 juin entre eux
+-- comparerait un jeudi à un mercredi.
+select pg_temp.check_equal(
+  'Cas du restaurant : 25/06/2026 -> 26/06/2025',
+  public.mep_reference_date(date '2026-06-25'),
+  date '2025-06-26'
+);
+
 select pg_temp.check_equal(
   'mep_reference_date : semaine 53 -> semaine 52 quand N-1 n''en a que 52',
   extract(week from public.mep_reference_date(date '2026-12-31'))::int,
@@ -107,6 +116,47 @@ select pg_temp.check_equal(
   1600.00::numeric
 );
 delete from public.daily_forecast where date = date '2026-08-18';
+
+-- ---------------------------------------------------------------------
+-- Scénario du restaurant : anticiper la production sur le CA estimé
+--
+-- « le 26 juin 2025 a fait 2 000 € ; avec 25 % de croissance, le 25 juin 2026
+--   est estimé à 2 500 € — et le taux se change à tout moment »
+-- ---------------------------------------------------------------------
+insert into public.revenue_history (date, revenue_ht, is_closed_day)
+values (date '2025-06-26', 2000, false)
+on conflict (date) do update set revenue_ht = 2000, is_closed_day = false;
+
+do $$
+begin
+  update public.revenue_settings set growth_rate = 0;
+  perform pg_temp.check_equal(
+    'Sans croissance, le 25/06/2026 reprend les 2 000 € de l''an dernier',
+    public.mep_forecast_revenue(date '2026-06-25'), 2000.00::numeric);
+
+  update public.revenue_settings set growth_rate = 0.25;
+  perform pg_temp.check_equal(
+    'Avec +25 %, la prévision passe à 2 500 €',
+    public.mep_forecast_revenue(date '2026-06-25'), 2500.00::numeric);
+
+  -- Le taux se change à tout moment et agit immédiatement : rien n'est figé.
+  update public.revenue_settings set growth_rate = 0.30;
+  perform pg_temp.check_equal(
+    'Passer à +30 % change la prévision dans la foulée',
+    public.mep_forecast_revenue(date '2026-06-25'), 2600.00::numeric);
+
+  -- Le coefficient du jour se cumule au taux de croissance.
+  insert into public.daily_forecast (date, coefficient, source)
+  values (date '2026-06-25', 0.8, 'auto')
+  on conflict (date) do update set coefficient = 0.8, source = 'auto';
+  perform pg_temp.check_equal(
+    'Un coefficient de 0,8 s''applique par-dessus les +30 %',
+    public.mep_forecast_revenue(date '2026-06-25'), 2080.00::numeric);
+  delete from public.daily_forecast where date = date '2026-06-25';
+
+  update public.revenue_settings set growth_rate = 0;
+end
+$$;
 
 -- ---------------------------------------------------------------------
 -- §5.3 / §5.4 — Cible et seuil : LE tableau de test

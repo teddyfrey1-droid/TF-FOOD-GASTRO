@@ -1,5 +1,5 @@
 import { createClient } from '@/lib/supabase/server';
-import { getRevenueSettings } from '@/lib/admin/queries';
+import { getObservedGrowth, getRevenueSettings } from '@/lib/admin/queries';
 import { todayInParis } from '@/lib/format';
 import { toNullableNumber } from '@/lib/admin/mappers';
 import { RevenueWorkbench, type MonthDay } from '@/components/admin/revenue-workbench';
@@ -32,11 +32,21 @@ export default async function RevenuePage({
   const last = days[days.length - 1];
 
   const supabase = await createClient();
-  const [settings, forecasts, actuals, history] = await Promise.all([
+
+  // La croissance constatée se mesure sur une fenêtre glissante, pas sur le
+  // seul mois affiché : un mois isolé est trop court pour conclure.
+  const growthWindowStart = (() => {
+    const date = new Date(`${today}T12:00:00Z`);
+    date.setUTCDate(date.getUTCDate() - 90);
+    return date.toISOString().slice(0, 10);
+  })();
+
+  const [settings, forecasts, actuals, history, growth] = await Promise.all([
     getRevenueSettings(),
     supabase.from('daily_forecast').select('*').gte('date', first).lte('date', last),
     supabase.from('revenue_actuals').select('*').gte('date', first).lte('date', last),
     supabase.from('revenue_history').select('date').limit(1),
+    getObservedGrowth(growthWindowStart, today),
   ]);
 
   const forecastByDate = new Map((forecasts.data ?? []).map((row) => [row.date, row]));
@@ -83,7 +93,13 @@ export default async function RevenuePage({
         </div>
       ) : null}
 
-      <RevenueWorkbench settings={settings} monthKey={monthKey} days={rows} today={today} />
+      <RevenueWorkbench
+        settings={settings}
+        monthKey={monthKey}
+        days={rows}
+        today={today}
+        growth={growth}
+      />
     </div>
   );
 }

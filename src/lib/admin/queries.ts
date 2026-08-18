@@ -1,7 +1,15 @@
 import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
-import { computeProductTarget, type ProductTarget, type RevenueSettings } from '@/lib/mep';
+import {
+  computeProductTarget,
+  observedGrowthRate,
+  referenceDateLastYear,
+  type GrowthObservation,
+  type GrowthSample,
+  type ProductTarget,
+  type RevenueSettings,
+} from '@/lib/mep';
 import { groupRulesByProduct, toNumber, toProductCalcConfig } from './mappers';
 import type { SessionKind, Tables } from '@/lib/supabase/database.types';
 
@@ -129,6 +137,55 @@ export async function simulateTargets(
       hasRule: target.hasRule,
     };
   });
+}
+
+/**
+ * Croissance réellement constatée sur une période.
+ *
+ * Compare, jour par jour, le CA réalisé au CA du même jour de semaine de
+ * l'an dernier — exactement la référence qu'utilise la prévision (§5.1).
+ */
+export async function getObservedGrowth(
+  from: string,
+  to: string,
+): Promise<GrowthObservation> {
+  const supabase = await createClient();
+
+  const { data: actuals } = await supabase
+    .from('revenue_actuals')
+    .select('date, revenue_ht')
+    .gte('date', from)
+    .lte('date', to);
+
+  if (!actuals || actuals.length === 0) {
+    return { observedRate: null, sampleDays: 0, totalActual: 0, totalReference: 0 };
+  }
+
+  // On ne va chercher que les journées de référence effectivement utiles.
+  const referenceByDate = new Map(
+    actuals.map((row) => [row.date, referenceDateLastYear(row.date)] as const),
+  );
+
+  const { data: history } = await supabase
+    .from('revenue_history')
+    .select('date, revenue_ht, is_closed_day')
+    .in('date', [...new Set(referenceByDate.values())]);
+
+  const historyByDate = new Map((history ?? []).map((row) => [row.date, row]));
+
+  const samples: GrowthSample[] = [];
+  for (const row of actuals) {
+    const reference = historyByDate.get(referenceByDate.get(row.date)!);
+    // Un jour de fermeture l'an dernier ne dit rien de la croissance.
+    if (!reference || reference.is_closed_day) continue;
+    samples.push({
+      date: row.date,
+      actualHt: toNumber(row.revenue_ht, 0),
+      referenceHt: toNumber(reference.revenue_ht, 0),
+    });
+  }
+
+  return observedGrowthRate(samples);
 }
 
 export interface DailyCountStatus {
