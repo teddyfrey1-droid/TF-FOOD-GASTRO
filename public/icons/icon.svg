@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MEP">
+  <rect width="512" height="512" rx="112" fill="#0f172a"/>
+  <!-- Bac gastro vu de dessus, avec sa collerette. -->
+  <rect x="104" y="128" width="304" height="256" rx="28" fill="none" stroke="#f8fafc" stroke-width="20"/>
+  <rect x="144" y="168" width="224" height="176" rx="14" fill="#f8fafc" opacity="0.14"/>
+  <!-- Niveau de remplissage : la moitié, comme un seuil de relance. -->
+  <path d="M144 256h224v74a14 14 0 0 1-14 14H158a14 14 0 0 1-14-14z" fill="#38bdf8"/>
+  <text x="256" y="452" font-family="system-ui, -apple-system, Segoe UI, sans-serif"
+        font-size="72" font-weight="700" fill="#f8fafc" text-anchor="middle" letter-spacing="4">MEP</text>
+</svg>

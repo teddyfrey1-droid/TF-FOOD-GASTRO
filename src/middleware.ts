@@ -7,7 +7,13 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Tout sauf les fichiers statiques, les images et les ressources PWA.
-    '/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
+    /*
+     * Tout sauf :
+     *   • les fichiers statiques, images et ressources PWA ;
+     *   • `/api/*`, dont les appelants (tâches planifiées) n'ont pas de cookie
+     *     de session. Ces routes portent leur propre authentification — la
+     *     redirection du middleware les rendrait tout bonnement inatteignables.
+     */
+    '/((?!api/|_next/static|_next/image|favicon.ico|manifest.webmanifest|sw.js|icons/|splash/|.*\\.(?:svg|png|jpg|jpeg|gif|webp|ico)$).*)',
   ],
 };

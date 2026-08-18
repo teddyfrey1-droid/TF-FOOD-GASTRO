@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/rappels?session=morning",
+      "schedule": "0,30 4-9 * * *"
+    },
+    {
+      "path": "/api/rappels?session=afternoon",
+      "schedule": "0,30 11-16 * * *"
+    }
+  ]
+}

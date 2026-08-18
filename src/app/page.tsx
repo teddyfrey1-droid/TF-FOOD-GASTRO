@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { requireUser, isManagerRole } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { signOut } from '@/app/connexion/actions';
-import { Button, buttonVariants } from '@/components/ui/button';
+import { SignOutButton } from '@/components/pwa/sign-out-button';
+import { NotificationToggle } from '@/components/pwa/notification-toggle';
+import { buttonVariants } from '@/components/ui/button';
 import { SessionCard } from '@/components/session-card';
 import type { SessionKind } from '@/lib/supabase/database.types';
 
@@ -63,17 +64,15 @@ export default async function HomePage() {
       </div>
 
       <div className="mt-auto space-y-3 pt-10">
+        <NotificationToggle />
+
         {isManagerRole(user.role) ? (
           <Link href="/admin" className={buttonVariants({ variant: 'outline', className: 'h-11 w-full' })}>
             Back-office
           </Link>
         ) : null}
 
-        <form action={signOut}>
-          <Button type="submit" variant="ghost" className="text-muted-foreground h-11 w-full">
-            Se déconnecter
-          </Button>
-        </form>
+        <SignOutButton className="text-muted-foreground h-11 w-full" />
       </div>
     </main>
   );

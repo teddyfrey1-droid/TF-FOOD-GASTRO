@@ -128,3 +128,49 @@
     @apply font-sans;
   }
 }
+/* ---------------------------------------------------------------------
+   Impression du rapport de relance.
+
+   L'employé imprime la liste et la punaise au passe. Format ticket : pas
+   de couleurs de fond, pas de navigation, une ligne par produit.
+   --------------------------------------------------------------------- */
+@media print {
+  @page {
+    margin: 10mm;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  /* Ni en-tête collant, ni barre d'action à l'impression. */
+  header.sticky,
+  footer.fixed,
+  nav {
+    display: none !important;
+  }
+
+  main {
+    max-width: none !important;
+    padding: 0 !important;
+  }
+
+  /* Les cases à cocher deviennent de vraies cases à cocher au stylo. */
+  [role='checkbox'] {
+    border: 1.5pt solid #000 !important;
+    background: #fff !important;
+  }
+
+  li {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+
+  /* Les pastilles de couleur ne survivent pas au noir et blanc : on les
+     remplace par le niveau d'urgence en toutes lettres via ::after. */
+  .print\:hidden {
+    display: none !important;
+  }
+}

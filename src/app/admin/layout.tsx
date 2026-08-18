@@ -1,8 +1,7 @@
 import Link from 'next/link';
 import { requireManager } from '@/lib/auth';
-import { signOut } from '@/app/connexion/actions';
+import { SignOutButton } from '@/components/pwa/sign-out-button';
 import { AdminNav } from '@/components/admin/admin-nav';
-import { Button } from '@/components/ui/button';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,11 +20,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
             <span className="text-muted-foreground hidden text-sm sm:inline">
               {user.fullName} · {user.role === 'owner' ? 'propriétaire' : 'directeur'}
             </span>
-            <form action={signOut}>
-              <Button type="submit" variant="ghost" size="sm">
-                Déconnexion
-              </Button>
-            </form>
+            <SignOutButton />
           </div>
         </div>
 

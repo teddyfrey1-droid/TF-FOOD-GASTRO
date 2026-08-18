@@ -165,6 +165,11 @@ retour du réseau, même si l'application a été fermée entre-temps. La valida
 attend toujours que la file soit vide : le rapport ne peut pas être calculé sur
 un comptage incomplet.
 
+Une page de comptage déjà ouverte reste utilisable sans réseau. Une page jamais
+visitée affiche un écran « Pas de réseau » qui rappelle que les saisies en
+cours sont conservées. À la déconnexion, ces pages mises en cache sont
+effacées : le téléphone est parfois partagé.
+
 ---
 
 ## 4. Ce que le directeur peut regarder
@@ -208,7 +213,46 @@ automatiquement par une cinquantaine de tests de sécurité (voir §6).
 
 ---
 
-## 6. Installation
+## 6. Installer l'application sur son iPhone
+
+1. Ouvrir l'adresse de l'application dans **Safari** (pas Chrome : sur iOS,
+   seul Safari sait installer une application web).
+2. Toucher le bouton **Partager** (le carré avec une flèche).
+3. Choisir **« Sur l'écran d'accueil »**, puis **Ajouter**.
+
+L'icône MEP apparaît alors avec les autres applications. Elle s'ouvre en plein
+écran, sans barre d'adresse.
+
+### Les rappels de comptage
+
+Une fois l'application installée, un bouton **« Activer les rappels de
+comptage »** apparaît sur l'écran d'accueil. Il envoie une notification si le
+comptage n'a pas été fait à l'heure prévue (07 h 30 et 15 h 00 par défaut,
+réglables dans le back-office).
+
+Deux points à connaître :
+
+- sur iPhone, les notifications ne fonctionnent **que** si l'application a été
+  ajoutée à l'écran d'accueil — c'est une contrainte d'Apple, pas un choix ;
+- côté serveur, il faut renseigner les clés VAPID et `CRON_SECRET` (voir
+  `.env.example`) et brancher la tâche planifiée. Sans elles, le bouton ne
+  s'affiche pas et le reste de l'application fonctionne normalement.
+
+Génération des clés :
+
+```bash
+npx web-push generate-vapid-keys
+```
+
+La tâche planifiée est décrite dans `vercel.json`. Elle s'exécute toutes les
+demi-heures dans une plage large, et c'est **la base de données** qui décide si
+l'heure de Paris est venue — sans quoi les rappels se décaleraient d'une heure à
+chaque changement d'heure d'été. Un verrou garantit un seul envoi par jour et
+par session.
+
+---
+
+## 7. Installation (développeurs)
 
 ### Prérequis
 
@@ -231,6 +275,10 @@ cp .env.example .env.local   # puis remplir les valeurs
 | `NEXT_PUBLIC_SUPABASE_ANON_KEY` | Clé publique. Visible dans le navigateur : c'est normal, la RLS fait la sécurité |
 | `SUPABASE_SERVICE_ROLE_KEY` | Clé d'administration. **Contourne la RLS**, serveur uniquement |
 | `SUPABASE_DB_URL` | Connexion directe, pour les migrations et la génération des types |
+| `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Clé publique des notifications push (facultatif) |
+| `VAPID_PRIVATE_KEY` | Clé privée des notifications push (facultatif) |
+| `VAPID_SUBJECT` | Contact du responsable, ex. `mailto:directeur@heiko.fr` |
+| `CRON_SECRET` | Protège `/api/rappels`. Sans lui, n'importe qui pourrait notifier l'équipe |
 
 ### Base de données
 
@@ -250,7 +298,7 @@ pnpm typecheck    # vérification TypeScript
 
 ---
 
-## 7. Comptes et rôles
+## 8. Comptes et rôles
 
 Trois rôles : `employee`, `manager`, `owner`.
 
@@ -266,7 +314,7 @@ update public.profiles set role = 'owner' where id = '<uuid du compte>';
 
 ---
 
-## 8. Tests
+## 9. Tests
 
 Le cœur métier est testé deux fois, parce qu'il existe en deux exemplaires :
 en TypeScript (pour le simulateur du back-office) et en SQL (pour la validation
@@ -274,7 +322,7 @@ d'un comptage). Les deux doivent donner exactement le même résultat.
 
 ```bash
 pnpm test       # 117 tests TypeScript : calcul, steppers, anomalies, CSV
-pnpm db:test    # tests SQL : calcul, sécurité RLS, journal d'audit
+pnpm db:test    # tests SQL : calcul, sécurité RLS, audit, comptage, rappels
 ```
 
 `pnpm db:test` rejoue le schéma complet sur une base Postgres neuve, puis lance
@@ -297,7 +345,7 @@ Sont notamment couverts :
 
 ---
 
-## 9. Organisation du code
+## 10. Organisation du code
 
 ```
 src/lib/mep/          Le calcul métier, pur et sans base de données
@@ -314,12 +362,13 @@ src/components/admin/ Écrans du back-office
 supabase/migrations/  Schéma versionné
 supabase/tests/       Tests SQL (calcul, sécurité, audit)
 tests/                Tests TypeScript
-scripts/              Imports CSV et rejeu de la base
+public/sw.js          Service worker : mode hors ligne et rappels
+scripts/              Imports CSV, génération des icônes, rejeu de la base
 ```
 
 ---
 
-## 10. Charger vos données
+## 11. Charger vos données
 
 ### Le calculateur
 
@@ -357,7 +406,7 @@ de doublon.
 
 ---
 
-## 11. État d'avancement
+## 12. État d'avancement
 
 | Phase | Contenu | État |
 |---|---|---|
@@ -365,14 +414,14 @@ de doublon.
 | 1 | Back-office : produits, calculateur, simulateur, CA, imports CSV | ✅ |
 | 2 | Parcours employé : comptage aux steppers, rapport de relance | ✅ |
 | 3 | Historique, exports, consommation réelle, détection d'anomalies | ✅ |
-| 4 | PWA : installation iOS, mode hors ligne, rappels, impression | à venir |
+| 4 | PWA : installation iOS, mode hors ligne, rappels, impression | ✅ |
 
 **Hors périmètre de la version 1 :** la gestion des DLC et la production en
 avance pour le lendemain.
 
 ---
 
-## 12. Données encore à fournir
+## 13. Données encore à fournir
 
 Le jeu de démonstration contient des valeurs **provisoires**, signalées par la
 mention « à confirmer » à côté de chaque format GN. Elles ne doivent pas servir

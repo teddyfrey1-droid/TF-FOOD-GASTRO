@@ -167,6 +167,18 @@ type ProductionTaskRow = {
   created_at: string;
 };
 
+type PushSubscriptionRow = {
+  id: string;
+  user_id: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  user_agent: string | null;
+  created_at: string;
+  last_used_at: string | null;
+  revoked_at: string | null;
+};
+
 type AuditLogRow = {
   id: string;
   user_id: string | null;
@@ -271,6 +283,10 @@ export type Database = {
         'id' | 'created_at' | 'is_done' | 'done_at' | 'done_by'
       >;
       audit_log: Table<AuditLogRow, 'id' | 'created_at' | 'user_id' | 'record_id' | 'before' | 'after'>;
+      push_subscriptions: Table<
+        PushSubscriptionRow,
+        'id' | 'created_at' | 'last_used_at' | 'revoked_at' | 'user_agent'
+      >;
     };
     Views: {
       products_for_count: { Row: ProductForCountRow; Relationships: [] };
@@ -325,6 +341,22 @@ export type Database = {
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /** Réserve l'envoi du rappel du jour. Vrai une seule fois par session. */
+      mep_claim_reminder: {
+        Args: { p_session: SessionKind; p_now?: string | null };
+        Returns: boolean;
+      };
+      /** Abonnements à notifier pour une session non encore validée. Serveur uniquement. */
+      mep_pending_reminders: {
+        Args: { p_session: SessionKind };
+        Returns: {
+          subscription_id: string;
+          endpoint: string;
+          p256dh: string;
+          auth: string;
+          full_name: string;
+        }[];
+      };
       /** Ouvre la session du jour et crée une ligne vide par produit actif. */
       mep_open_count_session: {
         Args: { p_session: SessionKind; p_device_info?: Json | null };

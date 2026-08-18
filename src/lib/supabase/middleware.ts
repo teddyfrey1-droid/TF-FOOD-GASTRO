@@ -1,8 +1,15 @@
 import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
-/** Chemins accessibles sans être connecté. */
-const PUBLIC_PATHS = ['/connexion', '/mot-de-passe-oublie'];
+/** Chemins d'authentification : accessibles déconnecté, inutiles une fois connecté. */
+const AUTH_PATHS = ['/connexion', '/mot-de-passe-oublie'];
+
+/**
+ * Chemins toujours accessibles, connecté ou non.
+ * La page hors ligne en fait partie : le service worker la sert quand il n'y
+ * a plus de réseau, et il n'y a alors aucun moyen de vérifier la session.
+ */
+const ALWAYS_PUBLIC_PATHS = ['/hors-ligne'];
 
 /** Chemins réservés au directeur et au propriétaire. */
 const MANAGER_PATHS = ['/admin'];
@@ -36,7 +43,12 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic = PUBLIC_PATHS.some((path) => pathname.startsWith(path));
+
+  if (ALWAYS_PUBLIC_PATHS.some((path) => pathname.startsWith(path))) {
+    return response;
+  }
+
+  const isPublic = AUTH_PATHS.some((path) => pathname.startsWith(path));
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone();

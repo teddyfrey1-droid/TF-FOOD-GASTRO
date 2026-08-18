@@ -13,7 +13,8 @@
     "db:test": "./scripts/db-test.sh",
     "db:types": "supabase gen types typescript --db-url \"$SUPABASE_DB_URL\" > src/lib/supabase/database.types.ts",
     "import:calculateur": "tsx --env-file-if-exists=.env.local scripts/import-calculator.ts",
-    "import:ca": "tsx --env-file-if-exists=.env.local scripts/import-revenue.ts"
+    "import:ca": "tsx --env-file-if-exists=.env.local scripts/import-revenue.ts",
+    "pwa:assets": "tsx scripts/generate-pwa-assets.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",
@@ -30,6 +31,7 @@
     "shadcn": "^4.18.0",
     "sonner": "^2.0.8",
     "tailwind-merge": "^3.6.0",
+    "web-push": "^3.6.7",
     "zod": "^4.4.3"
   },
   "devDependencies": {
@@ -38,10 +40,12 @@
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
     "@vitejs/plugin-react": "^6.0.5",
     "dotenv": "^17.4.2",
     "eslint": "^9",
     "eslint-config-next": "15.5.23",
+    "sharp": "^0.35.3",
     "supabase": "^2.115.0",
     "tailwindcss": "^4",
     "tsx": "^4.23.12",
