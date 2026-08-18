@@ -285,5 +285,40 @@ select pg_temp.check_equal('Les seuils restent invisibles pour ce collègue',
 reset role;
 reset "request.jwt.claim.sub";
 
+
+-- ---------------------------------------------------------------------
+-- Une saisie sur un comptage validé ne doit pas passer inaperçue
+--
+-- L'application détecte le cas au nombre de lignes touchées : si la RLS
+-- filtre tout, elle prévient l'employé au lieu de le laisser compter dans
+-- le vide. Ce test verrouille la prémisse : zéro ligne touchée.
+-- ---------------------------------------------------------------------
+set role authenticated;
+set request.jwt.claim.sub = 'b0000000-0000-0000-0000-00000000000f';
+
+do $$
+declare
+  v_session uuid;
+  v_saumon  uuid;
+  v_touched int;
+begin
+  select id into v_session from public.count_sessions
+  where date = current_date and session = 'morning';   -- déjà validée plus haut
+  select id into v_saumon from public.products_for_count where name = 'Saumon';
+
+  update public.count_lines
+  set qty_saladbar = 42, counted_at = now()
+  where session_id = v_session and product_id = v_saumon;
+
+  get diagnostics v_touched = row_count;
+
+  perform pg_temp.check_equal(
+    'Saisir sur un comptage validé ne touche aucune ligne', v_touched, 0);
+end
+$$;
+
+reset role;
+reset "request.jwt.claim.sub";
+
 \echo ''
 \echo '===== TESTS DE COMPTAGE : TOUS PASSÉS ====='

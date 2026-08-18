@@ -49,7 +49,7 @@ export async function saveCountLine(input: SaveLineInput): Promise<{ error?: str
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
+  const { data, error } = await supabase
     .from('count_lines')
     .update({
       // Un produit non applicable ne porte pas de quantité.
@@ -60,9 +60,21 @@ export async function saveCountLine(input: SaveLineInput): Promise<{ error?: str
       counted_at: new Date().toISOString(),
     })
     .eq('session_id', sessionId)
-    .eq('product_id', productId);
+    .eq('product_id', productId)
+    .select('id');
 
   if (error) return { error: error.message };
+
+  // Zéro ligne touchée : la RLS a filtré. En pratique, un collègue a validé le
+  // comptage pendant la saisie. Il faut le dire — sinon l'employé continue de
+  // compter dans le vide en croyant que tout est enregistré.
+  if (!data || data.length === 0) {
+    return {
+      error:
+        'Ce comptage a été validé entre-temps : vos dernières saisies n’ont pas été enregistrées.',
+    };
+  }
+
   return {};
 }
 

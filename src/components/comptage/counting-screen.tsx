@@ -144,10 +144,16 @@ export function CountingScreen({
             notApplicableReason: next.notApplicableReason,
           });
 
-          if (!result.error) {
-            await dequeue(key, updatedAt);
-            await refreshPending();
+          if (result.error) {
+            // Une panne réseau laisse la saisie en file, sans rien dire :
+            // elle repartira toute seule. Un refus du serveur, lui, doit
+            // remonter — l'employé compterait sinon dans le vide.
+            if (navigator.onLine) setError(result.error);
+            return;
           }
+
+          await dequeue(key, updatedAt);
+          await refreshPending();
         }, AUTOSAVE_DELAY_MS),
       );
     },
@@ -241,6 +247,12 @@ export function CountingScreen({
               {countedTotal} / {products.length}
             </span>
           </div>
+
+          {error ? (
+            <p role="alert" className="text-destructive mt-2 text-xs font-medium">
+              {error}
+            </p>
+          ) : null}
 
           {!online || pendingCount > 0 ? (
             <p className="text-muted-foreground mt-2 flex items-center gap-1.5 text-xs">
