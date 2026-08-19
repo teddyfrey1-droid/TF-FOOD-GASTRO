@@ -51,7 +51,7 @@ $$;
 insert into auth.users (id, email) values
   ('b0000000-0000-0000-0000-00000000000e', 'comptage@heiko.test')
 on conflict (id) do nothing;
-update public.profiles set full_name = 'Karim', role = 'employee'
+update public.profiles set full_name = 'Karim', role = 'employee', is_active = true
   where id = 'b0000000-0000-0000-0000-00000000000e';
 
 delete from public.count_sessions where date = current_date;
@@ -226,7 +226,7 @@ reset "request.jwt.claim.sub";
 insert into auth.users (id, email) values
   ('b0000000-0000-0000-0000-00000000000f', 'collegue@heiko.test')
 on conflict (id) do nothing;
-update public.profiles set full_name = 'Sofia', role = 'employee'
+update public.profiles set full_name = 'Sofia', role = 'employee', is_active = true
   where id = 'b0000000-0000-0000-0000-00000000000f';
 
 set role authenticated;

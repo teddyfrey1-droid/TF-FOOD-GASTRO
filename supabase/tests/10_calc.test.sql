@@ -278,7 +278,7 @@ $$;
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'employe@heiko.test')
 on conflict (id) do nothing;
-update public.profiles set full_name = 'Karim (test)', role = 'employee'
+update public.profiles set full_name = 'Karim (test)', role = 'employee', is_active = true
   where id = '11111111-1111-1111-1111-111111111111';
 
 do $$

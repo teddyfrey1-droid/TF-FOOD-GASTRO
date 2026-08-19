@@ -94,9 +94,10 @@ insert into auth.users (id, email) values
   ('a0000000-0000-0000-0000-00000000000f', 'proprietaire@heiko.test')
 on conflict (id) do nothing;
 
-update public.profiles set full_name = 'Karim',        role = 'employee' where id = 'a0000000-0000-0000-0000-00000000000e';
-update public.profiles set full_name = 'Le directeur', role = 'manager'  where id = 'a0000000-0000-0000-0000-00000000000d';
-update public.profiles set full_name = 'Le patron',    role = 'owner'    where id = 'a0000000-0000-0000-0000-00000000000f';
+update public.profiles set full_name = 'Karim',        role = 'employee', is_active = true where id = 'a0000000-0000-0000-0000-00000000000e';
+update public.profiles set full_name = 'Le directeur', role = 'manager', is_active = true
+  where id = 'a0000000-0000-0000-0000-00000000000d';
+update public.profiles set full_name = 'Le patron',    role = 'owner', is_active = true    where id = 'a0000000-0000-0000-0000-00000000000f';
 
 -- Données sensibles à protéger.
 insert into public.revenue_history (date, revenue_ht) values (date '2025-08-19', 3200)
@@ -366,6 +367,62 @@ select pg_temp.check_no_rows('anon ne lit pas le CA',            'select * from 
 select pg_temp.check_no_rows('anon ne lit pas les réglages de famille', 'select * from public.product_family_settings');
 select pg_temp.check_no_rows('anon ne lit pas les produits',     'select * from public.products');
 select pg_temp.check_no_rows('anon ne lit pas les comptages',    'select * from public.count_sessions');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
+\echo '--- 10. UN COMPTE AUTO-INSCRIT N''A RIEN, TANT QU''IL N''EST PAS VALIDÉ ---'
+
+-- Le dépôt est public : l'URL du projet et la clé « anon » sont connues.
+-- Si l'inscription libre est ouverte, un inconnu peut devenir `authenticated`.
+-- Il ne doit alors RIEN pouvoir faire tant que le directeur ne l'a pas activé.
+insert into auth.users (id, email)
+values ('a0000000-0000-0000-0000-0000000000ff', 'inconnu@exemple.fr')
+on conflict (id) do nothing;
+
+select pg_temp.check_equal('Un compte auto-inscrit naît désactivé',
+  (select is_active from public.profiles where id = 'a0000000-0000-0000-0000-0000000000ff'),
+  false);
+
+select pg_temp.check_equal('... et employé, jamais directeur',
+  (select role::text from public.profiles where id = 'a0000000-0000-0000-0000-0000000000ff'),
+  'employee');
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000ff';
+
+select pg_temp.check_no_rows('Un compte en attente ne voit aucun produit',
+  'select * from public.products_for_count');
+select pg_temp.check_no_rows('... ni les prénoms de l''équipe',
+  'select * from public.team_members');
+select pg_temp.check_no_rows('... ni le comptage du jour',
+  'select * from public.count_sessions');
+select pg_temp.check_no_rows('... ni les lignes de comptage',
+  'select * from public.count_lines');
+select pg_temp.check_no_rows('... ni les tâches de production',
+  'select * from public.production_tasks');
+select pg_temp.check_no_rows('... ni le chiffre d''affaires',
+  'select * from public.revenue_history');
+
+select pg_temp.check_no_effect('Un compte en attente ne peut pas toucher au comptage',
+  'update public.count_lines set qty_saladbar = 99');
+
+select pg_temp.check_denied('Un compte en attente ne peut pas s''activer lui-même',
+  'update public.profiles set is_active = true where id = ''a0000000-0000-0000-0000-0000000000ff''');
+
+-- Une fois validé par le directeur, il travaille normalement.
+reset role;
+reset "request.jwt.claim.sub";
+update public.profiles set is_active = true where id = 'a0000000-0000-0000-0000-0000000000ff';
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000ff';
+
+select pg_temp.check_equal('Une fois validé, il voit les produits à compter',
+  (select count(*) > 0 from public.products_for_count), true);
+select pg_temp.check_no_rows('... mais toujours aucun chiffre d''affaires',
+  'select * from public.revenue_history');
+
 reset role;
 reset "request.jwt.claim.sub";
 

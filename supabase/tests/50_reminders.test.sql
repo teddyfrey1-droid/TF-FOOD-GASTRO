@@ -86,7 +86,7 @@ $$;
 insert into auth.users (id, email) values
   ('d0000000-0000-0000-0000-00000000000e', 'rappel@heiko.test')
 on conflict (id) do nothing;
-update public.profiles set full_name = 'Karim', role = 'employee'
+update public.profiles set full_name = 'Karim', role = 'employee', is_active = true
   where id = 'd0000000-0000-0000-0000-00000000000e';
 
 insert into public.push_subscriptions (user_id, endpoint, p256dh, auth)
