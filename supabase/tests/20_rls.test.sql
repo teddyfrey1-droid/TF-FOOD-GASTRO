@@ -427,4 +427,51 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 11. LES FONCTIONS AUSSI, PAS SEULEMENT LES TABLES ---'
+
+-- Ces assertions manquaient : les tests vérifiaient ce qu'`anon` lit dans les
+-- TABLES, jamais ce qu'il peut EXÉCUTER. Sur Supabase, `revoke ... from public`
+-- ne retire pas la permission nominative accordée à `anon` par défaut — un
+-- visiteur anonyme lisait donc le CA prévisionnel via /rest/v1/rpc/.
+set role anon;
+
+select pg_temp.check_denied('anon ne peut pas calculer le CA prévisionnel',
+  'select public.mep_forecast_revenue(current_date)');
+select pg_temp.check_denied('anon ne peut pas calculer le CA de référence',
+  'select public.mep_reference_revenue(current_date, ''morning'')');
+select pg_temp.check_denied('anon ne peut pas lire les cibles',
+  'select * from public.mep_product_targets(current_date, ''morning'')');
+select pg_temp.check_denied('anon ne peut pas ouvrir de comptage',
+  'select public.mep_open_count_session(''morning'')');
+select pg_temp.check_denied('anon ne peut pas valider de comptage',
+  'select * from public.mep_submit_count(gen_random_uuid())');
+select pg_temp.check_denied('anon ne peut pas lire un rapport de relance',
+  'select * from public.mep_reorder_report(gen_random_uuid())');
+select pg_temp.check_denied('anon ne peut pas lister les rappels à envoyer',
+  'select * from public.mep_pending_reminders(''morning'')');
+select pg_temp.check_denied('anon ne peut pas réserver un rappel',
+  'select public.mep_claim_reminder(''morning'')');
+
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Un EMPLOYÉ connecté n'a pas davantage accès au CA ni aux cibles.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+
+select pg_temp.check_denied('Un employé ne peut pas calculer le CA prévisionnel',
+  'select public.mep_forecast_revenue(current_date)');
+select pg_temp.check_denied('Un employé ne peut pas lire les cibles',
+  'select * from public.mep_product_targets(current_date, ''morning'')');
+select pg_temp.check_denied('Un employé ne peut pas lister les rappels à envoyer',
+  'select * from public.mep_pending_reminders(''morning'')');
+
+-- ... mais il valide bien son comptage, qui ne lui renvoie que le nécessaire.
+select pg_temp.check_allowed('Un employé valide bien son comptage',
+  'select * from public.mep_submit_count(''c0000000-0000-0000-0000-0000000000ee'')');
+
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='
