@@ -32,6 +32,9 @@ yarn-error.log*
 
 # env files (can opt-in for committing if needed)
 .env*
+# Exception : ne contient que l'URL et la clé publique du projet Supabase,
+# qui sont de toute façon visibles dans le navigateur. Aucun secret ici.
+!.env.production
 
 # vercel
 .vercel
