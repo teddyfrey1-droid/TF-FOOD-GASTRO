@@ -22,51 +22,46 @@ begin
   select id into v_saumon from public.products where name = 'Saumon';
   select count(*)::int into v_before from public.audit_log where table_name = 'products';
 
-  update public.products set reorder_ratio = 0.6 where id = v_saumon;
+  update public.products set min_divisor = 3 where id = v_saumon;
 
   perform pg_temp.check_equal(
-    'Modifier un seuil de produit écrit une ligne d''audit',
+    'Modifier le minimum d''un produit écrit une ligne d''audit',
     (select count(*)::int from public.audit_log where table_name = 'products') - v_before, 1);
 
   perform pg_temp.check_equal(
-    'L''audit conserve l''ancienne valeur du seuil',
-    (select (before ->> 'reorder_ratio')::numeric from public.audit_log
+    'L''audit conserve l''ancienne valeur du minimum',
+    (select (before ->> 'min_divisor')::numeric from public.audit_log
      where table_name = 'products' and record_id = v_saumon::text
      order by created_at desc limit 1),
-    0.5000::numeric);
+    2.000::numeric);
 
   perform pg_temp.check_equal(
-    'L''audit conserve la nouvelle valeur du seuil',
-    (select (after ->> 'reorder_ratio')::numeric from public.audit_log
+    'L''audit conserve la nouvelle valeur du minimum',
+    (select (after ->> 'min_divisor')::numeric from public.audit_log
      where table_name = 'products' and record_id = v_saumon::text
      order by created_at desc limit 1),
-    0.6000::numeric);
+    3.000::numeric);
 
   -- Une mise à jour sans changement ne pollue pas le journal.
   select count(*)::int into v_before from public.audit_log where table_name = 'products';
-  update public.products set reorder_ratio = 0.6 where id = v_saumon;
+  update public.products set min_divisor = 3 where id = v_saumon;
   perform pg_temp.check_equal(
     'Une mise à jour sans changement n''écrit rien',
     (select count(*)::int from public.audit_log where table_name = 'products') - v_before, 0);
 
-  update public.products set reorder_ratio = 0.5 where id = v_saumon;
+  update public.products set min_divisor = 2 where id = v_saumon;
 end
 $$;
 
 do $$
 declare v_before int;
 begin
-  select count(*)::int into v_before from public.audit_log where table_name = 'calculator_rules';
-  update public.calculator_rules set target_qty = target_qty where target_qty is not null;
+  select count(*)::int into v_before from public.audit_log where table_name = 'products';
+  update public.products set base_qty = 9.9 where name = 'Saumon';
   perform pg_temp.check_equal(
-    'Une modification à blanc du calculateur n''écrit rien',
-    (select count(*)::int from public.audit_log where table_name = 'calculator_rules') - v_before, 0);
-
-  update public.calculator_rules set target_qty = 7
-  where id = (select id from public.calculator_rules where target_qty is not null limit 1);
-  perform pg_temp.check_equal(
-    'Modifier le calculateur est tracé',
-    (select count(*)::int from public.audit_log where table_name = 'calculator_rules') - v_before, 1);
+    'Modifier une base « VENTE POUR » est tracé',
+    (select count(*)::int from public.audit_log where table_name = 'products') - v_before, 1);
+  update public.products set base_qty = 4.6 where name = 'Saumon';
 end
 $$;
 

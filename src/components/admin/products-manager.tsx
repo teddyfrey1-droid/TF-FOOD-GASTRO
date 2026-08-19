@@ -1,35 +1,39 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { formatQty } from '@/lib/format';
-import { toggleProductActive } from '@/app/admin/produits/actions';
+import { cn } from '@/lib/utils';
+import { toggleProductActive, updateProductInline } from '@/app/admin/produits/actions';
 import { ProductForm } from './product-form';
 import type { ProductWithCategory } from '@/lib/admin/queries';
 import type { Tables } from '@/lib/supabase/database.types';
 
-const URGENCY_LABEL: Record<number, string> = {
-  1: 'Faible',
-  2: 'Modérée',
-  3: 'Normale',
-  4: 'Haute',
-  5: 'Critique',
+/**
+ * ⚠️ 1 est LE PLUS urgent : l'échelle se lit comme un classement.
+ * Les couleurs suivent — rouge en haut, gris en bas.
+ */
+const PRIORITY_DOT: Record<number, string> = {
+  1: 'bg-red-500',
+  2: 'bg-orange-500',
+  3: 'bg-yellow-400',
+  4: 'bg-blue-400',
+  5: 'bg-neutral-300',
 };
 
-/** Résume le seuil en une phrase lisible, sans jargon. */
-function describeThreshold(product: ProductWithCategory): string {
-  if (product.reorder_mode === 'fixed') {
-    return product.reorder_fixed === null
+/** Résume le minimum en une phrase lisible, sans jargon. */
+function describeMinimum(product: ProductWithCategory): string {
+  if (product.min_mode === 'manual') {
+    return product.min_qty_manual === null
       ? '—'
-      : `sous ${formatQty(Number(product.reorder_fixed))} gastro(s)`;
+      : `sous ${formatQty(Number(product.min_qty_manual))}`;
   }
-  return product.reorder_ratio === null
-    ? '—'
-    : `sous ${Math.round(Number(product.reorder_ratio) * 100)} % de la cible`;
+  const divisor = Number(product.min_divisor) || 2;
+  return divisor === 2 ? 'sous la moitié de la cible' : `sous la cible / ${formatQty(divisor)}`;
 }
 
 export function ProductsManager({
@@ -116,21 +120,23 @@ export function ProductsManager({
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{product.name}</span>
                     {!product.is_active ? <Badge variant="outline">Désactivé</Badge> : null}
-                    {product.gn_format?.includes('à confirmer') ? (
+                    {Number(product.base_qty) <= 0 ? (
                       <Badge variant="outline" className="border-amber-500/50 text-amber-600">
-                        à confirmer
+                        base à saisir
                       </Badge>
                     ) : null}
                   </div>
                   <p className="text-muted-foreground mt-0.5 text-xs">
-                    {product.gn_format ?? 'Format GN non renseigné'}
+                    {product.family === 'les_plus' ? 'Les plus' : 'Mise en place'} ·{' '}
+                    {product.unit === 'piece' ? 'pièce' : 'gastro'}
+                    {product.shelf_life_label ? ` · DLC ${product.shelf_life_label}` : ''}
                   </p>
                 </div>
 
                 <dl className="text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-4">
                   <div>
-                    <dt className="sr-only">Seuil de relance</dt>
-                    <dd>Relance {describeThreshold(product)}</dd>
+                    <dt className="sr-only">Minimum de relance</dt>
+                    <dd>Relance {describeMinimum(product)}</dd>
                   </div>
                   <div>
                     <dt className="sr-only">Bornes de cible</dt>
@@ -140,8 +146,8 @@ export function ProductsManager({
                     </dd>
                   </div>
                   <div>
-                    <dt className="sr-only">Urgence</dt>
-                    <dd>Urgence : {URGENCY_LABEL[product.urgency_level] ?? product.urgency_level}</dd>
+                    <dt className="sr-only">Base « VENTE POUR »</dt>
+                    <dd>Base {formatQty(Number(product.base_qty))}</dd>
                   </div>
                   <div>
                     <dt className="sr-only">Stockage</dt>
@@ -154,6 +160,8 @@ export function ProductsManager({
                 </dl>
 
                 <div className="flex items-center gap-2">
+                  <InlinePriority product={product} />
+                  <InlineMinimum product={product} />
                   <Button variant="outline" size="sm" onClick={() => setEditing(product)}>
                     Modifier
                   </Button>
@@ -168,6 +176,90 @@ export function ProductsManager({
           </div>
         </section>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Priorité réglable en un clic depuis le tableau, sans ouvrir de fiche.
+ * C'est l'un des deux réglages que le directeur touchera le plus souvent.
+ */
+function InlinePriority({ product }: { product: ProductWithCategory }) {
+  const [pending, startTransition] = useTransition();
+
+  return (
+    <label className="flex items-center gap-1.5" title="Priorité : 1 = le plus urgent">
+      <span
+        aria-hidden
+        className={cn('size-2.5 rounded-full', PRIORITY_DOT[product.priority] ?? 'bg-neutral-300')}
+      />
+      <select
+        value={product.priority}
+        disabled={pending}
+        aria-label={`Priorité de ${product.name}`}
+        onChange={(event) => {
+          const priority = Number(event.target.value);
+          startTransition(async () => {
+            await updateProductInline(product.id, { priority });
+          });
+        }}
+        className="border-input bg-background h-8 rounded-md border px-1.5 text-xs tabular-nums"
+      >
+        {[1, 2, 3, 4, 5].map((level) => (
+          <option key={level} value={level}>
+            P{level}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+/** Bascule auto / manuel et saisie du minimum, sans quitter le tableau. */
+function InlineMinimum({ product }: { product: ProductWithCategory }) {
+  const [pending, startTransition] = useTransition();
+  const [draft, setDraft] = useState(
+    product.min_qty_manual === null ? '' : String(product.min_qty_manual),
+  );
+
+  const isManual = product.min_mode === 'manual';
+
+  return (
+    <div className="flex items-center gap-1">
+      <Button
+        variant={isManual ? 'default' : 'outline'}
+        size="sm"
+        disabled={pending}
+        title={isManual ? 'Repasser en minimum automatique' : 'Fixer un minimum manuel'}
+        onClick={() =>
+          startTransition(async () => {
+            await updateProductInline(product.id, {
+              minMode: isManual ? 'auto' : 'manual',
+              minQtyManual: isManual ? null : Number(draft.replace(',', '.')) || 1,
+            });
+          })
+        }
+      >
+        {isManual ? 'Min fixe' : 'Min auto'}
+      </Button>
+
+      {isManual ? (
+        <Input
+          value={draft}
+          inputMode="decimal"
+          aria-label={`Minimum fixe de ${product.name}`}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => {
+            const parsed = Number(draft.replace(',', '.'));
+            if (!Number.isFinite(parsed) || parsed < 0) return;
+            if (parsed === Number(product.min_qty_manual)) return;
+            startTransition(async () => {
+              await updateProductInline(product.id, { minQtyManual: parsed });
+            });
+          }}
+          className="h-8 w-16 text-center text-xs tabular-nums"
+        />
+      ) : null}
     </div>
   );
 }

@@ -128,7 +128,7 @@ begin
   update public.count_lines
   set qty_saladbar = 0, qty_fridge = 0, counted_at = now()
   where session_id = v_session
-    and product_id = (select id from public.products_for_count where name = 'Grenade');
+    and product_id = (select id from public.products_for_count where name = 'Avocat');
 
   perform pg_temp.check_equal(
     'Compté à 0 compte comme renseigné',
@@ -151,7 +151,7 @@ select pg_temp.check_denied('Une quantité négative est refusée',
 select pg_temp.check_denied('« Non applicable » sans motif est refusé',
   'update public.count_lines set is_not_applicable = true, counted_at = now()
    where session_id = (select id from public.count_sessions where date = current_date and session = ''morning'')
-     and product_id = (select id from public.products_for_count where name = ''Wakamé'')');
+     and product_id = (select id from public.products_for_count where name = ''Épinard'')');
 
 do $$
 declare v_session uuid;
@@ -162,13 +162,13 @@ begin
   update public.count_lines
   set is_not_applicable = true, not_applicable_reason = 'Produit non reçu ce matin', counted_at = now()
   where session_id = v_session
-    and product_id = (select id from public.products_for_count where name = 'Wakamé');
+    and product_id = (select id from public.products_for_count where name = 'Épinard');
 
   perform pg_temp.check_equal(
     '« Non applicable » avec motif est accepté',
     (select not_applicable_reason from public.count_lines
      where session_id = v_session
-       and product_id = (select id from public.products_for_count where name = 'Wakamé')),
+       and product_id = (select id from public.products_for_count where name = 'Épinard')),
     'Produit non reçu ce matin');
 end
 $$;
@@ -179,18 +179,18 @@ $$;
 do $$
 declare
   v_session uuid;
-  v_wakame  uuid;
+  v_epinard  uuid;
 begin
   select id into v_session from public.count_sessions
   where date = current_date and session = 'morning';
-  select id into v_wakame from public.products_for_count where name = 'Wakamé';
+  select id into v_epinard from public.products_for_count where name = 'Épinard';
 
   perform public.mep_submit_count(v_session);
 
   perform pg_temp.check_equal(
     'Un produit non applicable ne crée pas de tâche',
     (select count(*)::int from public.production_tasks
-     where session_id = v_session and product_id = v_wakame),
+     where session_id = v_session and product_id = v_epinard),
     0);
 
   perform pg_temp.check_equal(
@@ -277,9 +277,9 @@ select pg_temp.check_no_effect('Le comptage d''hier reste hors d''atteinte',
 
 select pg_temp.check_equal('Le CA reste invisible pour ce collègue',
   (select count(*)::int from public.revenue_history), 0);
-select pg_temp.check_equal('Le calculateur reste invisible pour ce collègue',
-  (select count(*)::int from public.calculator_rules), 0);
-select pg_temp.check_equal('Les seuils restent invisibles pour ce collègue',
+select pg_temp.check_equal('Les réglages de famille restent invisibles pour ce collègue',
+  (select count(*)::int from public.product_family_settings), 0);
+select pg_temp.check_equal('Les bases et minimums restent invisibles pour ce collègue',
   (select count(*)::int from public.products), 0);
 
 reset role;

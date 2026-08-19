@@ -17,7 +17,8 @@ export default async function DashboardPage() {
     getProducts(false),
   ]);
 
-  const placeholders = products.filter((product) => product.gn_format?.includes('à confirmer'));
+  // Un produit sans base n'a pas encore reçu sa valeur « VENTE POUR ».
+  const placeholders = products.filter((product) => Number(product.base_qty) <= 0);
 
   return (
     <div className="space-y-8">
@@ -31,9 +32,8 @@ export default async function DashboardPage() {
           <h2 className="font-semibold">Données encore provisoires</h2>
           <p className="text-muted-foreground mt-2 text-sm">
             {placeholders.length} produit{placeholders.length > 1 ? 's' : ''} sur {products.length}{' '}
-            porte{placeholders.length > 1 ? 'nt' : ''} encore un format GN « à confirmer », ainsi
-            que des seuils et des paliers de calculateur provisoires. Ils ne doivent pas servir en
-            production.
+            n&apos;{placeholders.length > 1 ? 'ont' : 'a'} pas encore de valeur « VENTE POUR » :
+            leur cible restera à zéro tant qu&apos;elle n&apos;est pas saisie.
           </p>
           <Link
             href="/admin/produits"

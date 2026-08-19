@@ -1,23 +1,19 @@
 -- =====================================================================
--- MEP — Jeu de données de démonstration
+-- MEP — Référentiel produits
 --
--- ⚠️  AVERTISSEMENT — VALEURS PROVISOIRES
+-- `base_qty` = colonne « VENTE POUR » du Google Sheet du restaurant.
+-- C'est la seule donnée qui pilote la cible.
 --
--- Les formats GN, les seuils de relance, les niveaux d'urgence, les temps
--- de prépa et les paliers du calculateur ci-dessous sont des PLACEHOLDERS.
--- Ils n'ont pas été fournis par le restaurant et ne doivent PAS être
--- utilisés en production.
+-- ⚠️ La colonne « conso/1000 » du Sheet n'est PAS importée : elle vaut la
+-- base divisée par deux et fausserait le calcul du minimum.
 --
--- Chaque format GN provisoire est suffixé « (à confirmer) » : le repère
--- reste donc visible à l'écran de comptage tant qu'il n'a pas été validé.
+-- Valeurs volontairement laissées vides, à saisir dans le back-office :
+--   • priority       : tous à 3. Le restaurant saisira les vraies priorités.
+--   • floor_qty      : aucun plancher.
+--   • ceiling_qty    : aucun plafond.
+--   • prep_time_min  : hors périmètre v1.
 --
--- Valeurs par défaut appliquées faute d'information (cf. §9.3) :
---   • seuil de relance = 50 % de la cible
---   • niveau d'urgence = 3
---
--- Deux exceptions calibrées sur les cas de test du cahier des charges (§5.5) :
---   • Saumon  : CA 3 200 € -> cible 8, seuil 4
---   • Grenade : CA 1 400 € -> cible 2, seuil 1
+-- La DLC est stockée dans `shelf_life_label` mais n'entre dans aucun calcul.
 -- =====================================================================
 
 begin;
@@ -26,119 +22,83 @@ begin;
 -- Catégories
 -- ---------------------------------------------------------------------
 insert into public.product_categories (name, sort_order) values
-  ('Bases',     10),
-  ('Poissons',  20),
-  ('Légumes',   30),
-  ('Toppings',  40),
-  ('Sauces',    50)
+  ('Protéines',   10),
+  ('Ingrédients', 20),
+  ('Les plus',    30),
+  ('Desserts',    40)
 on conflict (name) do update set sort_order = excluded.sort_order;
 
 -- ---------------------------------------------------------------------
--- Produits
+-- Produits — 39 articles
 --
--- urgence : 1 = faible ... 5 = critique
--- Les produits chers et vite en rupture (poissons) portent une urgence
--- haute ; les toppings décoratifs une urgence basse.
+-- « Pastèque » figure deux fois, volontairement : une fois en ingrédient
+-- (comptée au gastro) et une fois en dessert (comptée à la pièce). Ce sont
+-- deux articles distincts, à ne pas fusionner.
 -- ---------------------------------------------------------------------
 insert into public.products (
-  name, category_id, gn_format, reorder_mode, reorder_ratio,
-  floor_qty, ceiling_qty, urgency_level, prep_time_min, weight_per_bac_kg,
-  in_saladbar, in_fridge, sort_order, notes
+  name, category_id, family, unit, base_qty,
+  count_step, min_mode, min_divisor, priority,
+  shelf_life_label, in_saladbar, in_fridge, sort_order
 )
 select
-  d.name,
-  c.id,
-  d.gn_format,
-  'ratio',
-  d.reorder_ratio,
-  d.floor_qty,
-  d.ceiling_qty,
-  d.urgency_level,
-  d.prep_time_min,
-  d.weight_per_bac_kg,
-  d.in_saladbar,
-  d.in_fridge,
-  d.sort_order,
-  d.notes
+  d.name, c.id, d.family::public.product_family, d.unit::public.product_unit, d.base_qty,
+  0.5, 'auto', 2, 3,
+  nullif(d.shelf_life, ''), true, true, d.sort_order
 from (values
-  -- name, catégorie, format GN, ratio seuil, plancher, plafond, urgence, prépa, poids, saladbar, frigo, ordre, note
-  ('Riz vinaigré',        'Bases',    'GN 1/1 - 100mm (à confirmer)', 0.5, 2.0, 12.0, 5, 12.0, 4.000, true,  true,  10, null),
-  ('Riz complet',         'Bases',    'GN 1/2 - 100mm (à confirmer)', 0.5, 1.0,  6.0, 4,  12.0, 3.500, true,  true,  20, null),
-  ('Quinoa',              'Bases',    'GN 1/3 - 100mm (à confirmer)', 0.5, 0.5,  4.0, 3,  10.0, 2.000, true,  true,  30, null),
-  ('Salade mêlée',        'Bases',    'GN 1/1 - 100mm (à confirmer)', 0.5, 1.0,  8.0, 4,   6.0, 1.200, true,  true,  40, null),
+  -- ---- Mise en place · Protéines (référence 4 000 €, multiplicateur 2) ----
+  ('Poulet Mayo',          'Protéines',   'mise_en_place', 'gastro', 0.8, 'J+1',  10),
+  ('Protéine végétale',    'Protéines',   'mise_en_place', 'gastro', 0.3, 'J+4',  20),
+  ('Saumon',               'Protéines',   'mise_en_place', 'gastro', 4.6, 'J+1',  30),
+  ('Thon',                 'Protéines',   'mise_en_place', 'gastro', 0.4, 'J+1',  40),
+  ('Crevette',             'Protéines',   'mise_en_place', 'gastro', 0.6, 'J+2',  50),
+  ('Poulet Crispy',        'Protéines',   'mise_en_place', 'gastro', 3.0, 'J',    60),
+  ('Effiloché de porc',    'Protéines',   'mise_en_place', 'gastro', 0.6, '',     70),
 
-  ('Saumon',              'Poissons', 'GN 1/3 - 65mm (à confirmer)',  0.5, 4.0, 16.0, 5,   6.0, 1.500, true,  true,  10, 'Décongeler la veille'),
-  ('Thon rouge',          'Poissons', 'GN 1/6 - 65mm (à confirmer)',  0.5, 1.0,  8.0, 5,   6.0, 1.200, true,  true,  20, 'Décongeler la veille'),
-  ('Thon épicé',          'Poissons', 'GN 1/6 - 65mm (à confirmer)',  0.5, 0.5,  6.0, 4,   8.0, 1.200, true,  true,  30, null),
-  ('Crevettes',           'Poissons', 'GN 1/6 - 65mm (à confirmer)',  0.5, 0.5,  6.0, 4,   8.0, 1.000, true,  true,  40, null),
-  ('Poulet grillé',       'Poissons', 'GN 1/3 - 65mm (à confirmer)',  0.5, 1.0,  8.0, 4,  15.0, 1.800, true,  true,  50, null),
-  ('Tofu mariné',         'Poissons', 'GN 1/6 - 65mm (à confirmer)',  0.5, 0.5,  4.0, 3,  10.0, 1.000, true,  true,  60, null),
-  ('Surimi snow crab',    'Poissons', 'GN 1/6 - 65mm (à confirmer)',  0.5, 0.5,  4.0, 3,   5.0, 1.000, true,  true,  70, null),
+  -- ---- Mise en place · Ingrédients ----
+  ('Edamame',              'Ingrédients', 'mise_en_place', 'gastro', 4.6, 'J+2',  10),
+  ('Concombre',            'Ingrédients', 'mise_en_place', 'gastro', 5.0, 'J+2',  20),
+  ('Avocat',               'Ingrédients', 'mise_en_place', 'gastro', 4.8, 'J+1',  30),
+  ('Carotte',              'Ingrédients', 'mise_en_place', 'gastro', 4.1, 'J+2',  40),
+  ('Mangue',               'Ingrédients', 'mise_en_place', 'gastro', 3.8, 'J+2',  50),
+  ('Guacamole',            'Ingrédients', 'mise_en_place', 'gastro', 1.0, 'J+1',  60),
+  ('Feta',                 'Ingrédients', 'mise_en_place', 'gastro', 0.8, 'J+2',  70),
+  ('Quinoa',               'Ingrédients', 'mise_en_place', 'gastro', 2.5, '',     80),
+  ('Creamy citron',        'Ingrédients', 'mise_en_place', 'gastro', 1.8, '',     90),
+  ('Creamy thon',          'Ingrédients', 'mise_en_place', 'gastro', 1.7, '',    100),
+  ('Pastèque',             'Ingrédients', 'mise_en_place', 'gastro', 0.4, 'J+2', 110),
+  ('Coleslaw',             'Ingrédients', 'mise_en_place', 'gastro', 1.2, '',    120),
+  ('Chou blanc',           'Ingrédients', 'mise_en_place', 'gastro', 0.7, 'J+2', 130),
+  ('Chou japonais',        'Ingrédients', 'mise_en_place', 'gastro', 2.7, '',    140),
+  ('Chou rouge',           'Ingrédients', 'mise_en_place', 'gastro', 3.0, '',    150),
+  ('Épinard',              'Ingrédients', 'mise_en_place', 'gastro', 3.0, 'J+2', 160),
+  ('Poivrons',             'Ingrédients', 'mise_en_place', 'gastro', 1.0, 'J+2', 170),
 
-  ('Edamame',             'Légumes',  'GN 1/6 - 65mm (à confirmer)',  0.5, 0.5,  5.0, 3,   5.0, 1.000, true,  true,  10, null),
-  ('Concombre',           'Légumes',  'GN 1/6 - 65mm (à confirmer)',  0.5, 0.5,  5.0, 3,   8.0, 1.000, true,  true,  20, null),
-  ('Carotte râpée',       'Légumes',  'GN 1/6 - 65mm (à confirmer)',  0.5, 0.5,  5.0, 3,  10.0, 1.000, true,  true,  30, null),
-  ('Chou rouge',          'Légumes',  'GN 1/6 - 65mm (à confirmer)',  0.5, 0.5,  4.0, 2,  10.0, 0.900, true,  true,  40, null),
-  ('Radis',               'Légumes',  'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  3.0, 2,   8.0, 0.600, true,  true,  50, null),
-  ('Avocat',              'Légumes',  'GN 1/6 - 65mm (à confirmer)',  0.5, 1.0,  6.0, 5,  12.0, 1.000, true,  true,  60, 'Mûrissement à surveiller'),
-  ('Mangue',              'Légumes',  'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  4.0, 3,  10.0, 0.700, true,  true,  70, null),
-  ('Ananas',              'Légumes',  'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  3.0, 2,  10.0, 0.700, true,  true,  80, null),
-  ('Tomate cerise',       'Légumes',  'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  3.0, 2,   6.0, 0.800, true,  true,  90, null),
-  ('Maïs',                'Légumes',  'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  3.0, 2,   3.0, 0.800, true,  true, 100, null),
-  ('Oignon rouge',        'Légumes',  'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  3.0, 2,   8.0, 0.600, true,  true, 110, null),
-  ('Wakamé',              'Légumes',  'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  3.0, 3,   5.0, 0.500, true,  true, 120, null),
+  -- ---- Les plus (référence 1 000 €, multiplicateur 1, comptés à la pièce) ----
+  ('Gyoza Poulet',         'Les plus',    'les_plus',      'piece',  4.8, '',     10),
+  ('Gyoza Légume',         'Les plus',    'les_plus',      'piece',  1.6, '',     20),
+  ('Bao',                  'Les plus',    'les_plus',      'piece',  1.7, '',     30),
 
-  ('Grenade',             'Toppings', 'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  4.0, 2,   8.0, 0.400, true,  true,  10, null),
-  ('Oignons frits',       'Toppings', 'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  3.0, 1,   1.0, 0.300, true,  false, 20, null),
-  ('Cacahuètes',          'Toppings', 'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  3.0, 1,   1.0, 0.400, true,  false, 30, null),
-  ('Graines de sésame',   'Toppings', 'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  2.0, 1,   1.0, 0.300, true,  false, 40, null),
-  ('Algues nori',         'Toppings', 'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  2.0, 1,   3.0, 0.200, true,  false, 50, null),
-  ('Gingembre mariné',    'Toppings', 'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  2.0, 2,   2.0, 0.400, true,  true,  60, null),
-  ('Jalapeño',            'Toppings', 'GN 1/9 - 65mm (à confirmer)',  0.5, 0.5,  2.0, 2,   4.0, 0.300, true,  true,  70, null),
-
-  ('Sauce spicy',         'Sauces',   'GN 1/9 - 100mm (à confirmer)', 0.5, 0.5,  4.0, 4,   5.0, 0.800, true,  true,  10, null),
-  ('Sauce teriyaki',      'Sauces',   'GN 1/9 - 100mm (à confirmer)', 0.5, 0.5,  4.0, 4,   5.0, 0.800, true,  true,  20, null),
-  ('Sauce sésame',        'Sauces',   'GN 1/9 - 100mm (à confirmer)', 0.5, 0.5,  4.0, 4,   5.0, 0.800, true,  true,  30, null),
-  ('Sauce ponzu',         'Sauces',   'GN 1/9 - 100mm (à confirmer)', 0.5, 0.5,  3.0, 3,   5.0, 0.800, true,  true,  40, null),
-  ('Mayo japonaise',      'Sauces',   'GN 1/9 - 100mm (à confirmer)', 0.5, 0.5,  3.0, 3,   3.0, 0.800, true,  true,  50, null)
-) as d(name, category, gn_format, reorder_ratio, floor_qty, ceiling_qty, urgency_level,
-       prep_time_min, weight_per_bac_kg, in_saladbar, in_fridge, sort_order, notes)
+  -- ---- Desserts ----
+  ('Sunny Bowl',           'Desserts',    'les_plus',      'piece',  0.4, '',     10),
+  ('Daily Bowl',           'Desserts',    'les_plus',      'piece',  0.3, '',     20),
+  ('Berry Bowl',           'Desserts',    'les_plus',      'piece',  1.0, '',     30),
+  ('Pastèques',            'Desserts',    'les_plus',      'piece',  0.6, '',     40),
+  ('Melon',                'Desserts',    'les_plus',      'piece',  0.3, '',     50),
+  ('Ananas',               'Desserts',    'les_plus',      'piece',  0.3, '',     60),
+  ('Tiramisu Oreo',        'Desserts',    'les_plus',      'piece',  1.4, '',     70),
+  ('Tiramisu Jap',         'Desserts',    'les_plus',      'piece',  1.1, '',     80),
+  ('Brookie',              'Desserts',    'les_plus',      'piece',  0.3, '',     90),
+  ('Cœur coulant',         'Desserts',    'les_plus',      'piece',  0.1, '',    100),
+  ('Pudding chia',         'Desserts',    'les_plus',      'piece',  2.9, '',    110),
+  ('Nachos',               'Desserts',    'les_plus',      'piece',  0.3, '',    120)
+) as d(name, category, family, unit, base_qty, shelf_life, sort_order)
 join public.product_categories c on c.name = d.category
-on conflict (name) do nothing;
-
--- ---------------------------------------------------------------------
--- Calculateur — paliers PROVISOIRES
---
--- Les paliers de CA et les cibles doivent être remplacés par l'export du
--- Google Sheet réel (cf. scripts/import-calculator.ts).
---
--- Calibrage : le saumon donne bien 8 gastros et la grenade 2 gastros aux
--- CA du tableau de test du §5.5, marge de sécurité comprise.
--- ---------------------------------------------------------------------
-insert into public.calculator_rules (product_id, mode, ca_min, ca_max, target_qty, valid_from)
-select p.id, 'bracket', b.ca_min, b.ca_max, round(b.factor * s.base_qty * 2) / 2, date '2020-01-01'
-from public.products p
-join (values
-  ('Riz vinaigré', 8.0), ('Riz complet', 3.0), ('Quinoa', 2.0), ('Salade mêlée', 4.0),
-  ('Saumon', 8.0), ('Thon rouge', 4.0), ('Thon épicé', 3.0), ('Crevettes', 3.0),
-  ('Poulet grillé', 4.0), ('Tofu mariné', 2.0), ('Surimi snow crab', 2.0),
-  ('Edamame', 2.5), ('Concombre', 2.5), ('Carotte râpée', 2.5), ('Chou rouge', 2.0),
-  ('Radis', 1.5), ('Avocat', 3.0), ('Mangue', 2.0), ('Ananas', 1.5),
-  ('Tomate cerise', 1.5), ('Maïs', 1.5), ('Oignon rouge', 1.5), ('Wakamé', 1.5),
-  ('Grenade', 4.0), ('Oignons frits', 1.5), ('Cacahuètes', 1.5), ('Graines de sésame', 1.0),
-  ('Algues nori', 1.0), ('Gingembre mariné', 1.0), ('Jalapeño', 1.0),
-  ('Sauce spicy', 2.0), ('Sauce teriyaki', 2.0), ('Sauce sésame', 2.0),
-  ('Sauce ponzu', 1.5), ('Mayo japonaise', 1.5)
-) as s(name, base_qty) on s.name = p.name
-cross join (values
-  -- Le palier « 2500 - 4000 » est celui du cas de test saumon (CA_ref 3 520 €).
-  (   0.0,  1000.0, 0.375),
-  (1000.0,  2000.0, 0.500),   -- palier du cas de test grenade (CA_ref 1 540 €) : 4,0 x 0,5 = 2
-  (2000.0,  2500.0, 0.750),
-  (2500.0,  4000.0, 1.000),
-  (4000.0,  5500.0, 1.250),
-  (5500.0,    null, 1.500)
-) as b(ca_min, ca_max, factor)
-on conflict do nothing;
+on conflict (name) do update set
+  family           = excluded.family,
+  unit             = excluded.unit,
+  base_qty         = excluded.base_qty,
+  shelf_life_label = excluded.shelf_life_label,
+  category_id      = excluded.category_id,
+  sort_order       = excluded.sort_order;
 
 commit;

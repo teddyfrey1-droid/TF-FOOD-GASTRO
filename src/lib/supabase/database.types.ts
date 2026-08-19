@@ -14,8 +14,9 @@ export type Json = string | number | boolean | null | { [key: string]: Json } | 
 export type UserRole = 'employee' | 'manager' | 'owner';
 export type SessionKind = 'morning' | 'afternoon';
 export type SessionStatus = 'draft' | 'submitted';
-export type CalculatorMode = 'bracket' | 'ratio';
-export type ReorderMode = 'ratio' | 'fixed';
+export type ProductFamily = 'mise_en_place' | 'les_plus';
+export type ProductUnit = 'gastro' | 'piece';
+export type MinMode = 'auto' | 'manual';
 export type ForecastSource = 'auto' | 'manual';
 
 type ProfileRow = {
@@ -38,16 +39,23 @@ type ProductRow = {
   id: string;
   name: string;
   category_id: string;
-  gn_format: string | null;
+  family: ProductFamily;
+  unit: ProductUnit;
+  /** Colonne « VENTE POUR » du Sheet : seule donnée qui pilote la cible. */
+  base_qty: number;
   count_step: number;
   production_step: number;
-  reorder_mode: ReorderMode;
-  reorder_ratio: number | null;
-  reorder_fixed: number | null;
+  min_mode: MinMode;
+  min_divisor: number;
+  min_qty_manual: number | null;
   floor_qty: number | null;
   ceiling_qty: number | null;
-  urgency_level: number;
+  /** 1 = LE PLUS urgent, 5 = le moins. */
+  priority: number;
+  /** Conservé pour plus tard : aucune logique ni affichage en v1. */
   prep_time_min: number | null;
+  /** DLC indicative (J, J+1, J+2, J+4). Stockée, non utilisée. */
+  shelf_life_label: string | null;
   weight_per_bac_kg: number | null;
   in_saladbar: boolean;
   in_fridge: boolean;
@@ -58,31 +66,25 @@ type ProductRow = {
   updated_at: string;
 };
 
+type ProductFamilySettingsRow = {
+  family: ProductFamily;
+  label: string;
+  reference_revenue: number;
+  target_multiplier: number;
+  updated_at: string;
+};
+
 /** Projection sans donnée sensible, seule table de produits visible d'un employé. */
 type ProductForCountRow = {
   id: string;
   name: string;
   category_id: string;
-  gn_format: string | null;
+  unit: ProductUnit;
   count_step: number;
   in_saladbar: boolean;
   in_fridge: boolean;
   sort_order: number;
   notes: string | null;
-};
-
-type CalculatorRuleRow = {
-  id: string;
-  product_id: string;
-  mode: CalculatorMode;
-  ca_min: number | null;
-  ca_max: number | null;
-  target_qty: number | null;
-  qty_per_1000_eur: number | null;
-  valid_from: string;
-  valid_to: string | null;
-  created_at: string;
-  created_by: string | null;
 };
 
 type RevenueHistoryRow = {
@@ -118,7 +120,7 @@ type RevenueSettingsRow = {
   growth_rate: number;
   safety_margin: number;
   afternoon_target_ratio: number;
-  default_reorder_ratio: number;
+  default_min_divisor: number;
   show_targets_to_employees: boolean;
   morning_reminder_time: string;
   afternoon_reminder_time: string;
@@ -147,7 +149,7 @@ type CountLineRow = {
   qty_fridge: number;
   qty_total: number;
   target_snapshot: number | null;
-  reorder_threshold_snapshot: number | null;
+  min_snapshot: number | null;
   production_needed_snapshot: number | null;
   is_not_applicable: boolean;
   not_applicable_reason: string | null;
@@ -160,7 +162,7 @@ type ProductionTaskRow = {
   session_id: string;
   product_id: string;
   qty_to_produce: number;
-  urgency_level_snapshot: number;
+  priority_snapshot: number;
   is_done: boolean;
   done_at: string | null;
   done_by: string | null;
@@ -211,33 +213,25 @@ export type Database = {
         | Generated
         | 'count_step'
         | 'production_step'
-        | 'reorder_mode'
-        | 'reorder_ratio'
-        | 'reorder_fixed'
+        | 'min_mode'
+        | 'min_divisor'
+        | 'min_qty_manual'
         | 'floor_qty'
         | 'ceiling_qty'
-        | 'urgency_level'
+        | 'priority'
         | 'prep_time_min'
         | 'weight_per_bac_kg'
-        | 'gn_format'
+        | 'shelf_life_label'
+        | 'family'
+        | 'unit'
+        | 'base_qty'
         | 'in_saladbar'
         | 'in_fridge'
         | 'sort_order'
         | 'is_active'
         | 'notes'
       >;
-      calculator_rules: Table<
-        CalculatorRuleRow,
-        | 'id'
-        | 'created_at'
-        | 'created_by'
-        | 'ca_min'
-        | 'ca_max'
-        | 'target_qty'
-        | 'qty_per_1000_eur'
-        | 'valid_from'
-        | 'valid_to'
-      >;
+      product_family_settings: Table<ProductFamilySettingsRow, 'updated_at'>;
       revenue_history: Table<RevenueHistoryRow, 'created_at' | 'is_closed_day' | 'note'>;
       revenue_actuals: Table<
         RevenueActualRow,
@@ -272,7 +266,7 @@ export type Database = {
         | 'qty_saladbar'
         | 'qty_fridge'
         | 'target_snapshot'
-        | 'reorder_threshold_snapshot'
+        | 'min_snapshot'
         | 'production_needed_snapshot'
         | 'is_not_applicable'
         | 'not_applicable_reason'
@@ -301,8 +295,9 @@ export type Database = {
           product_id: string;
           product_name: string;
           target: number;
-          reorder_threshold: number;
-          has_rule: boolean;
+          minimum: number;
+          priority: number;
+          unit: ProductUnit;
         }[];
       };
       /**
@@ -314,11 +309,10 @@ export type Database = {
         Returns: {
           product_id: string;
           product_name: string;
-          gn_format: string | null;
           notes: string | null;
           qty_to_produce: number;
-          urgency_level: number;
-          is_critical: boolean;
+          unit: ProductUnit;
+          priority: number;
         }[];
       };
       mep_reorder_report: {
@@ -326,15 +320,13 @@ export type Database = {
         Returns: {
           product_id: string;
           product_name: string;
-          gn_format: string | null;
           notes: string | null;
           qty_to_produce: number;
-          urgency_level: number;
+          unit: ProductUnit;
+          priority: number;
           is_done: boolean;
         }[];
       };
-      /** Temps de prépa total du rapport, en minutes. Ne divulgue pas prep_time_min. */
-      mep_reorder_prep_time: { Args: { p_session_id: string }; Returns: number };
       mep_forecast_revenue: { Args: { d: string }; Returns: number | null };
       mep_reference_revenue: {
         Args: { d: string; p_session: SessionKind };
@@ -367,8 +359,9 @@ export type Database = {
       user_role: UserRole;
       session_kind: SessionKind;
       session_status: SessionStatus;
-      calculator_mode: CalculatorMode;
-      reorder_mode: ReorderMode;
+      product_family: ProductFamily;
+      product_unit: ProductUnit;
+      min_mode: MinMode;
       forecast_source: ForecastSource;
     };
     CompositeTypes: Record<never, never>;

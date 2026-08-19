@@ -175,7 +175,7 @@ function ApplyGrowthRateButton({
             form.set('growth_rate', String(rounded));
             form.set('safety_margin', String(settings.safetyMargin));
             form.set('afternoon_target_ratio', String(settings.afternoonTargetRatio));
-            form.set('default_reorder_ratio', String(settings.defaultReorderRatio));
+            form.set('default_min_divisor', String(settings.defaultMinDivisor));
             form.set('morning_reminder_time', settings.morningReminderTime ?? '07:30');
             form.set('afternoon_reminder_time', settings.afternoonReminderTime ?? '15:00');
             if (settings.showTargetsToEmployees) form.set('show_targets_to_employees', 'on');
@@ -462,16 +462,16 @@ function SettingsForm({ settings }: { settings: RevenueSettings }) {
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="default_reorder_ratio">Seuil de relance par défaut</Label>
+            <Label htmlFor="default_min_divisor">Diviseur de minimum par défaut</Label>
             <Input
-              id="default_reorder_ratio"
-              name="default_reorder_ratio"
+              id="default_min_divisor"
+              name="default_min_divisor"
               inputMode="decimal"
-              defaultValue={settings.defaultReorderRatio}
+              defaultValue={settings.defaultMinDivisor}
             />
             <p className="text-muted-foreground text-xs">
-              0,5 = on relance sous 50 % de la cible, pour les produits qui n&apos;ont pas leur
-              propre réglage.
+              2 = le minimum vaut la moitié de la cible, pour les produits en mode automatique
+              qui n&apos;ont pas leur propre diviseur.
             </p>
           </div>
 
@@ -504,7 +504,7 @@ function SettingsForm({ settings }: { settings: RevenueSettings }) {
           <span>
             <span className="font-medium">Montrer les cibles aux employés</span>
             <span className="text-muted-foreground mt-1 block text-xs">
-              Désactivé par défaut. Activé, les employés voient la cible et le seuil de chaque
+              Désactivé par défaut. Activé, les employés voient la cible et le minimum de chaque
               produit — mais jamais le chiffre d&apos;affaires.
             </span>
           </span>

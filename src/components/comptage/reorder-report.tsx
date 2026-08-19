@@ -1,44 +1,47 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import { AlertTriangle, Check, Printer } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
+import { Check, Printer } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
-import { formatBacs, formatDuration } from '@/lib/format';
+import { unitLabel, type ProductUnit } from '@/lib/mep';
 import { toggleProductionTask } from '@/app/comptage/actions';
 
 export interface ReportTask {
   taskId: string;
   productName: string;
-  gnFormat: string | null;
   notes: string | null;
   qtyToProduce: number;
-  urgencyLevel: number;
+  unit: ProductUnit;
+  /** 1 = le plus urgent, 5 = le moins. */
+  priority: number;
   isDone: boolean;
 }
 
-/** Pastille de couleur d'urgence. Le rouge est réservé au vraiment critique. */
-const URGENCY_DOT: Record<number, string> = {
-  1: 'bg-slate-300',
-  2: 'bg-sky-400',
-  3: 'bg-amber-400',
-  4: 'bg-orange-500',
-  5: 'bg-red-500',
+/**
+ * Pastille de priorité.
+ *
+ * ⚠️ L'échelle se lit comme un classement : **1 est le plus urgent**.
+ * Le rouge est donc en haut de liste, le gris en bas.
+ */
+const PRIORITY_DOT: Record<number, string> = {
+  1: 'bg-red-500',
+  2: 'bg-orange-500',
+  3: 'bg-yellow-400',
+  4: 'bg-blue-400',
+  5: 'bg-neutral-300',
 };
 
 export function ReorderReport({
   title,
   tasks,
   sufficientCount,
-  totalPrepMinutes,
 }: {
   title: string;
   tasks: ReportTask[];
   sufficientCount: number;
-  totalPrepMinutes: number | null;
 }) {
   const [done, setDone] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(tasks.map((task) => [task.taskId, task.isDone])),
@@ -61,11 +64,11 @@ export function ReorderReport({
         <div className="bg-primary/10 mx-auto flex size-16 items-center justify-center rounded-full">
           <Check className="text-primary size-8" />
         </div>
-        <h1 className="mt-5 text-2xl font-bold tracking-tight">Tout est au niveau.</h1>
+        <h1 className="mt-5 text-2xl font-black tracking-tight">Tout est au niveau.</h1>
         <p className="text-muted-foreground mt-2">Rien à relancer.</p>
         <p className="text-muted-foreground mt-6 text-sm">
           {title} validé — {sufficientCount} produit{sufficientCount > 1 ? 's' : ''} au-dessus de
-          leur seuil.
+          leur minimum.
         </p>
       </div>
     );
@@ -75,13 +78,9 @@ export function ReorderReport({
     <div className="space-y-5">
       <header className="flex items-start justify-between gap-3 print:block">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">À relancer</h1>
+          <h1 className="text-2xl font-black tracking-tight">À relancer</h1>
           <p className="text-muted-foreground mt-1 text-sm">
-            {remaining.length} sur {tasks.length} restant
-            {remaining.length > 1 ? 's' : ''}
-            {totalPrepMinutes !== null && totalPrepMinutes > 0
-              ? ` · environ ${formatDuration(totalPrepMinutes)} de prépa`
-              : ''}
+            {remaining.length} sur {tasks.length} restant{remaining.length > 1 ? 's' : ''}
           </p>
         </div>
 
@@ -97,10 +96,9 @@ export function ReorderReport({
         </Button>
       </header>
 
-      <ul className="divide-y overflow-hidden rounded-lg border">
+      <ul className="divide-y overflow-hidden rounded-2xl border">
         {tasks.map((task) => {
           const isDone = done[task.taskId];
-          const critical = task.urgencyLevel >= 4 || task.qtyToProduce === 0;
 
           return (
             <li
@@ -120,30 +118,23 @@ export function ReorderReport({
                     aria-hidden
                     className={cn(
                       'size-2.5 shrink-0 rounded-full',
-                      URGENCY_DOT[task.urgencyLevel] ?? 'bg-slate-300',
+                      PRIORITY_DOT[task.priority] ?? 'bg-neutral-300',
                     )}
                   />
-                  <span className={cn('font-medium', isDone && 'line-through')}>
+                  <span className={cn('font-semibold', isDone && 'line-through')}>
                     {task.productName}
                   </span>
                 </div>
 
-                <p className="mt-1 text-lg font-bold tabular-nums">
-                  {formatBacs(task.qtyToProduce)}
+                <p className="mt-1 text-xl font-black tabular-nums">
+                  {task.qtyToProduce.toLocaleString('fr-FR')}{' '}
+                  <span className="text-muted-foreground text-sm font-medium">
+                    {unitLabel(task.unit, task.qtyToProduce)}
+                  </span>
                 </p>
 
-                {task.gnFormat ? (
-                  <p className="text-muted-foreground text-xs">{task.gnFormat}</p>
-                ) : null}
                 {task.notes ? (
                   <p className="text-muted-foreground mt-1 text-xs italic">{task.notes}</p>
-                ) : null}
-
-                {critical && task.urgencyLevel >= 4 ? (
-                  <Badge variant="destructive" className="mt-2 gap-1">
-                    <AlertTriangle className="size-3" />
-                    Rupture imminente
-                  </Badge>
                 ) : null}
               </div>
             </li>
@@ -164,7 +155,8 @@ export function ReorderReport({
 
           {showSufficient ? (
             <Card className="text-muted-foreground p-4 text-sm">
-              Ces produits sont au-dessus de leur seuil de relance : il n&apos;y a rien à produire.
+              Ces produits sont au-dessus de leur minimum de relance : il n&apos;y a rien à
+              produire.
             </Card>
           ) : null}
         </div>

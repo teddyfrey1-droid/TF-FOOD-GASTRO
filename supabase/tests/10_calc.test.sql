@@ -159,65 +159,121 @@ end
 $$;
 
 -- ---------------------------------------------------------------------
--- §5.3 / §5.4 — Cible et seuil : LE tableau de test
+-- Cible et minimum — modèle « base_qty »
+--
+--   cible   = base × multiplicateur × (CA_ref / référence), PLAFOND à l'entier
+--   minimum = cible / diviseur, PLAFOND au pas de comptage, borné par la cible
 -- ---------------------------------------------------------------------
-select pg_temp.check_equal(
-  'Saumon @ CA 3 200 € -> cible 8',
-  (select target from public.mep_product_targets(date '2026-08-18', 'morning') where product_name = 'Saumon'),
-  8.0::numeric
-);
 
-select pg_temp.check_equal(
-  'Saumon @ CA 3 200 € -> seuil 4',
-  (select reorder_threshold from public.mep_product_targets(date '2026-08-18', 'morning') where product_name = 'Saumon'),
-  4.0::numeric
-);
+-- CA de référence calé à 4 000 € pour rejouer le tableau de vérification.
+-- La marge de sécurité est à 0 : le multiplicateur de famille (x2) porte
+-- déjà la sécurité.
+update public.revenue_settings
+set growth_rate = 0, safety_margin = 0, afternoon_target_ratio = 1.0, default_min_divisor = 2;
 
--- CA 1 400 € pour le cas grenade.
 insert into public.revenue_history (date, revenue_ht, is_closed_day)
-values (date '2025-08-20', 1400, false)
-on conflict (date) do update set revenue_ht = 1400, is_closed_day = false;
+values (public.mep_reference_date(current_date), 4000, false)
+on conflict (date) do update set revenue_ht = 4000, is_closed_day = false;
 
 select pg_temp.check_equal(
-  'Grenade @ CA 1 400 € -> cible 2',
-  (select target from public.mep_product_targets(date '2026-08-19', 'morning') where product_name = 'Grenade'),
-  2.0::numeric
+  'CA de référence du jour ramené à 4 000 €',
+  public.mep_reference_revenue(current_date, 'morning'),
+  4000.00::numeric
 );
 
 select pg_temp.check_equal(
-  'Grenade @ CA 1 400 € -> seuil 1',
-  (select reorder_threshold from public.mep_product_targets(date '2026-08-19', 'morning') where product_name = 'Grenade'),
-  1.0::numeric
+  'Saumon (base 4,6) @ 4 000 € -> 9,2 -> cible 10',
+  (select target from public.mep_product_targets(current_date, 'morning') where product_name = 'Saumon'),
+  10::numeric
 );
 
--- Toutes les cibles et tous les seuils tombent sur des multiples de 0,5.
+select pg_temp.check_equal(
+  'Saumon -> minimum 5',
+  (select minimum from public.mep_product_targets(current_date, 'morning') where product_name = 'Saumon'),
+  5.0::numeric
+);
+
+select pg_temp.check_equal(
+  'Thon (base 0,4) @ 4 000 € -> 0,8 -> cible 1',
+  (select target from public.mep_product_targets(current_date, 'morning') where product_name = 'Thon'),
+  1::numeric
+);
+
+select pg_temp.check_equal(
+  'Thon -> minimum 0,5',
+  (select minimum from public.mep_product_targets(current_date, 'morning') where product_name = 'Thon'),
+  0.5::numeric
+);
+
+-- Contrôle du §1 à 5 000 € : Saumon 11,5 -> 12, Gyoza Poulet 24 pile.
+insert into public.revenue_history (date, revenue_ht, is_closed_day)
+values (public.mep_reference_date(current_date + 1), 5000, false)
+on conflict (date) do update set revenue_ht = 5000, is_closed_day = false;
+
+select pg_temp.check_equal(
+  'Saumon @ 5 000 € -> 11,5 -> cible 12',
+  (select target from public.mep_product_targets(current_date + 1, 'morning') where product_name = 'Saumon'),
+  12::numeric
+);
+
+select pg_temp.check_equal(
+  'Gyoza Poulet (base 4,8, les_plus) @ 5 000 € -> cible 24',
+  (select target from public.mep_product_targets(current_date + 1, 'morning') where product_name = 'Gyoza Poulet'),
+  24::numeric
+);
+
+select pg_temp.check_equal(
+  'Gyoza Poulet -> minimum 12',
+  (select minimum from public.mep_product_targets(current_date + 1, 'morning') where product_name = 'Gyoza Poulet'),
+  12::numeric
+);
+
+-- Toutes les cibles tombent sur des entiers, et aucun minimum ne dépasse sa cible.
 do $$
 declare bad int;
 begin
   select count(*) into bad
-  from public.mep_product_targets(date '2026-08-18', 'morning')
-  where (target * 2) <> floor(target * 2) or (reorder_threshold * 2) <> floor(reorder_threshold * 2);
-  if bad > 0 then
-    raise exception 'ÉCHEC — % cibles/seuils hors du pas de 0,5', bad;
-  end if;
-  raise notice 'OK   — toutes les cibles et tous les seuils sont des multiples de 0,5';
+  from public.mep_product_targets(current_date, 'morning')
+  where target <> floor(target);
+  if bad > 0 then raise exception 'ÉCHEC — % cibles non entières', bad; end if;
+  raise notice 'OK   — toutes les cibles sont des entiers';
+
+  select count(*) into bad
+  from public.mep_product_targets(current_date, 'morning')
+  where minimum > target;
+  if bad > 0 then raise exception 'ÉCHEC — % minimums dépassent leur cible', bad; end if;
+  raise notice 'OK   — aucun minimum ne dépasse sa cible';
+
+  select count(*) into bad
+  from public.mep_product_targets(current_date, 'morning')
+  where (minimum * 2) <> floor(minimum * 2);
+  if bad > 0 then raise exception 'ÉCHEC — % minimums hors du pas de 0,5', bad; end if;
+  raise notice 'OK   — tous les minimums tombent sur un demi';
 end
 $$;
 
--- Un seuil ne dépasse jamais la cible.
+-- Mode manuel, réglable produit par produit.
 do $$
-declare bad int;
 begin
-  select count(*) into bad
-  from public.mep_product_targets(date '2026-08-18', 'morning')
-  where reorder_threshold > target;
-  if bad > 0 then raise exception 'ÉCHEC — % seuils dépassent leur cible', bad; end if;
-  raise notice 'OK   — aucun seuil ne dépasse sa cible';
+  update public.products set min_mode = 'manual', min_qty_manual = 8 where name = 'Saumon';
+  perform pg_temp.check_equal(
+    'Saumon en mode manuel -> minimum 8',
+    (select minimum from public.mep_product_targets(current_date, 'morning') where product_name = 'Saumon'),
+    8::numeric);
+
+  -- Un minimum manuel supérieur à la cible est ramené à la cible.
+  update public.products set min_qty_manual = 40 where name = 'Saumon';
+  perform pg_temp.check_equal(
+    'Un minimum manuel de 40 est ramené à la cible de 10',
+    (select minimum from public.mep_product_targets(current_date, 'morning') where product_name = 'Saumon'),
+    10::numeric);
+
+  update public.products set min_mode = 'auto', min_qty_manual = null where name = 'Saumon';
 end
 $$;
 
 -- ---------------------------------------------------------------------
--- §5.5 — Décision de relance de bout en bout, via mep_submit_count
+-- Décision de relance — tableau de vérification du §1, de bout en bout
 -- ---------------------------------------------------------------------
 insert into auth.users (id, email) values
   ('11111111-1111-1111-1111-111111111111', 'employe@heiko.test')
@@ -229,93 +285,121 @@ do $$
 declare
   v_session uuid;
   v_saumon  uuid;
-  v_grenade uuid;
+  v_thon    uuid;
   v_qty     numeric;
+  v_case    record;
 begin
-  select id into v_saumon  from public.products where name = 'Saumon';
-  select id into v_grenade from public.products where name = 'Grenade';
+  select id into v_saumon from public.products where name = 'Saumon';
+  select id into v_thon   from public.products where name = 'Thon';
 
-  -- Cas « stock 3 sur une cible de 8, seuil 4 » -> relancer 5.
   delete from public.count_sessions where date = current_date;
   insert into public.count_sessions (date, session, user_id)
   values (current_date, 'morning', '11111111-1111-1111-1111-111111111111')
   returning id into v_session;
 
-  -- La prévision du jour courant doit valoir 3 200 € pour rejouer le cas.
-  insert into public.revenue_history (date, revenue_ht, is_closed_day)
-  values (public.mep_reference_date(current_date), 3200, false)
-  on conflict (date) do update set revenue_ht = 3200, is_closed_day = false;
+  insert into public.count_lines (session_id, product_id, qty_saladbar, qty_fridge, counted_at)
+  select v_session, p.id, 999, 0, now() from public.products p where p.is_active;
 
-  insert into public.count_lines (session_id, product_id, qty_saladbar, qty_fridge)
-  select v_session, p.id, 99, 0 from public.products p where p.is_active;
+  -- Saumon : cible 10, minimum 5.
+  for v_case in
+    select * from (values
+      (3::numeric, 7::numeric), (6, 0), (5, 0), (0, 10), (3.5, 7)
+    ) as t(stock, attendu)
+  loop
+    update public.count_lines set qty_saladbar = v_case.stock, qty_fridge = 0
+      where session_id = v_session and product_id = v_saumon;
+    perform public.mep_submit_count(v_session);
 
-  -- Saumon : 2 au saladbar + 1 au frigo = 3.
-  update public.count_lines set qty_saladbar = 2, qty_fridge = 1
+    select production_needed_snapshot into v_qty
+    from public.count_lines where session_id = v_session and product_id = v_saumon;
+
+    perform pg_temp.check_equal(
+      format('Saumon cible 10 minimum 5, stock %s -> %s', v_case.stock, v_case.attendu),
+      v_qty, v_case.attendu);
+  end loop;
+
+  -- Thon : cible 1, minimum 0,5.
+  for v_case in
+    select * from (values (0::numeric, 1::numeric), (0.5, 0)) as t(stock, attendu)
+  loop
+    update public.count_lines set qty_saladbar = v_case.stock, qty_fridge = 0
+      where session_id = v_session and product_id = v_thon;
+    perform public.mep_submit_count(v_session);
+
+    select production_needed_snapshot into v_qty
+    from public.count_lines where session_id = v_session and product_id = v_thon;
+
+    perform pg_temp.check_equal(
+      format('Thon cible 1 minimum 0,5, stock %s -> %s', v_case.stock, v_case.attendu),
+      v_qty, v_case.attendu);
+  end loop;
+
+  -- Saladbar + frigo s'additionnent avant comparaison au minimum.
+  update public.count_lines set qty_saladbar = 3, qty_fridge = 2
     where session_id = v_session and product_id = v_saumon;
-
   perform public.mep_submit_count(v_session);
-
   select production_needed_snapshot into v_qty
   from public.count_lines where session_id = v_session and product_id = v_saumon;
-  perform pg_temp.check_equal('Saumon stock 3 (2 saladbar + 1 frigo) -> relancer 5', v_qty, 5.0::numeric);
+  perform pg_temp.check_equal('Saumon 3 saladbar + 2 frigo = 5 = minimum -> rien', v_qty, 0::numeric);
 
-  -- Les produits largement au-dessus de leur seuil ne créent aucune tâche.
-  perform pg_temp.check_equal(
-    'Seul le saumon apparaît dans les tâches de production',
-    (select count(*)::int from public.production_tasks where session_id = v_session),
-    1
-  );
-
-  -- Stock exactement au seuil : aucune relance.
-  update public.count_lines set qty_saladbar = 4, qty_fridge = 0
+  -- Le besoin est toujours un entier, même sur un stock en demis.
+  update public.count_lines set qty_saladbar = 4.5, qty_fridge = 0
     where session_id = v_session and product_id = v_saumon;
   perform public.mep_submit_count(v_session);
   select production_needed_snapshot into v_qty
   from public.count_lines where session_id = v_session and product_id = v_saumon;
-  perform pg_temp.check_equal('Saumon stock 4 = seuil -> aucune relance', v_qty, 0.0::numeric);
-  perform pg_temp.check_equal(
-    'Aucune tâche de production quand tout est au niveau',
-    (select count(*)::int from public.production_tasks where session_id = v_session),
-    0
-  );
+  perform pg_temp.check_equal('Saumon stock 4,5 -> PLAFOND(10 − 4,5) = 6', v_qty, 6::numeric);
 
-  -- Stock nul : relancer toute la cible.
-  update public.count_lines set qty_saladbar = 0, qty_fridge = 0
-    where session_id = v_session and product_id = v_saumon;
-  perform public.mep_submit_count(v_session);
-  select production_needed_snapshot into v_qty
-  from public.count_lines where session_id = v_session and product_id = v_saumon;
-  perform pg_temp.check_equal('Saumon stock 0 -> relancer 8', v_qty, 8.0::numeric);
-
-  perform pg_temp.check_equal(
-    'Stock 0 -> badge RUPTURE IMMINENTE',
-    (select is_critical from public.mep_submit_count(v_session) where product_id = v_saumon),
-    true
-  );
-
-  -- Les snapshots figent bien cible et seuil sur la ligne de comptage.
+  -- Les snapshots figent cible et minimum sur la ligne.
   perform pg_temp.check_equal(
     'Snapshot de cible écrit sur la ligne',
-    (select target_snapshot from public.count_lines where session_id = v_session and product_id = v_saumon),
-    8.0::numeric
-  );
+    (select target_snapshot from public.count_lines
+     where session_id = v_session and product_id = v_saumon), 10::numeric);
   perform pg_temp.check_equal(
-    'Snapshot de seuil écrit sur la ligne',
-    (select reorder_threshold_snapshot from public.count_lines where session_id = v_session and product_id = v_saumon),
-    4.0::numeric
-  );
+    'Snapshot de minimum écrit sur la ligne',
+    (select min_snapshot from public.count_lines
+     where session_id = v_session and product_id = v_saumon), 5.0::numeric);
 end
 $$;
 
 -- ---------------------------------------------------------------------
--- Les snapshots protègent l'historique (critère d'acceptation)
+-- Priorité : 1 est LE PLUS urgent, le rapport trie par ordre croissant
+-- ---------------------------------------------------------------------
+do $$
+declare
+  v_session uuid;
+  v_first   text;
+begin
+  select id into v_session from public.count_sessions where date = current_date limit 1;
+
+  update public.products set priority = 1 where name = 'Thon';
+  update public.products set priority = 5 where name = 'Saumon';
+
+  -- Les deux sont à zéro : c'est la priorité qui départage.
+  update public.count_lines set qty_saladbar = 0, qty_fridge = 0
+  where session_id = v_session
+    and product_id in (select id from public.products where name in ('Saumon', 'Thon'));
+
+  select product_name into v_first
+  from public.mep_submit_count(v_session)
+  where product_name in ('Saumon', 'Thon')
+  limit 1;
+
+  perform pg_temp.check_equal(
+    'Le produit en priorité 1 passe avant celui en priorité 5', v_first, 'Thon');
+
+  update public.products set priority = 3 where name in ('Saumon', 'Thon');
+end
+$$;
+
+-- ---------------------------------------------------------------------
+-- Les snapshots protègent l'historique
 -- ---------------------------------------------------------------------
 do $$
 declare
   v_session uuid;
   v_saumon  uuid;
   v_before  numeric;
-  v_after   numeric;
 begin
   select id into v_saumon from public.products where name = 'Saumon';
   select id into v_session from public.count_sessions where date = current_date limit 1;
@@ -323,110 +407,21 @@ begin
   select target_snapshot into v_before
   from public.count_lines where session_id = v_session and product_id = v_saumon;
 
-  -- On change le calculateur APRÈS la validation.
-  update public.calculator_rules set target_qty = target_qty * 2
-  where product_id = v_saumon and mode = 'bracket';
-
-  select target_snapshot into v_after
-  from public.count_lines where session_id = v_session and product_id = v_saumon;
+  -- On change la base APRÈS la validation.
+  update public.products set base_qty = 9.2 where id = v_saumon;
 
   perform pg_temp.check_equal(
-    'Modifier le calculateur ne réécrit pas l''historique',
-    v_after, v_before
-  );
+    'Modifier la base ne réécrit pas l''historique',
+    (select target_snapshot from public.count_lines
+     where session_id = v_session and product_id = v_saumon),
+    v_before);
 
-  -- ... mais change bien la cible du jour.
   perform pg_temp.check_equal(
-    'Modifier le calculateur change la cible du jour même',
+    'Modifier la base change la cible du jour même',
     (select target from public.mep_product_targets(current_date, 'morning') where product_name = 'Saumon'),
-    16.0::numeric
-  );
+    19::numeric);  -- 9,2 x 2 x 1 = 18,4 -> 19
 
-  update public.calculator_rules set target_qty = target_qty / 2
-  where product_id = v_saumon and mode = 'bracket';
-end
-$$;
-
--- ---------------------------------------------------------------------
--- Versionnage du calculateur (valid_from / valid_to)
--- ---------------------------------------------------------------------
-do $$
-declare v_saumon uuid;
-begin
-  select id into v_saumon from public.products where name = 'Saumon';
-
-  -- Une règle expirée hier ne doit plus s'appliquer aujourd'hui.
-  update public.calculator_rules set valid_to = current_date - 1 where product_id = v_saumon;
-  perform pg_temp.check_equal(
-    'Une règle expirée ne s''applique plus (cible ramenée au plancher)',
-    (select target from public.mep_product_targets(current_date, 'morning') where product_name = 'Saumon'),
-    4.0::numeric  -- floor_qty du saumon
-  );
-  update public.calculator_rules set valid_to = null where product_id = v_saumon;
-end
-$$;
-
-
--- ---------------------------------------------------------------------
--- Versionnage : deux versions ne doivent jamais s'appliquer le même jour
---
--- Reproduit ce que fait le back-office quand on modifie une cellule du
--- calculateur : la version en cours est close à hier, une nouvelle est
--- ouverte aujourd'hui.
--- ---------------------------------------------------------------------
-do $$
-declare
-  v_saumon uuid;
-  v_rule   uuid;
-  v_count  int;
-begin
-  select id into v_saumon from public.products where name = 'Saumon';
-
-  -- La règle qui couvre 3 520 € aujourd'hui.
-  select id into v_rule
-  from public.calculator_rules
-  where product_id = v_saumon
-    and mode = 'bracket'
-    and 3520 >= coalesce(ca_min, -1)
-    and 3520 <  coalesce(ca_max, 1e9)
-    and valid_from <= current_date
-    and (valid_to is null or valid_to >= current_date)
-  limit 1;
-
-  -- On la clôt à hier et on ouvre une nouvelle version aujourd'hui.
-  update public.calculator_rules set valid_to = current_date - 1 where id = v_rule;
-
-  insert into public.calculator_rules (product_id, mode, ca_min, ca_max, target_qty, valid_from)
-  select product_id, mode, ca_min, ca_max, 10, current_date
-  from public.calculator_rules where id = v_rule;
-
-  select count(*)::int into v_count
-  from public.calculator_rules
-  where product_id = v_saumon
-    and mode = 'bracket'
-    and 3520 >= coalesce(ca_min, -1)
-    and 3520 <  coalesce(ca_max, 1e9)
-    and valid_from <= current_date
-    and (valid_to is null or valid_to >= current_date);
-
-  perform pg_temp.check_equal(
-    'Une seule version de règle s''applique aujourd''hui', v_count, 1);
-
-  perform pg_temp.check_equal(
-    'La nouvelle version pilote la cible du jour',
-    (select target from public.mep_product_targets(current_date, 'morning') where product_name = 'Saumon'),
-    10.0::numeric);
-
-  perform pg_temp.check_equal(
-    'L''ancienne version reste consultable pour les dates passées',
-    (select count(*)::int from public.calculator_rules
-     where id = v_rule and valid_to = current_date - 1),
-    1);
-
-  -- Nettoyage : on rétablit l'état d'origine.
-  delete from public.calculator_rules
-  where product_id = v_saumon and valid_from = current_date and target_qty = 10;
-  update public.calculator_rules set valid_to = null where id = v_rule;
+  update public.products set base_qty = 4.6 where id = v_saumon;
 end
 $$;
 

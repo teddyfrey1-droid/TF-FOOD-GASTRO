@@ -1,88 +1,70 @@
 /**
- * §5.3 et §5.4 — Cible par produit et seuil de relance.
- */
-
-import { clamp, roundToNearestStep, roundUpToStep, snap } from './rounding';
-import type { CalculatorRule, ProductCalcConfig, ProductTarget } from './types';
-
-/**
- * Sélectionne le palier couvrant `caRef` : `ca_min <= CA_ref < ca_max`.
- * Les bornes nulles valent -infini / +infini.
- */
-export function findBracket(
-  rules: readonly CalculatorRule[],
-  caRef: number,
-): CalculatorRule | null {
-  return (
-    rules.find(
-      (rule) =>
-        rule.mode === 'bracket' &&
-        (rule.caMin === null || caRef >= rule.caMin) &&
-        (rule.caMax === null || caRef < rule.caMax),
-    ) ?? null
-  );
-}
-
-/** Cible brute (avant bornage et arrondi), ou null si aucune règle ne s'applique. */
-export function rawTarget(rules: readonly CalculatorRule[], caRef: number): number | null {
-  const ratioRule = rules.find((rule) => rule.mode === 'ratio');
-  if (ratioRule && ratioRule.qtyPer1000Eur !== null) {
-    return snap(ratioRule.qtyPer1000Eur * (caRef / 1000));
-  }
-  const bracket = findBracket(rules, caRef);
-  if (bracket && bracket.targetQty !== null) return bracket.targetQty;
-  return null;
-}
-
-/**
- * §5.3 — Cible finale :
- *   target = clamp(target, floor_qty, ceiling_qty)
- *   target = arrondi_supérieur_au_multiple(target, production_step)
+ * Cible du jour et minimum de relance.
  *
- * L'ordre est celui du cahier des charges : le bornage précède l'arrondi.
- * Un `ceilingQty` qui n'est pas un multiple du pas peut donc être légèrement
- * dépassé par l'arrondi supérieur — les plafonds doivent rester des multiples
- * du pas de production.
+ * Une seule donnée pilote un produit : sa `base_qty`, reprise de la colonne
+ * « VENTE POUR » du Google Sheet. Tout le reste en découle.
  */
-export function computeTarget(product: ProductCalcConfig, raw: number): number {
-  const bounded = clamp(raw, product.floorQty, product.ceilingQty);
-  return roundUpToStep(Math.max(bounded, 0), product.productionStep);
+
+import { familySettings } from './families';
+import { ceilTo, clamp, PRODUCTION_STEP } from './rounding';
+import type { ProductCalcConfig, ProductTarget } from './types';
+
+/**
+ * Cible du jour :
+ *
+ *   cible = base_qty × target_multiplier × (CA_ref / reference_revenue)
+ *   cible = clamp(cible, floor_qty, ceiling_qty)
+ *   cible = PLAFOND(cible)
+ *
+ * Saumon, base 4,6, mise en place, CA 4 000 € :
+ *   4,6 × 2 × (4 000 / 4 000) = 9,2  ->  10
+ */
+export function computeTarget(product: ProductCalcConfig, caRef: number): number {
+  const { referenceRevenue, targetMultiplier } = familySettings(product.family);
+
+  const raw = product.baseQty * targetMultiplier * (caRef / referenceRevenue);
+  const bounded = clamp(Math.max(raw, 0), product.floorQty, product.ceilingQty);
+
+  return ceilTo(Math.max(bounded, 0), PRODUCTION_STEP);
 }
 
 /**
- * §5.4 — Seuil de relance :
- *   ratio  -> seuil = target × reorder_ratio
- *   fixed  -> seuil = reorder_fixed
- *   puis arrondi au multiple de count_step le plus proche,
- *   puis borné : un seuil ne peut jamais dépasser la cible.
+ * Minimum de relance :
+ *
+ *   auto   -> minimum = cible / min_divisor      (divisor par défaut : 2)
+ *   manual -> minimum = min_qty_manual
+ *
+ *   minimum = PLAFOND(minimum, count_step)
+ *   minimum = min(minimum, cible)
+ *
+ * Le minimum suit donc la cible tout seul en mode auto : il n'y a rien à
+ * régler quand le chiffre d'affaires bouge.
  */
-export function computeReorderThreshold(
+export function computeMinimum(
   product: ProductCalcConfig,
   target: number,
-  defaultReorderRatio: number,
+  defaultMinDivisor: number,
 ): number {
-  const base =
-    product.reorderMode === 'fixed'
-      ? (product.reorderFixed ?? 0)
-      : target * (product.reorderRatio ?? defaultReorderRatio);
+  const divisor =
+    product.minDivisor && product.minDivisor > 0 ? product.minDivisor : defaultMinDivisor;
 
-  const rounded = roundToNearestStep(Math.max(base, 0), product.countStep);
+  const raw =
+    product.minMode === 'manual' ? (product.minQtyManual ?? 0) : divisor > 0 ? target / divisor : 0;
+
+  const rounded = ceilTo(Math.max(raw, 0), product.countStep);
   return Math.min(rounded, target);
 }
 
-/** Calcule cible + seuil pour un produit à partir du CA de référence. */
+/** Cible + minimum d'un produit, à partir du CA de référence. */
 export function computeProductTarget(
   product: ProductCalcConfig,
-  rules: readonly CalculatorRule[],
   caRef: number,
-  defaultReorderRatio: number,
+  defaultMinDivisor: number,
 ): ProductTarget {
-  const raw = rawTarget(rules, caRef);
-  const target = computeTarget(product, raw ?? 0);
+  const target = computeTarget(product, caRef);
   return {
     productId: product.id,
     target,
-    reorderThreshold: computeReorderThreshold(product, target, defaultReorderRatio),
-    hasRule: raw !== null,
+    minimum: computeMinimum(product, target, defaultMinDivisor),
   };
 }

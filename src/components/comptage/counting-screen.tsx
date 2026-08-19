@@ -16,7 +16,7 @@ export interface CountProduct {
   name: string;
   categoryId: string;
   categoryName: string;
-  gnFormat: string | null;
+  unit: 'gastro' | 'piece';
   countStep: number;
   inSaladbar: boolean;
   inFridge: boolean;

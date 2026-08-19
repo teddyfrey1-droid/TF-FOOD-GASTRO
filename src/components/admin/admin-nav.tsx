@@ -7,7 +7,7 @@ import { cn } from '@/lib/utils';
 const LINKS = [
   { href: '/admin', label: 'Tableau de bord', exact: true },
   { href: '/admin/produits', label: 'Produits' },
-  { href: '/admin/calculateur', label: 'Calculateur' },
+  { href: '/admin/simulateur', label: 'Simulateur' },
   { href: '/admin/chiffre-affaires', label: "Chiffre d'affaires" },
   { href: '/admin/historique', label: 'Historique' },
 ];

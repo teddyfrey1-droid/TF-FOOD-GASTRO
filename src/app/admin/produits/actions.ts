@@ -5,8 +5,8 @@ import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
 
 /**
- * Un nombre saisi au clavier français : « 1,5 » doit être accepté au même titre
- * que « 1.5 ». Une chaîne vide vaut « non renseigné ».
+ * Un nombre saisi au clavier français : « 1,5 » vaut « 1.5 ».
+ * Une chaîne vide signifie « non renseigné ».
  */
 const frenchNumber = z
   .union([z.string(), z.number(), z.null()])
@@ -29,17 +29,19 @@ const productSchema = z
     id: z.uuid().optional(),
     name: z.string().trim().min(1, 'Le nom est obligatoire.').max(120),
     category_id: z.uuid('Choisissez une catégorie.'),
-    gn_format: z.string().trim().max(80).nullable(),
+    family: z.enum(['mise_en_place', 'les_plus']),
+    unit: z.enum(['gastro', 'piece']),
+    /** Colonne « VENTE POUR » du Sheet. */
+    base_qty: positiveNumber,
     count_step: positiveNumber,
-    production_step: positiveNumber,
-    reorder_mode: z.enum(['ratio', 'fixed']),
-    reorder_ratio: positiveNumber,
-    reorder_fixed: positiveNumber,
+    min_mode: z.enum(['auto', 'manual']),
+    min_divisor: positiveNumber,
+    min_qty_manual: positiveNumber,
     floor_qty: positiveNumber,
     ceiling_qty: positiveNumber,
-    urgency_level: z.coerce.number().int().min(1).max(5),
-    prep_time_min: positiveNumber,
-    weight_per_bac_kg: positiveNumber,
+    /** 1 = le plus urgent, 5 = le moins. */
+    priority: z.coerce.number().int().min(1).max(5),
+    shelf_life_label: z.string().trim().max(20).nullable(),
     in_saladbar: z.boolean(),
     in_fridge: z.boolean(),
     sort_order: z.coerce.number().int(),
@@ -50,29 +52,22 @@ const productSchema = z
     message: 'Le pas de comptage doit être strictement positif.',
     path: ['count_step'],
   })
-  .refine((data) => data.production_step === null || data.production_step > 0, {
-    message: 'Le pas de production doit être strictement positif.',
-    path: ['production_step'],
+  .refine((data) => data.min_divisor === null || data.min_divisor > 0, {
+    message: 'Le diviseur doit être strictement positif.',
+    path: ['min_divisor'],
   })
   .refine((data) => data.in_saladbar || data.in_fridge, {
     message: 'Un produit doit être stocké au saladbar, au frigo, ou aux deux.',
     path: ['in_saladbar'],
   })
-  .refine((data) => data.reorder_mode !== 'ratio' || data.reorder_ratio !== null, {
-    message: 'Renseignez le pourcentage de la cible qui déclenche la relance.',
-    path: ['reorder_ratio'],
-  })
-  .refine((data) => data.reorder_mode !== 'fixed' || data.reorder_fixed !== null, {
-    message: 'Renseignez le seuil de relance en gastros.',
-    path: ['reorder_fixed'],
+  .refine((data) => data.min_mode !== 'manual' || data.min_qty_manual !== null, {
+    message: 'Renseignez le minimum en valeur absolue.',
+    path: ['min_qty_manual'],
   })
   .refine(
     (data) =>
       data.floor_qty === null || data.ceiling_qty === null || data.floor_qty <= data.ceiling_qty,
-    {
-      message: 'Le plancher de cible ne peut pas dépasser le plafond.',
-      path: ['ceiling_qty'],
-    },
+    { message: 'Le plancher de cible ne peut pas dépasser le plafond.', path: ['ceiling_qty'] },
   );
 
 export interface ProductFormState {
@@ -88,26 +83,27 @@ function readForm(formData: FormData) {
     const trimmed = String(value).trim();
     return trimmed === '' ? null : trimmed;
   };
+  const bool = (key: string) => formData.get(key) === 'on' || formData.get(key) === 'true';
 
   return {
     id: text('id') ?? undefined,
     name: String(formData.get('name') ?? ''),
     category_id: String(formData.get('category_id') ?? ''),
-    gn_format: text('gn_format'),
+    family: String(formData.get('family') ?? 'mise_en_place'),
+    unit: String(formData.get('unit') ?? 'gastro'),
+    base_qty: text('base_qty'),
     count_step: text('count_step'),
-    production_step: text('production_step'),
-    reorder_mode: String(formData.get('reorder_mode') ?? 'ratio'),
-    reorder_ratio: text('reorder_ratio'),
-    reorder_fixed: text('reorder_fixed'),
+    min_mode: String(formData.get('min_mode') ?? 'auto'),
+    min_divisor: text('min_divisor'),
+    min_qty_manual: text('min_qty_manual'),
     floor_qty: text('floor_qty'),
     ceiling_qty: text('ceiling_qty'),
-    urgency_level: String(formData.get('urgency_level') ?? '3'),
-    prep_time_min: text('prep_time_min'),
-    weight_per_bac_kg: text('weight_per_bac_kg'),
-    in_saladbar: formData.get('in_saladbar') === 'on' || formData.get('in_saladbar') === 'true',
-    in_fridge: formData.get('in_fridge') === 'on' || formData.get('in_fridge') === 'true',
+    priority: String(formData.get('priority') ?? '3'),
+    shelf_life_label: text('shelf_life_label'),
+    in_saladbar: bool('in_saladbar'),
+    in_fridge: bool('in_fridge'),
     sort_order: String(formData.get('sort_order') ?? '0'),
-    is_active: formData.get('is_active') === 'on' || formData.get('is_active') === 'true',
+    is_active: bool('is_active'),
     notes: text('notes'),
   };
 }
@@ -129,14 +125,14 @@ export async function saveProduct(
 
   const { id, ...values } = parsed.data;
 
-  // Le mode non retenu est vidé : on ne garde jamais un seuil fixe fantôme
-  // derrière un produit passé en pourcentage.
   const payload = {
     ...values,
-    reorder_ratio: values.reorder_mode === 'ratio' ? values.reorder_ratio : null,
-    reorder_fixed: values.reorder_mode === 'fixed' ? values.reorder_fixed : null,
+    base_qty: values.base_qty ?? 0,
     count_step: values.count_step ?? 0.5,
-    production_step: values.production_step ?? 0.5,
+    min_divisor: values.min_divisor ?? 2,
+    // Le mode non retenu est vidé : pas de minimum manuel fantôme derrière un
+    // produit repassé en automatique.
+    min_qty_manual: values.min_mode === 'manual' ? values.min_qty_manual : null,
   };
 
   const supabase = await createClient();
@@ -154,8 +150,55 @@ export async function saveProduct(
   }
 
   revalidatePath('/admin/produits');
-  revalidatePath('/admin/calculateur');
   return { success: true };
+}
+
+/**
+ * Réglages modifiables en deux clics depuis le tableau, sans ouvrir de fiche.
+ * Ce sont ceux que le directeur touchera le plus souvent.
+ */
+export async function updateProductInline(
+  id: string,
+  patch: {
+    priority?: number;
+    minMode?: 'auto' | 'manual';
+    minQtyManual?: number | null;
+    minDivisor?: number;
+  },
+): Promise<{ error?: string }> {
+  const schema = z.object({
+    priority: z.number().int().min(1).max(5).optional(),
+    minMode: z.enum(['auto', 'manual']).optional(),
+    minQtyManual: z.number().min(0).nullable().optional(),
+    minDivisor: z.number().positive().optional(),
+  });
+
+  const parsed = schema.safeParse(patch);
+  if (!parsed.success) return { error: 'Valeur invalide.' };
+
+  const payload: Partial<{
+    priority: number;
+    min_divisor: number;
+    min_mode: 'auto' | 'manual';
+    min_qty_manual: number | null;
+  }> = {};
+  if (parsed.data.priority !== undefined) payload.priority = parsed.data.priority;
+  if (parsed.data.minDivisor !== undefined) payload.min_divisor = parsed.data.minDivisor;
+  if (parsed.data.minMode !== undefined) {
+    payload.min_mode = parsed.data.minMode;
+    // Repasser en automatique efface le minimum manuel.
+    if (parsed.data.minMode === 'auto') payload.min_qty_manual = null;
+  }
+  if (parsed.data.minQtyManual !== undefined) payload.min_qty_manual = parsed.data.minQtyManual;
+
+  if (Object.keys(payload).length === 0) return {};
+
+  const supabase = await createClient();
+  const { error } = await supabase.from('products').update(payload).eq('id', id);
+  if (error) return { error: error.message };
+
+  revalidatePath('/admin/produits');
+  return {};
 }
 
 /**

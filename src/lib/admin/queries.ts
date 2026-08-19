@@ -7,10 +7,9 @@ import {
   referenceDateLastYear,
   type GrowthObservation,
   type GrowthSample,
-  type ProductTarget,
   type RevenueSettings,
 } from '@/lib/mep';
-import { groupRulesByProduct, toNumber, toProductCalcConfig } from './mappers';
+import { toNumber, toProductCalcConfig } from './mappers';
 import type { SessionKind, Tables } from '@/lib/supabase/database.types';
 
 /**
@@ -27,7 +26,7 @@ export async function getRevenueSettings(): Promise<RevenueSettings> {
     growthRate: toNumber(data?.growth_rate, 0),
     safetyMargin: toNumber(data?.safety_margin, 0.1),
     afternoonTargetRatio: toNumber(data?.afternoon_target_ratio, 1),
-    defaultReorderRatio: toNumber(data?.default_reorder_ratio, 0.5),
+    defaultMinDivisor: toNumber(data?.default_min_divisor, 2),
     showTargetsToEmployees: data?.show_targets_to_employees ?? false,
     // Postgres renvoie « 07:30:00 » ; l'input type=time attend « 07:30 ».
     morningReminderTime: data?.morning_reminder_time?.slice(0, 5) ?? null,
@@ -62,12 +61,9 @@ export async function getCategories(): Promise<Tables<'product_categories'>[]> {
   return data ?? [];
 }
 
-export async function getCalculatorRules(): Promise<Tables<'calculator_rules'>[]> {
+export async function getFamilySettings(): Promise<Tables<'product_family_settings'>[]> {
   const supabase = await createClient();
-  const { data } = await supabase
-    .from('calculator_rules')
-    .select('*')
-    .order('ca_min', { ascending: true, nullsFirst: true });
+  const { data } = await supabase.from('product_family_settings').select('*').order('family');
   return data ?? [];
 }
 
@@ -92,49 +88,37 @@ export interface SimulationRow {
   productId: string;
   productName: string;
   categoryName: string;
-  gnFormat: string | null;
-  urgencyLevel: number;
+  family: string;
+  unit: string;
+  baseQty: number;
+  priority: number;
   target: number;
-  reorderThreshold: number;
-  hasRule: boolean;
+  minimum: number;
 }
 
 /**
- * Simulateur (§7.3) : « je saisis un CA, j'obtiens la cible et le seuil de
- * chaque produit ». Le calcul tourne ici en TypeScript, avec exactement les
- * mêmes règles que la fonction SQL utilisée à la validation d'un comptage —
- * les deux implémentations sont couvertes par les mêmes cas de test.
+ * Simulateur : « je saisis un CA, j'obtiens la cible et le minimum de chaque
+ * produit ». Le calcul tourne ici en TypeScript, avec exactement les mêmes
+ * règles que la fonction SQL utilisée à la validation d'un comptage — les deux
+ * implémentations sont couvertes par le même tableau de vérification.
  */
-export async function simulateTargets(
-  caRef: number,
-  onDate: string,
-): Promise<SimulationRow[]> {
-  const [products, rules, settings] = await Promise.all([
-    getProducts(false),
-    getCalculatorRules(),
-    getRevenueSettings(),
-  ]);
-
-  const rulesByProduct = groupRulesByProduct(rules, onDate);
+export async function simulateTargets(caRef: number): Promise<SimulationRow[]> {
+  const [products, settings] = await Promise.all([getProducts(false), getRevenueSettings()]);
 
   return products.map((product) => {
     const config = toProductCalcConfig(product);
-    const target: ProductTarget = computeProductTarget(
-      config,
-      rulesByProduct.get(product.id) ?? [],
-      caRef,
-      settings.defaultReorderRatio,
-    );
+    const target = computeProductTarget(config, caRef, settings.defaultMinDivisor);
 
     return {
       productId: product.id,
       productName: product.name,
       categoryName: product.category?.name ?? '—',
-      gnFormat: product.gn_format,
-      urgencyLevel: product.urgency_level,
+      family: product.family,
+      unit: product.unit,
+      baseQty: config.baseQty,
+      priority: config.priority,
       target: target.target,
-      reorderThreshold: target.reorderThreshold,
-      hasRule: target.hasRule,
+      minimum: target.minimum,
     };
   });
 }
@@ -143,12 +127,9 @@ export async function simulateTargets(
  * Croissance réellement constatée sur une période.
  *
  * Compare, jour par jour, le CA réalisé au CA du même jour de semaine de
- * l'an dernier — exactement la référence qu'utilise la prévision (§5.1).
+ * l'an dernier — exactement la référence qu'utilise la prévision.
  */
-export async function getObservedGrowth(
-  from: string,
-  to: string,
-): Promise<GrowthObservation> {
+export async function getObservedGrowth(from: string, to: string): Promise<GrowthObservation> {
   const supabase = await createClient();
 
   const { data: actuals } = await supabase
@@ -161,7 +142,6 @@ export async function getObservedGrowth(
     return { observedRate: null, sampleDays: 0, totalActual: 0, totalReference: 0 };
   }
 
-  // On ne va chercher que les journées de référence effectivement utiles.
   const referenceByDate = new Map(
     actuals.map((row) => [row.date, referenceDateLastYear(row.date)] as const),
   );

@@ -23,18 +23,36 @@ function assertStep(step: number): void {
 }
 
 /**
- * Arrondi SUPÉRIEUR au multiple du pas.
- * Utilisé pour la cible (§5.3) et pour le besoin de production (§5.5) :
- * on ne produit jamais moins que nécessaire.
+ * Arrondi SUPÉRIEUR au multiple du pas — LA fonction d'arrondi du produit.
+ *
+ * Tout ce qui est visé ou produit passe par elle, et par elle seule :
+ * cible, minimum de relance, besoin de production. Il n'y a volontairement
+ * aucun autre arrondi ailleurs dans le code.
+ *
+ *   ceilTo(9.2, 1)   -> 10     on ne produit jamais moins que nécessaire
+ *   ceilTo(4.0, 1)   -> 4      une valeur déjà entière ne remonte pas
+ *   ceilTo(0.25, 0.5) -> 0.5   le comptage, lui, accepte les demis
  */
-export function roundUpToStep(value: number, step: number): number {
+export function ceilTo(value: number, step: number): number {
   assertStep(step);
   return snap(Math.ceil(snap(value / step) - EPSILON) * step);
 }
 
+/** Pas de production : tout ce qui est visé ou produit tombe sur un entier. */
+export const PRODUCTION_STEP = 1;
+
+/** Pas de comptage : l'employé constate un stock réel, donc au demi près. */
+export const COUNT_STEP = 0.5;
+
+/** @deprecated Utiliser `ceilTo`. Conservé le temps de la migration des appels. */
+export const roundUpToStep = ceilTo;
+
 /**
- * Arrondi au multiple du pas LE PLUS PROCHE (0,5 arrondi vers le haut).
- * Utilisé pour le seuil de relance (§5.4).
+ * Arrondi au multiple du pas LE PLUS PROCHE.
+ *
+ * ⚠️ N'entre PLUS dans le calcul métier : la cible, le minimum et le besoin
+ * s'arrondissent tous à l'entier SUPÉRIEUR via `ceilTo`. Cette fonction ne
+ * sert qu'à l'affichage de valeurs indicatives.
  */
 export function roundToNearestStep(value: number, step: number): number {
   assertStep(step);

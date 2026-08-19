@@ -49,9 +49,9 @@ export function ProductRow({
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           <p className="leading-tight font-medium">{product.name}</p>
-          {product.gnFormat ? (
-            <p className="text-muted-foreground mt-0.5 text-xs">{product.gnFormat}</p>
-          ) : null}
+          <p className="text-muted-foreground mt-0.5 text-xs">
+            {product.unit === 'piece' ? 'pièces' : 'gastros'}
+          </p>
           {product.notes ? (
             <p className="text-muted-foreground mt-0.5 text-xs italic">{product.notes}</p>
           ) : null}

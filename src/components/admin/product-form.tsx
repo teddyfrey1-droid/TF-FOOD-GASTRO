@@ -41,7 +41,8 @@ export function ProductForm({
   onClose: () => void;
 }) {
   const [state, formAction] = useActionState<ProductFormState, FormData>(saveProduct, {});
-  const [reorderMode, setReorderMode] = useState(product?.reorder_mode ?? 'ratio');
+  const [minMode, setMinMode] = useState(product?.min_mode ?? 'auto');
+  const [family, setFamily] = useState(product?.family ?? 'mise_en_place');
 
   useEffect(() => {
     if (state.success) onClose();
@@ -53,7 +54,8 @@ export function ProductForm({
     <Card className="p-6">
       <form action={formAction} className="space-y-8">
         {product ? <input type="hidden" name="id" value={product.id} /> : null}
-        <input type="hidden" name="reorder_mode" value={reorderMode} />
+        <input type="hidden" name="min_mode" value={minMode} />
+        <input type="hidden" name="family" value={family} />
 
         <header className="flex items-start justify-between gap-4">
           <div>
@@ -61,8 +63,8 @@ export function ProductForm({
               {product ? `Modifier « ${product.name} »` : 'Nouveau produit'}
             </h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              Le format GN s&apos;affiche à l&apos;écran de comptage. Le poids par gastro reste
-              interne au back-office.
+              La valeur « VENTE POUR » et la famille pilotent la cible. Elles ne sont jamais
+              visibles d&apos;un employé.
             </p>
           </div>
           <Button type="button" variant="ghost" onClick={onClose}>
@@ -95,63 +97,100 @@ export function ProductForm({
             <FieldError message={errors.category_id} />
           </div>
 
-          <div className="space-y-2 sm:col-span-2">
-            <Label htmlFor="gn_format">Format GN</Label>
+          <div className="space-y-2">
+            <Label htmlFor="base_qty">Valeur « VENTE POUR »</Label>
             <Input
-              id="gn_format"
-              name="gn_format"
-              defaultValue={product?.gn_format ?? ''}
-              placeholder="GN 1/3 - 65mm"
+              id="base_qty"
+              name="base_qty"
+              inputMode="decimal"
+              defaultValue={value(product?.base_qty)}
+              placeholder="4,6"
             />
             <p className="text-muted-foreground text-xs">
-              Affiché sous le nom du produit au comptage, pour lever toute ambiguïté.
+              Reprise du Google Sheet. C&apos;est la seule donnée qui pilote la cible.
             </p>
+            <FieldError message={errors.base_qty} />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="unit">Unité de comptage</Label>
+            <select
+              id="unit"
+              name="unit"
+              defaultValue={product?.unit ?? 'gastro'}
+              className="border-input bg-background h-9 w-full rounded-md border px-3 text-sm"
+            >
+              <option value="gastro">Gastro</option>
+              <option value="piece">Pièce</option>
+            </select>
+          </div>
+
+          <div className="space-y-2 sm:col-span-2">
+            <Label>Famille</Label>
+            <div className="flex flex-wrap gap-2">
+              {(['mise_en_place', 'les_plus'] as const).map((candidate) => (
+                <Button
+                  key={candidate}
+                  type="button"
+                  variant={family === candidate ? 'default' : 'outline'}
+                  size="sm"
+                  onClick={() => setFamily(candidate)}
+                >
+                  {candidate === 'mise_en_place'
+                    ? 'Mise en place — base pour 4 000 €, x2'
+                    : 'Les plus — base pour 1 000 €, x1'}
+                </Button>
+              ))}
+            </div>
           </div>
         </section>
 
         <section className="space-y-4">
-          <h3 className="text-sm font-semibold">Seuil de relance</h3>
+          <h3 className="text-sm font-semibold">Minimum de relance</h3>
           <p className="text-muted-foreground text-sm">
             C&apos;est le plancher qui <strong>déclenche</strong> la reproduction. À ne pas
             confondre avec le plancher de cible plus bas, qui borne le calcul.
           </p>
 
           <div className="flex gap-2">
-            {(['ratio', 'fixed'] as const).map((mode) => (
+            {(['auto', 'manual'] as const).map((mode) => (
               <Button
                 key={mode}
                 type="button"
-                variant={reorderMode === mode ? 'default' : 'outline'}
+                variant={minMode === mode ? 'default' : 'outline'}
                 size="sm"
-                onClick={() => setReorderMode(mode)}
+                onClick={() => setMinMode(mode)}
               >
-                {mode === 'ratio' ? 'Pourcentage de la cible' : 'Valeur fixe en gastros'}
+                {mode === 'auto' ? 'Automatique (fraction de la cible)' : 'Valeur fixe'}
               </Button>
             ))}
           </div>
 
-          {reorderMode === 'ratio' ? (
+          {minMode === 'auto' ? (
             <div className="max-w-xs space-y-2">
-              <Label htmlFor="reorder_ratio">Fraction de la cible (0,5 = 50 %)</Label>
+              <Label htmlFor="min_divisor">Diviseur (2 = la moitié de la cible)</Label>
               <Input
-                id="reorder_ratio"
-                name="reorder_ratio"
+                id="min_divisor"
+                name="min_divisor"
                 inputMode="decimal"
-                defaultValue={value(product?.reorder_ratio) || '0.5'}
+                defaultValue={value(product?.min_divisor) || '2'}
               />
-              <FieldError message={errors.reorder_ratio} />
+              <p className="text-muted-foreground text-xs">
+                Le minimum suit la cible tout seul quand le chiffre d&apos;affaires bouge.
+              </p>
+              <FieldError message={errors.min_divisor} />
             </div>
           ) : (
             <div className="max-w-xs space-y-2">
-              <Label htmlFor="reorder_fixed">Seuil en gastros</Label>
+              <Label htmlFor="min_qty_manual">Minimum fixe</Label>
               <Input
-                id="reorder_fixed"
-                name="reorder_fixed"
+                id="min_qty_manual"
+                name="min_qty_manual"
                 inputMode="decimal"
-                defaultValue={value(product?.reorder_fixed)}
-                placeholder="4"
+                defaultValue={value(product?.min_qty_manual)}
+                placeholder="8"
               />
-              <FieldError message={errors.reorder_fixed} />
+              <FieldError message={errors.min_qty_manual} />
             </div>
           )}
         </section>
@@ -189,37 +228,31 @@ export function ProductForm({
 
         <section className="grid gap-5 sm:grid-cols-3">
           <div className="space-y-2">
-            <Label htmlFor="urgency_level">Urgence (1 à 5)</Label>
+            <Label htmlFor="priority">Priorité (1 à 5)</Label>
             <Input
-              id="urgency_level"
-              name="urgency_level"
+              id="priority"
+              name="priority"
               type="number"
               min={1}
               max={5}
-              defaultValue={product?.urgency_level ?? 3}
+              defaultValue={product?.priority ?? 3}
             />
-            <p className="text-muted-foreground text-xs">Pilote l&apos;ordre du rapport.</p>
+            <p className="text-muted-foreground text-xs">
+              <strong>1 = le plus urgent</strong>, 5 = le moins. Pilote l&apos;ordre du rapport.
+            </p>
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="prep_time_min">Prépa (min / gastro)</Label>
+            <Label htmlFor="shelf_life_label">DLC</Label>
             <Input
-              id="prep_time_min"
-              name="prep_time_min"
-              inputMode="decimal"
-              defaultValue={value(product?.prep_time_min)}
+              id="shelf_life_label"
+              name="shelf_life_label"
+              defaultValue={product?.shelf_life_label ?? ''}
+              placeholder="J+2"
             />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="weight_per_bac_kg">Poids par gastro (kg)</Label>
-            <Input
-              id="weight_per_bac_kg"
-              name="weight_per_bac_kg"
-              inputMode="decimal"
-              defaultValue={value(product?.weight_per_bac_kg)}
-            />
-            <p className="text-muted-foreground text-xs">Indicatif, jamais affiché au comptage.</p>
+            <p className="text-muted-foreground text-xs">
+              Notée pour mémoire, aucun effet sur le calcul pour l&apos;instant.
+            </p>
           </div>
 
           <div className="space-y-2">
@@ -231,17 +264,6 @@ export function ProductForm({
               defaultValue={value(product?.count_step) || '0.5'}
             />
             <FieldError message={errors.count_step} />
-          </div>
-
-          <div className="space-y-2">
-            <Label htmlFor="production_step">Pas de production</Label>
-            <Input
-              id="production_step"
-              name="production_step"
-              inputMode="decimal"
-              defaultValue={value(product?.production_step) || '0.5'}
-            />
-            <FieldError message={errors.production_step} />
           </div>
 
           <div className="space-y-2">

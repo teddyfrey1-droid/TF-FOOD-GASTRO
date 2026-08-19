@@ -1,73 +1,61 @@
 /**
  * Types du domaine « MEP » (mise en place).
  *
- * Ces types sont volontairement découplés du schéma Supabase : la couche de
- * calcul (§5 du cahier des charges) est pure et testable sans base de données.
+ * La couche de calcul est pure et testable sans base de données.
  */
+
+import type { ProductFamily, ProductUnit } from './families';
 
 /** Session de comptage de la journée. */
 export type SessionKind = 'morning' | 'afternoon';
 
-/** Mode de calcul de la cible pour un produit. */
-export type CalculatorMode = 'bracket' | 'ratio';
-
-/** Mode de calcul du SEUIL DE RELANCE (à ne pas confondre avec floorQty). */
-export type ReorderMode = 'ratio' | 'fixed';
-
-/** Niveau d'urgence : 1 = faible ... 5 = critique. */
-export type UrgencyLevel = 1 | 2 | 3 | 4 | 5;
+/** Mode de calcul du MINIMUM de relance. */
+export type MinMode = 'auto' | 'manual';
 
 /**
- * Paramètres du produit nécessaires au calcul.
+ * Priorité d'un produit.
  *
- * ATTENTION : `floorQty` / `ceilingQty` bornent la CIBLE.
- * `reorderMode` / `reorderRatio` / `reorderFixed` définissent le SEUIL qui
- * DÉCLENCHE la relance. Les deux notions sont distinctes (cf. §4).
+ * ⚠️ **1 = LE PLUS URGENT, 5 = le moins urgent.** L'échelle se lit comme un
+ * classement (« priorité 1 »), pas comme une intensité. Le rapport trie donc
+ * par priorité CROISSANTE.
  */
+export type Priority = 1 | 2 | 3 | 4 | 5;
+
+/** Priorité attribuée à tous les produits tant que le restaurant ne les a pas saisies. */
+export const DEFAULT_PRIORITY: Priority = 3;
+
+/** Diviseur par défaut du minimum : le minimum vaut la moitié de la cible. */
+export const DEFAULT_MIN_DIVISOR = 2;
+
+/** Paramètres d'un produit nécessaires au calcul. */
 export interface ProductCalcConfig {
   id: string;
   name: string;
-  /** Pas de saisie au comptage (défaut 0,5 gastro). */
+  family: ProductFamily;
+  unit: ProductUnit;
+  /** Colonne « VENTE POUR » du Google Sheet. Pilote toute la cible. */
+  baseQty: number;
+  /** Pas de saisie au comptage (0,5 : on constate un stock réel). */
   countStep: number;
-  /** Pas de production (défaut 0,5 gastro). */
-  productionStep: number;
-  reorderMode: ReorderMode;
-  /** Fraction de la cible, utilisée si reorderMode = 'ratio'. */
-  reorderRatio: number | null;
-  /** Valeur absolue en gastros, utilisée si reorderMode = 'fixed'. */
-  reorderFixed: number | null;
-  /** Plancher absolu de la CIBLE, quel que soit le CA. */
+  minMode: MinMode;
+  /** Diviseur appliqué à la cible quand minMode = 'auto'. */
+  minDivisor: number;
+  /** Minimum en valeur absolue quand minMode = 'manual'. */
+  minQtyManual: number | null;
+  /** Plancher absolu de la CIBLE. */
   floorQty: number | null;
-  /** Plafond de la CIBLE (capacité frigo). */
+  /** Plafond de la CIBLE. */
   ceilingQty: number | null;
-  urgencyLevel: UrgencyLevel;
-  /** Temps de prépa en minutes (cf. §5.6 et la note sur l'unité). */
-  prepTimeMin: number | null;
+  priority: Priority;
 }
 
-/** Une ligne du calculateur, en mode paliers ou en mode ratio. */
-export interface CalculatorRule {
-  productId: string;
-  mode: CalculatorMode;
-  /** Mode 'bracket' : borne basse INCLUSE. null = pas de borne basse. */
-  caMin: number | null;
-  /** Mode 'bracket' : borne haute EXCLUE. null = pas de borne haute. */
-  caMax: number | null;
-  /** Mode 'bracket' : cible en gastros pour ce palier. */
-  targetQty: number | null;
-  /** Mode 'ratio' : gastros par tranche de 1 000 € de CA. */
-  qtyPer1000Eur: number | null;
-}
-
-/** Résultat du calcul de la cible et du seuil pour un produit. */
+/** Résultat du calcul de la cible et du minimum pour un produit. */
 export interface ProductTarget {
   productId: string;
-  /** Cible en gastros, bornée puis arrondie au pas de production. */
+  /** Cible du jour, arrondie à l'entier supérieur. */
   target: number;
-  /** Seuil de relance en gastros, arrondi au pas de comptage et borné par la cible. */
-  reorderThreshold: number;
-  /** Faux si aucune règle de calculateur ne couvre ce CA (cible issue du seul plancher). */
-  hasRule: boolean;
+  /** Minimum sous lequel il faut relancer. Ne dépasse jamais la cible. */
+  minimum: number;
 }
 
 /** Stock compté pour un produit, zone par zone. */
@@ -77,56 +65,57 @@ export interface CountedStock {
   qtyFridge: number;
 }
 
-/** Décision de relance pour un produit (§5.5). */
+/** Décision de relance pour un produit. */
 export interface ReorderDecision {
   productId: string;
   stockTotal: number;
   target: number;
-  reorderThreshold: number;
-  /** Vrai si stockTotal < seuil : le produit doit être relancé. */
+  minimum: number;
+  /** Vrai si stockTotal < minimum : le produit doit être relancé. */
   needsReorder: boolean;
-  /** Quantité à produire en gastros. 0 si aucune relance nécessaire. */
+  /** Quantité à produire. 0 si aucune relance nécessaire. */
   qtyToProduce: number;
-  /** stockTotal / target, borné à 1 quand la cible est nulle. */
+  /** stockTotal / target, vaut 1 quand la cible est nulle. */
   coverageRatio: number;
-  urgencyLevel: UrgencyLevel;
-  /** Badge « RUPTURE IMMINENTE » (§5.6). */
-  isCritical: boolean;
+  priority: Priority;
+  unit: ProductUnit;
 }
 
 /**
  * Charge utile envoyée au téléphone de l'employé.
- * Aucune donnée de CA, de cible ni de seuil (§5.8).
+ *
+ * Ni CA, ni base, ni multiplicateur, ni cible, ni minimum : un employé qui
+ * connaîtrait sa base et sa cible pourrait recalculer le chiffre d'affaires.
  */
 export interface EmployeeReorderItem {
   productId: string;
   qtyToProduce: number;
-  urgencyLevel: UrgencyLevel;
-  isCritical: boolean;
+  unit: ProductUnit;
+  priority: Priority;
 }
 
 /** Réglages globaux du calcul de CA. */
 export interface RevenueSettings {
   /** Taux de croissance N-1 -> N (0.10 = +10 %). */
   growthRate: number;
-  /** Marge de sécurité appliquée au CA de référence (défaut 0.10). */
+  /** Marge de sécurité appliquée au CA de référence. */
   safetyMargin: number;
   /** Coefficient de cible pour la session de l'après-midi (défaut 1.0). */
   afternoonTargetRatio: number;
-  /** Ratio de seuil par défaut quand le produit n'en définit pas (défaut 0.5). */
-  defaultReorderRatio: number;
-  /** Les employés voient-ils les cibles et seuils ? (défaut false) */
+  /** Diviseur de minimum par défaut, pour les produits en mode auto. */
+  defaultMinDivisor: number;
+  /** Les employés voient-ils les cibles et minimums ? (défaut false) */
   showTargetsToEmployees: boolean;
-  /** Heure du rappel de comptage du matin, au format HH:MM. */
   morningReminderTime?: string | null;
-  /** Heure du rappel de comptage de l'après-midi, au format HH:MM. */
   afternoonReminderTime?: string | null;
 }
 
 export const DEFAULT_REVENUE_SETTINGS: RevenueSettings = {
   growthRate: 0,
-  safetyMargin: 0.1,
+  // Le multiplicateur de famille (x2 pour la mise en place) porte déjà la
+  // sécurité : une marge supplémentaire s'y cumulerait.
+  safetyMargin: 0,
   afternoonTargetRatio: 1.0,
-  defaultReorderRatio: 0.5,
+  defaultMinDivisor: DEFAULT_MIN_DIVISOR,
   showTargetsToEmployees: false,
 };

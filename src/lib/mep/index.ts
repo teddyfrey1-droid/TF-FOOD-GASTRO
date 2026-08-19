@@ -1,3 +1,4 @@
+export * from './families';
 export * from './types';
 export * from './rounding';
 export * from './isoWeek';

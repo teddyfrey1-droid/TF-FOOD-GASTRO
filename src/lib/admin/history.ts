@@ -2,6 +2,7 @@ import 'server-only';
 
 import { createClient } from '@/lib/supabase/server';
 import {
+  snap,
   averageObservedRatio,
   computeServiceConsumption,
   eveningToLunchRatio,
@@ -98,7 +99,7 @@ export interface SessionDetailLine {
   productId: string;
   productName: string;
   categoryName: string;
-  gnFormat: string | null;
+  unit: string | null;
   qtySaladbar: number;
   qtyFridge: number;
   qtyTotal: number;
@@ -116,7 +117,7 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
   const [{ data: lines }, { data: products }, { data: categories }, { data: tasks }] =
     await Promise.all([
       supabase.from('count_lines').select('*').eq('session_id', sessionId),
-      supabase.from('products').select('id, name, category_id, gn_format'),
+      supabase.from('products').select('id, name, category_id, unit'),
       supabase.from('product_categories').select('id, name'),
       supabase.from('production_tasks').select('product_id, is_done').eq('session_id', sessionId),
     ]);
@@ -132,12 +133,12 @@ export async function getSessionDetail(sessionId: string): Promise<SessionDetail
         productId: line.product_id,
         productName: product?.name ?? '—',
         categoryName: product ? (categoryById.get(product.category_id) ?? '—') : '—',
-        gnFormat: product?.gn_format ?? null,
+        unit: product?.unit ?? 'gastro',
         qtySaladbar: toNumber(line.qty_saladbar, 0),
         qtyFridge: toNumber(line.qty_fridge, 0),
         qtyTotal: toNumber(line.qty_total, 0),
         targetSnapshot: toNullableNumber(line.target_snapshot),
-        thresholdSnapshot: toNullableNumber(line.reorder_threshold_snapshot),
+        thresholdSnapshot: toNullableNumber(line.min_snapshot),
         productionNeeded: toNullableNumber(line.production_needed_snapshot),
         isNotApplicable: line.is_not_applicable,
         notApplicableReason: line.not_applicable_reason,
@@ -190,7 +191,7 @@ export async function getConsumption(from: string, to: string): Promise<Consumpt
   // matin est nécessaire pour clore le dernier soir.
   const toPlusOne = addDays(to, 1);
 
-  const [{ data: sessions }, { data: actuals }, { data: products }, { data: rules }] =
+  const [{ data: sessions }, { data: actuals }, { data: products }, { data: families }] =
     await Promise.all([
       supabase
         .from('count_sessions')
@@ -199,8 +200,8 @@ export async function getConsumption(from: string, to: string): Promise<Consumpt
         .lte('date', toPlusOne)
         .eq('status', 'submitted'),
       supabase.from('revenue_actuals').select('date, revenue_ht').gte('date', from).lte('date', to),
-      supabase.from('products').select('id, name').eq('is_active', true),
-      supabase.from('calculator_rules').select('product_id, mode, qty_per_1000_eur, valid_to'),
+      supabase.from('products').select('id, name, base_qty, family').eq('is_active', true),
+      supabase.from('product_family_settings').select('*'),
     ]);
 
   const sessionRows = sessions ?? [];
@@ -250,10 +251,22 @@ export async function getConsumption(from: string, to: string): Promise<Consumpt
       .filter((task) => task.session_id === session && task.product_id === productId && task.is_done)
       .reduce((sum, task) => sum + toNumber(task.qty_to_produce, 0), 0);
 
+  // Consommation « théorique » pour 1 000 € de CA, déduite de la base du
+  // produit et des réglages de sa famille :
+  //   base × multiplicateur / référence × 1 000
+  const familyByName = new Map((families ?? []).map((f) => [f.family, f] as const));
   const theoreticalByProduct = new Map(
-    (rules ?? [])
-      .filter((rule) => rule.mode === 'ratio' && rule.valid_to === null)
-      .map((rule) => [rule.product_id, toNullableNumber(rule.qty_per_1000_eur)] as const),
+    (products ?? []).map((product) => {
+      const family = familyByName.get(product.family);
+      if (!family) return [product.id, null] as const;
+      return [
+        product.id,
+        snap(
+          (toNumber(product.base_qty, 0) * toNumber(family.target_multiplier, 1) * 1000) /
+            toNumber(family.reference_revenue, 1),
+        ),
+      ] as const;
+    }),
   );
 
   let overallLunch = 0;

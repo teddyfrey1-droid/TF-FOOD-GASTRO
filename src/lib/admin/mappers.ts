@@ -6,11 +6,7 @@
  * plus loin dans le code, tout est en `number`.
  */
 
-import type {
-  CalculatorRule,
-  ProductCalcConfig,
-  UrgencyLevel,
-} from '@/lib/mep';
+import type { ProductCalcConfig, Priority } from '@/lib/mep';
 import type { Tables } from '@/lib/supabase/database.types';
 
 /** Convertit un numeric PostgREST (number | string | null) en number. */
@@ -29,53 +25,24 @@ export function toNullableNumber(
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-function toUrgency(value: number | string | null | undefined): UrgencyLevel {
+function toPriority(value: number | string | null | undefined): Priority {
   const parsed = Math.round(toNumber(value, 3));
-  return Math.min(5, Math.max(1, parsed)) as UrgencyLevel;
+  return Math.min(5, Math.max(1, parsed)) as Priority;
 }
 
 export function toProductCalcConfig(row: Tables<'products'>): ProductCalcConfig {
   return {
     id: row.id,
     name: row.name,
+    family: row.family,
+    unit: row.unit,
+    baseQty: toNumber(row.base_qty, 0),
     countStep: toNumber(row.count_step, 0.5),
-    productionStep: toNumber(row.production_step, 0.5),
-    reorderMode: row.reorder_mode,
-    reorderRatio: toNullableNumber(row.reorder_ratio),
-    reorderFixed: toNullableNumber(row.reorder_fixed),
+    minMode: row.min_mode,
+    minDivisor: toNumber(row.min_divisor, 2),
+    minQtyManual: toNullableNumber(row.min_qty_manual),
     floorQty: toNullableNumber(row.floor_qty),
     ceilingQty: toNullableNumber(row.ceiling_qty),
-    urgencyLevel: toUrgency(row.urgency_level),
-    prepTimeMin: toNullableNumber(row.prep_time_min),
+    priority: toPriority(row.priority),
   };
-}
-
-export function toCalculatorRule(row: Tables<'calculator_rules'>): CalculatorRule {
-  return {
-    productId: row.product_id,
-    mode: row.mode,
-    caMin: toNullableNumber(row.ca_min),
-    caMax: toNullableNumber(row.ca_max),
-    targetQty: toNullableNumber(row.target_qty),
-    qtyPer1000Eur: toNullableNumber(row.qty_per_1000_eur),
-  };
-}
-
-/** Regroupe les règles par produit, en ne gardant que celles en vigueur à la date donnée. */
-export function groupRulesByProduct(
-  rows: readonly Tables<'calculator_rules'>[],
-  onDate: string,
-): Map<string, CalculatorRule[]> {
-  const byProduct = new Map<string, CalculatorRule[]>();
-
-  for (const row of rows) {
-    if (row.valid_from > onDate) continue;
-    if (row.valid_to !== null && row.valid_to < onDate) continue;
-
-    const rules = byProduct.get(row.product_id) ?? [];
-    rules.push(toCalculatorRule(row));
-    byProduct.set(row.product_id, rules);
-  }
-
-  return byProduct;
 }

@@ -122,7 +122,6 @@ select pg_temp.check_no_rows('revenue_history invisible',  'select * from public
 select pg_temp.check_no_rows('revenue_actuals invisible',  'select * from public.revenue_actuals');
 select pg_temp.check_no_rows('daily_forecast invisible',   'select * from public.daily_forecast');
 select pg_temp.check_no_rows('revenue_settings invisible', 'select * from public.revenue_settings');
-select pg_temp.check_no_rows('calculator_rules invisible', 'select * from public.calculator_rules');
 select pg_temp.check_no_rows('audit_log invisible',        'select * from public.audit_log');
 
 select pg_temp.check_denied('Écriture dans revenue_history refusée',
@@ -131,8 +130,10 @@ select pg_temp.check_denied('Écriture dans daily_forecast refusée',
   'insert into public.daily_forecast (date, forecast_revenue) values (date ''2030-01-01'', 9999)');
 select pg_temp.check_no_effect('Modification des réglages de CA sans effet',
   'update public.revenue_settings set growth_rate = 5');
-select pg_temp.check_denied('Écriture dans calculator_rules refusée',
-  'insert into public.calculator_rules (product_id, mode, qty_per_1000_eur) select id, ''ratio'', 99 from public.products_for_count limit 1');
+select pg_temp.check_no_rows('product_family_settings invisible',
+  'select * from public.product_family_settings');
+select pg_temp.check_no_effect('Modifier les réglages de famille sans effet',
+  'update public.product_family_settings set target_multiplier = 99');
 select pg_temp.check_denied('Écriture dans audit_log refusée',
   'insert into public.audit_log (action, table_name) values (''triche'', ''products'')');
 
@@ -162,15 +163,39 @@ begin
   from information_schema.columns
   where table_schema = 'public'
     and table_name = 'products_for_count'
+    -- Un employé qui connaîtrait sa base ET sa cible pourrait recalculer le
+    -- chiffre d'affaires du restaurant. Aucune de ces colonnes ne doit sortir.
     and column_name in (
-      'reorder_ratio', 'reorder_fixed', 'reorder_mode',
-      'floor_qty', 'ceiling_qty', 'urgency_level',
+      'base_qty', 'family', 'min_mode', 'min_divisor', 'min_qty_manual',
+      'floor_qty', 'ceiling_qty', 'priority',
       'weight_per_bac_kg', 'prep_time_min', 'production_step'
     );
   if leaked is not null then
     raise exception 'ÉCHEC — colonnes sensibles exposées par products_for_count : %', leaked;
   end if;
   raise notice 'OK   — products_for_count ne contient aucune colonne sensible';
+end
+$$;
+
+-- La charge utile renvoyée au téléphone ne doit porter que produit, quantité,
+-- unité et priorité.
+do $$
+declare leaked text;
+begin
+  select string_agg(p.parameter_name, ', ')
+    into leaked
+  from information_schema.parameters p
+  join information_schema.routines r
+    on r.specific_name = p.specific_name and r.specific_schema = p.specific_schema
+  where r.routine_schema = 'public'
+    and r.routine_name = 'mep_submit_count'
+    and p.parameter_mode = 'OUT'
+    and p.parameter_name not in ('product_id', 'product_name', 'notes',
+                                 'qty_to_produce', 'unit', 'priority');
+  if leaked is not null then
+    raise exception 'ÉCHEC — mep_submit_count renvoie des colonnes en trop : %', leaked;
+  end if;
+  raise notice 'OK   — mep_submit_count ne renvoie que produit, quantité, unité et priorité';
 end
 $$;
 
@@ -212,8 +237,8 @@ select pg_temp.check_allowed('Saisie d''une ligne de comptage',
 select pg_temp.check_denied('Écriture directe d''un snapshot de cible refusée',
   'update public.count_lines set target_snapshot = 99
    where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
-select pg_temp.check_denied('Écriture directe d''un snapshot de seuil refusée',
-  'update public.count_lines set reorder_threshold_snapshot = 0
+select pg_temp.check_denied('Écriture directe d''un snapshot de minimum refusée',
+  'update public.count_lines set min_snapshot = 0
    where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
 
 select pg_temp.check_allowed('Correction de sa propre quantité comptée',
@@ -239,11 +264,11 @@ begin
   where r.routine_schema = 'public'
     and r.routine_name = 'mep_submit_count'
     and p.parameter_mode = 'OUT'
-    and p.parameter_name in ('target', 'reorder_threshold', 'forecast_revenue', 'ca_ref', 'coverage_ratio');
+    and p.parameter_name in ('target', 'minimum', 'base_qty', 'forecast_revenue', 'ca_ref', 'coverage_ratio');
   if leaked is not null then
     raise exception 'ÉCHEC — mep_submit_count renvoie des colonnes sensibles : %', leaked;
   end if;
-  raise notice 'OK   — mep_submit_count ne renvoie ni cible, ni seuil, ni CA';
+  raise notice 'OK   — mep_submit_count ne renvoie ni cible, ni minimum, ni base, ni CA';
 end
 $$;
 
@@ -261,8 +286,8 @@ select pg_temp.check_denied('Réécrire la quantité à produire refusée',
   'update public.production_tasks set qty_to_produce = 0
    where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
 
-select pg_temp.check_denied('Réécrire l''urgence refusée',
-  'update public.production_tasks set urgency_level_snapshot = 1
+select pg_temp.check_denied('Réécrire la priorité refusée',
+  'update public.production_tasks set priority_snapshot = 1
    where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
 
 \echo ''
@@ -295,8 +320,10 @@ set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
 select pg_temp.check_equal('is_manager() est vrai pour un directeur', public.is_manager(), true);
 select pg_temp.check_equal('Le directeur lit le CA de l''an dernier',
   (select count(*) > 0 from public.revenue_history), true);
-select pg_temp.check_equal('Le directeur lit le calculateur',
-  (select count(*) > 0 from public.calculator_rules), true);
+select pg_temp.check_equal('Le directeur lit les réglages de famille',
+  (select count(*) > 0 from public.product_family_settings), true);
+select pg_temp.check_equal('Le directeur lit les bases « VENTE POUR »',
+  (select count(*) > 0 from public.products where base_qty > 0), true);
 select pg_temp.check_equal('Le directeur lit la table products complète',
   (select count(*) > 0 from public.products), true);
 select pg_temp.check_equal('Le directeur lit les prévisions',
@@ -336,7 +363,7 @@ update public.profiles set is_active = true where id = 'a0000000-0000-0000-0000-
 
 set role anon;
 select pg_temp.check_no_rows('anon ne lit pas le CA',            'select * from public.revenue_history');
-select pg_temp.check_no_rows('anon ne lit pas le calculateur',   'select * from public.calculator_rules');
+select pg_temp.check_no_rows('anon ne lit pas les réglages de famille', 'select * from public.product_family_settings');
 select pg_temp.check_no_rows('anon ne lit pas les produits',     'select * from public.products');
 select pg_temp.check_no_rows('anon ne lit pas les comptages',    'select * from public.count_sessions');
 reset role;

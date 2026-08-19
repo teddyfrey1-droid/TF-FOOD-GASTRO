@@ -68,12 +68,16 @@ describe('conversion des valeurs', () => {
 });
 
 describe('fichiers d’exemple fournis', () => {
-  it('le modèle de calculateur se lit correctement', () => {
-    const { rows } = parseCsv(readFileSync('data/calculateur.example.csv', 'utf8'));
-    expect(rows).toHaveLength(4);
+  it('le modèle de référentiel produits se lit correctement', () => {
+    const { headers, rows } = parseCsv(readFileSync('data/produits.example.csv', 'utf8'));
+    expect(rows).toHaveLength(5);
     expect(rows[0].Produit).toBe('Saumon');
-    expect(parseFrenchNumber(rows[0]['CA 2500-4000'])).toBe(8);
-    expect(parseFrenchNumber(rows[1]['CA 0-1000'])).toBe(1.5);
+    expect(parseFrenchNumber(rows[0]['VENTE POUR'])).toBe(4.6);
+    expect(rows[3].Famille).toBe('les_plus');
+
+    // La colonne conso/1000 est présente dans l'export du Sheet : elle doit
+    // être lue sans erreur, mais l'import l'ignore volontairement.
+    expect(headers).toContain('conso/1000');
   });
 
   it('le modèle de CA se lit correctement', () => {

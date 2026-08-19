@@ -65,7 +65,7 @@ export default async function HistoryPage({
     ? await supabase
         .from('count_lines')
         .select(
-          'session_id, product_id, qty_total, target_snapshot, reorder_threshold_snapshot, is_not_applicable',
+          'session_id, product_id, qty_total, target_snapshot, min_snapshot, is_not_applicable',
         )
         .in('session_id', sessionIds)
     : { data: [] };
@@ -79,7 +79,7 @@ export default async function HistoryPage({
     productName: productName.get(line.product_id) ?? '—',
     qtyTotal: toNumber(line.qty_total, 0),
     targetSnapshot: toNullableNumber(line.target_snapshot),
-    thresholdSnapshot: toNullableNumber(line.reorder_threshold_snapshot),
+    thresholdSnapshot: toNullableNumber(line.min_snapshot),
     isNotApplicable: line.is_not_applicable,
   }));
 

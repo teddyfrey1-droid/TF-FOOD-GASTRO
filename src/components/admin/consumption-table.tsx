@@ -1,7 +1,6 @@
 import { Card } from '@/components/ui/card';
 import { formatPercent, formatQty } from '@/lib/format';
 import type { ConsumptionReport } from '@/lib/admin/history';
-import { ApplyObservedRatioButton } from './apply-observed-ratio';
 
 /**
  * §5.7 — Ce que la cuisine consomme réellement à chaque service, face à ce que
@@ -91,7 +90,6 @@ export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
               <th scope="col" className="px-3 py-3 text-right font-semibold">
                 Jours
               </th>
-              <th scope="col" className="px-4 py-3 text-right font-semibold" />
             </tr>
           </thead>
 
@@ -134,15 +132,6 @@ export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
                       {' '}
                       (+{row.lunchOnlyDays})
                     </span>
-                  ) : null}
-                </td>
-                <td className="px-4 py-2 text-right">
-                  {row.dailyPer1000 !== null ? (
-                    <ApplyObservedRatioButton
-                      productId={row.productId}
-                      productName={row.productName}
-                      observedPer1000={row.dailyPer1000}
-                    />
                   ) : null}
                 </td>
               </tr>

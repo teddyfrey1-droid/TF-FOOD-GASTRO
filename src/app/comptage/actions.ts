@@ -96,11 +96,11 @@ export async function saveCountLines(
 export interface ReorderItem {
   productId: string;
   productName: string;
-  gnFormat: string | null;
   notes: string | null;
   qtyToProduce: number;
-  urgencyLevel: number;
-  isCritical: boolean;
+  unit: 'gastro' | 'piece';
+  /** 1 = le plus urgent, 5 = le moins. */
+  priority: number;
 }
 
 /**
@@ -138,11 +138,10 @@ export async function submitCount(sessionId: string): Promise<{
     items: (data ?? []).map((row) => ({
       productId: row.product_id,
       productName: row.product_name,
-      gnFormat: row.gn_format,
       notes: row.notes,
       qtyToProduce: Number(row.qty_to_produce),
-      urgencyLevel: Number(row.urgency_level),
-      isCritical: row.is_critical,
+      unit: row.unit,
+      priority: Number(row.priority),
     })),
   };
 }

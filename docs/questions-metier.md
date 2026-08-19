@@ -1,180 +1,50 @@
-# Questions métier — à répondre avant la phase 1
+# Questions métier
 
-La phase 0 (fondations) est terminée et ne dépendait d'aucune de ces réponses :
-le schéma, la sécurité et le moteur de calcul sont neutres vis-à-vis des valeurs
-réelles. En revanche **le back-office et le calculateur (phase 1) ont besoin de
-ces réponses** pour être calibrés.
+> Ce document a été **entièrement repris** après le recadrage des
+> spécifications. Les questions qui portaient sur le calculateur à paliers, les
+> formats GN et le temps de préparation n'ont plus lieu d'être.
 
-Tout ce qui est aujourd'hui en base est **provisoire** et signalé comme tel.
+## ✅ Tranché
 
----
+| Sujet | Décision |
+|---|---|
+| Modèle de cible | `base_qty` (« VENTE POUR ») × multiplicateur × (CA / référence) |
+| `conso/1000` | **ignorée** — c'est la base divisée par deux, elle fausse le minimum |
+| Arrondis | à l'**entier supérieur** pour tout ce qui est visé ou produit ; demis au comptage seulement |
+| Minimum | `auto` (cible / 2 par défaut) ou `manual`, réglable par produit |
+| Priorité | **1 = le plus urgent**, 5 = le moins. Tous à 3 en attendant |
+| Formats GN | retirés — l'unité se dit « gastro » ou « pièce » |
+| Temps de prépa | retiré de la logique et de l'UI, colonne conservée en base |
+| DLC | stockée dans `shelf_life_label`, aucune logique |
+| Découpage midi / soir du CA | inutile : le comptage du lendemain matin ferme le service du soir |
+| Temps de prépa par gastro | sans objet, la fonctionnalité est retirée |
 
-## 1. Le calculateur actuel (le Google Sheet)
+## ⚠️ Deux points signalés, à confirmer
 
-C'est la donnée la plus importante. Il me faut l'export CSV du Sheet, tel quel.
+### 1. La marge de sécurité est passée à 0
 
-**Questions :**
+Le modèle précédent ajoutait 10 % au chiffre d'affaires avant de calculer les
+cibles. Le nouveau multiplicateur de famille (× 2 pour la mise en place) porte
+déjà cette sécurité.
 
-- Combien de tranches de CA comporte-t-il, et quelles sont leurs bornes exactes ?
-  (le seed utilise pour l'instant : 0–1 500 / 1 500–2 500 / 2 500–4 000 /
-  4 000–5 500 / 5 500 et plus)
-- Une tranche s'écrit-elle « de 2 500 inclus à 4 000 exclu » ? C'est ce que
-  j'ai implémenté ; si le Sheet raisonne autrement, dites-le-moi.
-- Le CA du Sheet est-il **HT ou TTC** ? Toute la base est en HT.
-- Les valeurs du Sheet sont-elles déjà en gastros, ou en kilos / portions ?
-- Certains produits fonctionnent-ils mieux **au ratio** (« X gastros pour
-  1 000 € ») qu'aux paliers ?
+Si la marge était restée à 10 %, un chiffre d'affaires de 4 000 € serait entré
+dans le calcul à 4 400 € et aurait donné **11 gastros de saumon au lieu des 10**
+de votre tableau de contrôle. Elle est donc réglée à **0**, et reste modifiable
+dans *Chiffre d'affaires → Réglages*.
 
-Format attendu :
+**À confirmer :** voulez-vous conserver une marge par-dessus le × 2 ?
 
-```
-Produit ; Format GN ; CA 0-1500 ; CA 1500-2500 ; CA 2500-4000 ; ...
-Saumon  ; GN 1/3 - 65mm ; 3 ; 5 ; 8 ; ...
-```
+### 2. Le plafond de cible et l'arrondi
 
----
+La cible est bornée **puis** arrondie à l'entier supérieur. Un plafond de 9,5
+deviendrait donc 10, soit au-dessus du plafond.
 
-## 2. Le chiffre d'affaires de l'an dernier
+**À confirmer :** les plafonds seront-ils toujours saisis en nombres entiers ?
+Si oui, le cas ne se présente jamais.
 
-```
-date ; ca_ht ; ferme(0/1)
-2025-01-02 ; 2840.00 ; 0
-```
+## Reste à fournir
 
-**Questions :**
-
-- Sur quelle profondeur ? (12 mois glissants suffisent pour démarrer)
-- Quel **taux de croissance** appliquer par rapport à l'an dernier ?
-  (le cahier des charges cite +10 % en exemple, la base est à 0 % pour l'instant)
-
-### ✅ Découpage midi / soir — tranché
-
-Le CA est enregistré **à la journée**. Le restaurant fait **deux services**
-(midi et soir), produit avant chacun, et compte deux fois : le matin et après
-le service du midi.
-
-Le §5.7 rapportait la consommation à un « CA réel du midi » qui n'existe pas.
-Plus important : les invendus du soir **ne sont pas jetés** (DLC de 2 jours),
-donc le comptage du **lendemain matin** ferme la boucle du service du soir.
-
-La consommation des deux services est donc **entièrement mesurée**, sans
-estimation ni réglage à deviner :
-
-```
-consommé au MIDI = (stock matin      + produit le matin)      − stock après-midi
-consommé au SOIR = (stock après-midi + produit l'après-midi)  − stock lendemain matin
-```
-
-Aucune question ne reste ouverte de ce côté. Le réglage « part du midi » que
-j'avais ajouté a été retiré : il demandait de deviner ce qui se mesure.
-
-**Bonus :** l'application calcule maintenant le rapport soir / midi et vous
-propose la valeur du `afternoon_target_ratio` (le coefficient qui abaisse les
-cibles du soir) sur la base du constaté.
-
-### ⚠️ Une limite à connaître
-
-La mesure du soir suppose que **rien n'est jeté** entre la fermeture et le
-lendemain matin. Si un produit part à la poubelle pour cause de DLC, la
-consommation du soir est surévaluée d'autant.
-
-La gestion des DLC étant hors périmètre v1, l'application ne peut pas faire la
-différence. En pratique l'effet reste marginal, et un écart aberrant remonte
-dans l'écran Anomalies. Si vous jetez régulièrement, dites-le-moi : une simple
-case « jeté » au comptage suffirait à corriger la mesure.
-
-## 3. Les formats GN par produit
-
-Le format s'affiche à l'écran de comptage : c'est lui qui lève l'ambiguïté
-« un gastro de quoi ». Les 35 produits du seed portent tous un format
-**provisoire**, suffixé « (à confirmer) ».
-
-**Question :** le format réel pour chaque produit — par exemple
-`GN 1/3 - 65mm`, `GN 1/6 - 100mm`.
-
-Un même produit peut-il exister dans deux formats différents (un grand bac au
-frigo, un petit au saladbar) ? Le modèle actuel suppose **un seul format de
-référence par produit** ; si ce n'est pas le cas, il faut me le dire maintenant,
-cela change le comptage.
-
----
-
-## 4. Seuils de relance et niveaux d'urgence
-
-Faute d'information, le seed applique les valeurs par défaut prévues au §9.3 :
-**seuil = 50 % de la cible**, et j'ai réparti les urgences à la main selon le
-coût et la vitesse de rotation (poissons et avocat à 5, toppings décoratifs à 1).
-
-**Questions :**
-
-- Pour quels produits le seuil doit-il être une **valeur fixe** plutôt qu'un
-  pourcentage ? (typiquement le saumon : « on relance dès qu'on passe sous
-  4 gastros », quel que soit le CA)
-- Le niveau d'urgence de 1 à 5 de chaque produit. C'est lui qui pilote l'ordre
-  du rapport : ce que l'employé fera en premier.
-- Le **plancher** de cible (« on ne descend jamais sous X gastros de saumon,
-  même un lundi creux ») et le **plafond** (capacité du frigo) par produit.
-
----
-
-## 5. Deux points du cahier des charges à trancher
-
-### 5.1 Le temps de préparation — ✅ tranché
-
-Le cahier des charges décrivait `prep_time_min` comme le temps « par gastro »
-tout en donnant une formule qui comptait les pas de production (soit un facteur
-2 d'écart).
-
-**Réponse retenue : le temps se compte par GASTRO ENTIER.** Pour 5 gastros de
-saumon à 6 minutes, le rapport affiche 30 minutes.
-
-La taille réelle du bac se lit dans `gn_format`, réglable produit par produit
-depuis le back-office. La base de calcul reste un paramètre
-(`DEFAULT_PREP_TIME_BASIS` dans `src/lib/mep/reorder.ts`) pour pouvoir revenir
-au comptage par demi-gastro sans réécriture.
-
-**Reste à fournir :** le temps de prépa réel, en minutes par gastro, pour chaque
-produit. Les valeurs du seed sont provisoires.
-
-### 5.2 Le comptage du jour est partagé — à confirmer
-
-Le §8 décrit l'accès employé comme « ses propres sessions du jour ». Pris à la
-lettre, cela bloque deux choses :
-
-- il n'existe qu'**une** session par (date, moment). Si Karim ouvre le comptage
-  du matin puis part, Sofia n'a plus aucun accès en écriture et ne peut plus
-  compter du tout ;
-- le §6.2 demande que l'accueil affiche « fait à 08h42 par Karim », ce qui
-  suppose de voir les sessions des collègues.
-
-**J'ai donc ouvert le comptage DU JOUR à tout employé actif**, en gardant
-intactes les deux protections qui comptent : aucun accès au CA, au calculateur,
-aux cibles ni aux seuils ; et un comptage validé n'est plus modifiable. L'auteur
-de chaque session reste enregistré et visible dans l'historique.
-
-**Question :** est-ce le bon comportement ? L'alternative serait un comptage par
-employé (chacun le sien, avec plusieurs comptages du matin le même jour), mais
-cela complique le rapport de relance — lequel des trois comptages fait foi ?
-
-### 5.3 Le plafond de cible et l'arrondi
-
-Le §5.3 impose de borner la cible **puis** de l'arrondir au demi-gastro
-supérieur. Un plafond de 8,2 gastros deviendrait donc 8,5 — au-dessus du
-plafond. J'ai respecté l'ordre du cahier des charges.
-
-**Question :** je confirme que les plafonds (capacité frigo) seront toujours
-saisis en multiples de 0,5 ? Si oui, le cas ne se présente jamais et il n'y a
-rien à changer.
-
----
-
-## 6. Organisation du restaurant
-
-- Combien d'employés auront un compte ? (pour préparer les créations)
-- Le restaurant ferme-t-il certains jours de la semaine, ou certaines périodes
-  (vacances, jours fériés) ?
-- À quelle heure se font les deux comptages ? Les rappels sont réglés à 7 h 30
-  et 15 h 00 par défaut.
-- Un produit peut-il être **absent du saladbar** et présent uniquement au frigo,
-  ou l'inverse ? Le modèle le gère (`in_saladbar` / `in_fridge`), mais j'ai
-  besoin de la liste réelle.
+1. L'**historique du chiffre d'affaires** de l'an dernier, jour par jour.
+   En attendant, la prévision se saisit à la main dans le calendrier.
+2. Les **priorités réelles** — un clic par produit dans le tableau.
+3. Les **planchers et plafonds** par produit, laissés vides.

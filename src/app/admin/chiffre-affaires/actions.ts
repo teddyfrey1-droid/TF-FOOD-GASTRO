@@ -13,9 +13,9 @@ const settingsSchema = z.object({
   growth_rate: percent.refine((v) => v > -1, 'Le taux de croissance doit être supérieur à −100 %.'),
   safety_margin: percent.refine((v) => v >= 0, 'La marge de sécurité ne peut pas être négative.'),
   afternoon_target_ratio: percent.refine((v) => v >= 0, 'Le coefficient doit être positif.'),
-  default_reorder_ratio: percent.refine(
-    (v) => v >= 0 && v <= 1,
-    'Le ratio de seuil doit être compris entre 0 et 1.',
+  default_min_divisor: percent.refine(
+    (v) => v > 0,
+    'Le diviseur de minimum doit être strictement positif.',
   ),
   show_targets_to_employees: z.boolean(),
   morning_reminder_time: z.string().regex(/^\d{2}:\d{2}$/, 'Heure invalide.'),
@@ -35,7 +35,7 @@ export async function saveRevenueSettings(
     growth_rate: formData.get('growth_rate') ?? '0',
     safety_margin: formData.get('safety_margin') ?? '0.1',
     afternoon_target_ratio: formData.get('afternoon_target_ratio') ?? '1',
-    default_reorder_ratio: formData.get('default_reorder_ratio') ?? '0.5',
+    default_min_divisor: formData.get('default_min_divisor') ?? '2',
     show_targets_to_employees: formData.get('show_targets_to_employees') === 'on',
     morning_reminder_time: String(formData.get('morning_reminder_time') ?? '07:30'),
     afternoon_reminder_time: String(formData.get('afternoon_reminder_time') ?? '15:00'),

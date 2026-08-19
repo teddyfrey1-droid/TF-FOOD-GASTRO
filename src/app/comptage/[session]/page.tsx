@@ -60,7 +60,7 @@ export default async function CountPage({ params }: { params: Promise<{ session:
       name: row.name,
       categoryId: row.category_id,
       categoryName: categoryById.get(row.category_id)?.name ?? 'Autres',
-      gnFormat: row.gn_format,
+      unit: row.unit,
       countStep: toNumber(row.count_step, 0.5),
       inSaladbar: row.in_saladbar,
       inFridge: row.in_fridge,

@@ -1,137 +1,194 @@
 import { describe, expect, it } from 'vitest';
-import {
-  computeProductTarget,
-  computeReorderThreshold,
-  computeTarget,
-  findBracket,
-  rawTarget,
-} from '@/lib/mep/targets';
-import type { CalculatorRule, ProductCalcConfig } from '@/lib/mep/types';
+import { computeMinimum, computeProductTarget, computeTarget } from '@/lib/mep/targets';
+import { decideReorder } from '@/lib/mep/reorder';
+import { DEFAULT_MIN_DIVISOR, type ProductCalcConfig, type Priority } from '@/lib/mep/types';
 
 function product(overrides: Partial<ProductCalcConfig> = {}): ProductCalcConfig {
   return {
     id: 'p1',
     name: 'Saumon',
+    family: 'mise_en_place',
+    unit: 'gastro',
+    baseQty: 4.6,
     countStep: 0.5,
-    productionStep: 0.5,
-    reorderMode: 'ratio',
-    reorderRatio: 0.5,
-    reorderFixed: null,
+    minMode: 'auto',
+    minDivisor: DEFAULT_MIN_DIVISOR,
+    minQtyManual: null,
     floorQty: null,
     ceilingQty: null,
-    urgencyLevel: 3,
-    prepTimeMin: null,
+    priority: 3 as Priority,
     ...overrides,
   };
 }
 
-const brackets: CalculatorRule[] = [
-  { productId: 'p1', mode: 'bracket', caMin: 0, caMax: 1500, targetQty: 3, qtyPer1000Eur: null },
-  { productId: 'p1', mode: 'bracket', caMin: 1500, caMax: 2500, targetQty: 5, qtyPer1000Eur: null },
-  { productId: 'p1', mode: 'bracket', caMin: 2500, caMax: 3500, targetQty: 8, qtyPer1000Eur: null },
-  { productId: 'p1', mode: 'bracket', caMin: 3500, caMax: null, targetQty: 11, qtyPer1000Eur: null },
-];
+const SAUMON = product();
+const THON = product({ id: 'thon', name: 'Thon', baseQty: 0.4 });
+const GYOZA = product({
+  id: 'gyoza',
+  name: 'Gyoza Poulet',
+  family: 'les_plus',
+  unit: 'piece',
+  baseQty: 4.8,
+});
 
-describe('§5.3 — sélection du palier', () => {
-  it('applique ca_min <= CA < ca_max (borne basse incluse, haute exclue)', () => {
-    expect(findBracket(brackets, 1499)?.targetQty).toBe(3);
-    expect(findBracket(brackets, 1500)?.targetQty).toBe(5);
-    expect(findBracket(brackets, 2500)?.targetQty).toBe(8);
-    expect(findBracket(brackets, 3200)?.targetQty).toBe(8);
+describe('cible — base × multiplicateur × (CA / référence)', () => {
+  it('Saumon, base 4,6, CA 4 000 € -> 9,2 -> cible 10', () => {
+    expect(computeTarget(SAUMON, 4000)).toBe(10);
   });
 
-  it('traite une borne haute nulle comme +infini', () => {
-    expect(findBracket(brackets, 99_000)?.targetQty).toBe(11);
+  it('Saumon à 5 000 € -> 11,5 -> cible 12', () => {
+    expect(computeTarget(SAUMON, 5000)).toBe(12);
   });
 
-  it('renvoie null quand aucun palier ne couvre le CA', () => {
-    expect(findBracket(brackets.slice(1), 500)).toBeNull();
-    expect(rawTarget(brackets.slice(1), 500)).toBeNull();
+  it('Gyoza Poulet, base 4,8, les_plus, CA 5 000 € -> 24 -> cible 24', () => {
+    // 4,8 × 1 × (5 000 / 1 000) = 24 pile : une valeur entière ne remonte pas.
+    expect(computeTarget(GYOZA, 5000)).toBe(24);
   });
 
-  it('calcule la cible en mode ratio', () => {
-    const rules: CalculatorRule[] = [
-      { productId: 'p1', mode: 'ratio', caMin: null, caMax: null, targetQty: null, qtyPer1000Eur: 2.5 },
-    ];
-    expect(rawTarget(rules, 3200)).toBe(8);
-    expect(rawTarget(rules, 1400)).toBe(3.5);
+  it('Thon, base 0,4, CA 4 000 € -> 0,8 -> cible 1', () => {
+    expect(computeTarget(THON, 4000)).toBe(1);
+  });
+
+  it('arrondit toujours à l’entier SUPÉRIEUR, jamais au plus proche', () => {
+    // Le Google Sheet arrondit au plus proche (Bao 8,3 -> 8). L'app monte.
+    const bao = product({ name: 'Bao', family: 'les_plus', unit: 'piece', baseQty: 1.7 });
+    expect(computeTarget(bao, 4882)).toBe(9); // 8,3 -> 9
+    expect(computeTarget(product({ baseQty: 2 }), 4000)).toBe(4); // 4,0 reste 4
+    expect(computeTarget(product({ baseQty: 2.05 }), 4000)).toBe(5); // 4,1 -> 5
+  });
+
+  it('ne renvoie jamais de cible négative', () => {
+    expect(computeTarget(product({ baseQty: 0 }), 4000)).toBe(0);
+    expect(computeTarget(SAUMON, 0)).toBe(0);
+  });
+
+  it('respecte le plancher et le plafond quand ils sont renseignés', () => {
+    expect(computeTarget(product({ floorQty: 12 }), 4000)).toBe(12);
+    expect(computeTarget(product({ ceilingQty: 6 }), 4000)).toBe(6);
   });
 });
 
-describe('§5.3 — bornage et arrondi de la cible', () => {
-  it('borne par le plancher, quel que soit le CA', () => {
-    expect(computeTarget(product({ floorQty: 4 }), 1.5)).toBe(4);
+describe('minimum de relance', () => {
+  it('mode auto : moitié de la cible', () => {
+    expect(computeMinimum(SAUMON, 10, 2)).toBe(5);
   });
 
-  it('borne par le plafond (capacité frigo)', () => {
-    expect(computeTarget(product({ ceilingQty: 10 }), 14)).toBe(10);
+  it('mode auto : le minimum suit la cible sans réglage', () => {
+    expect(computeMinimum(SAUMON, 12, 2)).toBe(6);
+    expect(computeMinimum(SAUMON, 24, 2)).toBe(12);
   });
 
-  it('arrondit la cible au pas de production supérieur', () => {
-    expect(computeTarget(product(), 7.2)).toBe(7.5);
-    expect(computeTarget(product(), 8)).toBe(8);
+  it('mode auto : arrondi SUPÉRIEUR au pas de comptage', () => {
+    // Cible 1 -> 0,5 pile. Cible 3 -> 1,5 pile. Cible 5 -> 2,5 pile.
+    expect(computeMinimum(THON, 1, 2)).toBe(0.5);
+    expect(computeMinimum(SAUMON, 3, 2)).toBe(1.5);
+    // Cible 7 avec divisor 3 -> 2,333 -> 2,5 (et non 2)
+    expect(computeMinimum(product({ minDivisor: 3 }), 7, 2)).toBe(2.5);
   });
 
-  it('ne renvoie jamais une cible négative', () => {
-    expect(computeTarget(product(), -3)).toBe(0);
+  it('un diviseur personnalisé change le minimum', () => {
+    expect(computeMinimum(product({ minDivisor: 4 }), 10, 2)).toBe(2.5);
+    expect(computeMinimum(product({ minDivisor: 1 }), 10, 2)).toBe(10);
   });
 
-  it('plancher et plafond peuvent se croiser : le plafond gagne', () => {
-    expect(computeTarget(product({ floorQty: 6, ceilingQty: 4 }), 10)).toBe(4);
+  it('mode manuel : valeur absolue', () => {
+    expect(computeMinimum(product({ minMode: 'manual', minQtyManual: 8 }), 10, 2)).toBe(8);
+  });
+
+  it('le minimum ne dépasse JAMAIS la cible', () => {
+    expect(computeMinimum(product({ minMode: 'manual', minQtyManual: 40 }), 10, 2)).toBe(10);
+    expect(computeMinimum(product({ minDivisor: 0.5 }), 10, 2)).toBe(10);
+  });
+
+  it('le minimum n’est jamais négatif', () => {
+    expect(computeMinimum(product({ minMode: 'manual', minQtyManual: -3 }), 10, 2)).toBe(0);
+  });
+
+  it('cible nulle -> minimum nul', () => {
+    expect(computeMinimum(product({ minMode: 'manual', minQtyManual: 5 }), 0, 2)).toBe(0);
+  });
+
+  it('retombe sur le diviseur global quand le produit n’en a pas', () => {
+    expect(computeMinimum(product({ minDivisor: 0 }), 10, 2)).toBe(5);
   });
 });
 
-describe('§5.4 — seuil de relance', () => {
-  it('mode ratio : seuil = cible x ratio', () => {
-    expect(computeReorderThreshold(product({ reorderRatio: 0.5 }), 8, 0.5)).toBe(4);
-    expect(computeReorderThreshold(product({ reorderRatio: 0.4 }), 10, 0.5)).toBe(4);
-  });
+/**
+ * Tableau de vérification obligatoire, recopié à l'identique.
+ * CA 4 000 €, mode auto, diviseur 2 — sauf mention contraire.
+ */
+describe('tableau de vérification (§1)', () => {
+  const cases = [
+    { produit: 'Saumon', config: SAUMON, caRef: 4000, cible: 10, minimum: 5, stock: 3, attendu: 7 },
+    { produit: 'Saumon', config: SAUMON, caRef: 4000, cible: 10, minimum: 5, stock: 6, attendu: 0 },
+    { produit: 'Saumon', config: SAUMON, caRef: 4000, cible: 10, minimum: 5, stock: 5, attendu: 0 },
+    { produit: 'Saumon', config: SAUMON, caRef: 4000, cible: 10, minimum: 5, stock: 0, attendu: 10 },
+    { produit: 'Saumon', config: SAUMON, caRef: 4000, cible: 10, minimum: 5, stock: 3.5, attendu: 7 },
+    { produit: 'Thon', config: THON, caRef: 4000, cible: 1, minimum: 0.5, stock: 0, attendu: 1 },
+    { produit: 'Thon', config: THON, caRef: 4000, cible: 1, minimum: 0.5, stock: 0.5, attendu: 0 },
+    { produit: 'Gyoza Poulet', config: GYOZA, caRef: 5000, cible: 24, minimum: 12, stock: 10, attendu: 14 },
+  ] as const;
 
-  it('mode ratio : arrondi au pas de comptage le plus proche', () => {
-    // 7 x 0.5 = 3.5 -> déjà aligné ; 5 x 0.3 = 1.5 -> aligné ; 3 x 0.4 = 1.2 -> 1
-    expect(computeReorderThreshold(product({ reorderRatio: 0.5 }), 7, 0.5)).toBe(3.5);
-    expect(computeReorderThreshold(product({ reorderRatio: 0.4 }), 3, 0.5)).toBe(1);
-  });
+  for (const testCase of cases) {
+    it(`${testCase.produit} @ ${testCase.caRef} € — cible ${testCase.cible}, minimum ${testCase.minimum}, stock ${testCase.stock} -> ${testCase.attendu || 'rien'}`, () => {
+      const target = computeProductTarget(testCase.config, testCase.caRef, 2);
 
-  it('mode fixed : seuil = valeur absolue', () => {
+      // La cible et le minimum du tableau doivent d'abord être ceux calculés.
+      expect(target.target).toBe(testCase.cible);
+      expect(target.minimum).toBe(testCase.minimum);
+
+      const decision = decideReorder(testCase.config, target, {
+        qtySaladbar: testCase.stock,
+        qtyFridge: 0,
+      });
+      expect(decision.qtyToProduce).toBe(testCase.attendu);
+      expect(decision.needsReorder).toBe(testCase.attendu > 0);
+    });
+  }
+
+  it('Saumon en mode manuel, minimum 8, stock 6 -> relancer 4', () => {
+    const manuel = product({ minMode: 'manual', minQtyManual: 8 });
+    const target = computeProductTarget(manuel, 4000, 2);
+
+    expect(target.target).toBe(10);
+    expect(target.minimum).toBe(8);
     expect(
-      computeReorderThreshold(product({ reorderMode: 'fixed', reorderFixed: 2 }), 8, 0.5),
-    ).toBe(2);
+      decideReorder(manuel, target, { qtySaladbar: 6, qtyFridge: 0 }).qtyToProduce,
+    ).toBe(4);
+  });
+});
+
+describe('décision de relance', () => {
+  const target = computeProductTarget(SAUMON, 4000, 2);
+
+  it('additionne saladbar et frigo avant de comparer au minimum', () => {
+    const decision = decideReorder(SAUMON, target, { qtySaladbar: 3, qtyFridge: 2 });
+    expect(decision.stockTotal).toBe(5);
+    expect(decision.needsReorder).toBe(false);
   });
 
-  it('un seuil ne peut JAMAIS dépasser la cible', () => {
+  it('un demi-gastro sous le minimum déclenche la relance', () => {
+    const decision = decideReorder(SAUMON, target, { qtySaladbar: 4.5, qtyFridge: 0 });
+    expect(decision.needsReorder).toBe(true);
+    expect(decision.qtyToProduce).toBe(6); // PLAFOND(10 − 4,5) = 6
+  });
+
+  it('le besoin est toujours un entier, même sur un stock en demis', () => {
+    for (const stock of [0.5, 1.5, 2.5, 3.5, 4.5]) {
+      const qty = decideReorder(SAUMON, target, { qtySaladbar: stock, qtyFridge: 0 })
+        .qtyToProduce;
+      expect(Number.isInteger(qty)).toBe(true);
+    }
+  });
+
+  it('ne produit jamais une quantité négative', () => {
+    const large = computeProductTarget(
+      product({ minMode: 'manual', minQtyManual: 10 }),
+      4000,
+      2,
+    );
     expect(
-      computeReorderThreshold(product({ reorderMode: 'fixed', reorderFixed: 12 }), 8, 0.5),
-    ).toBe(8);
-    expect(computeReorderThreshold(product({ reorderRatio: 1.5 }), 6, 0.5)).toBe(6);
-  });
-
-  it('retombe sur le ratio par défaut quand le produit n’en définit pas', () => {
-    expect(computeReorderThreshold(product({ reorderRatio: null }), 8, 0.5)).toBe(4);
-    expect(computeReorderThreshold(product({ reorderRatio: null }), 8, 0.25)).toBe(2);
-  });
-
-  it('ne renvoie jamais un seuil négatif', () => {
-    expect(
-      computeReorderThreshold(product({ reorderMode: 'fixed', reorderFixed: -5 }), 8, 0.5),
+      decideReorder(SAUMON, large, { qtySaladbar: 12, qtyFridge: 0 }).qtyToProduce,
     ).toBe(0);
-  });
-
-  it('cible nulle -> seuil nul', () => {
-    expect(computeReorderThreshold(product({ reorderMode: 'fixed', reorderFixed: 3 }), 0, 0.5)).toBe(0);
-  });
-});
-
-describe('cible + seuil combinés', () => {
-  it('produit le couple attendu du cas saumon (CA 3 200 €)', () => {
-    const result = computeProductTarget(product(), brackets, 3200, 0.5);
-    expect(result).toEqual({ productId: 'p1', target: 8, reorderThreshold: 4, hasRule: true });
-  });
-
-  it('signale l’absence de règle mais applique quand même le plancher', () => {
-    const result = computeProductTarget(product({ floorQty: 2 }), [], 3200, 0.5);
-    expect(result.hasRule).toBe(false);
-    expect(result.target).toBe(2);
-    expect(result.reorderThreshold).toBe(1);
   });
 });

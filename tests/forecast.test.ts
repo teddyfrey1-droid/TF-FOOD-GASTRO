@@ -107,34 +107,25 @@ describe('§5.2 — CA de référence par session', () => {
  * Le scénario complet décrit par le restaurant :
  *
  *   « si le 26 juin 2025 a fait 2 000 €, alors le 25 juin 2026 est estimé à
- *     2 500 €, et on aura besoin de 6 gastros de saumon au lieu de 5 »
+ *     2 500 €, et on aura besoin de plus de saumon »
  *
  * C'est tout l'intérêt du calcul : anticiper la production sur un CA estimé,
  * pour ne jamais manquer sans pour autant gâcher.
  */
 describe('scénario du restaurant — anticiper la production sur le CA estimé', () => {
-  // Paliers d'illustration. Les bornes portent sur le CA DE RÉFÉRENCE,
-  // c'est-à-dire la prévision majorée de la marge de sécurité (+10 %) :
-  // 2 000 € prévus se lisent à 2 200 €, et 2 500 € prévus à 2 750 €.
-  const brackets = [
-    { productId: 'saumon', mode: 'bracket' as const, caMin: 0, caMax: 2000, targetQty: 4, qtyPer1000Eur: null },
-    { productId: 'saumon', mode: 'bracket' as const, caMin: 2000, caMax: 2400, targetQty: 5, qtyPer1000Eur: null },
-    { productId: 'saumon', mode: 'bracket' as const, caMin: 2400, caMax: 3000, targetQty: 6, qtyPer1000Eur: null },
-    { productId: 'saumon', mode: 'bracket' as const, caMin: 3000, caMax: null, targetQty: 8, qtyPer1000Eur: null },
-  ];
-
   const saumon = {
     id: 'saumon',
     name: 'Saumon',
+    family: 'mise_en_place' as const,
+    unit: 'gastro' as const,
+    baseQty: 4.6,
     countStep: 0.5,
-    productionStep: 0.5,
-    reorderMode: 'ratio' as const,
-    reorderRatio: 0.5,
-    reorderFixed: null,
-    floorQty: 4,
-    ceilingQty: 16,
-    urgencyLevel: 5 as const,
-    prepTimeMin: 6,
+    minMode: 'auto' as const,
+    minDivisor: 2,
+    minQtyManual: null,
+    floorQty: null,
+    ceilingQty: null,
+    priority: 3 as const,
   };
 
   const history = new Map([
@@ -152,37 +143,22 @@ describe('scénario du restaurant — anticiper la production sur le CA estimé'
     expect(forecast.forecastRevenue).toBe(2500);
   });
 
-  it('et la cible du saumon passe de 5 à 6 gastros', () => {
-    const settings = { safetyMargin: 0.1, afternoonTargetRatio: 1 };
-
-    const sansCroissance = computeProductTarget(
-      saumon,
-      brackets,
-      referenceRevenueForSession(2000, 'morning', settings), // 2 200 €
-      0.5,
-    );
-    expect(sansCroissance.target).toBe(5);
-
-    const avecCroissance = computeProductTarget(
-      saumon,
-      brackets,
-      referenceRevenueForSession(2500, 'morning', settings), // 2 750 €
-      0.5,
-    );
-    expect(avecCroissance.target).toBe(6);
+  it('et la cible du saumon monte avec le CA estimé', () => {
+    // 4,6 x 2 x (2 000 / 4 000) = 4,6 -> 5
+    expect(computeProductTarget(saumon, 2000, 2).target).toBe(5);
+    // 4,6 x 2 x (2 500 / 4 000) = 5,75 -> 6
+    expect(computeProductTarget(saumon, 2500, 2).target).toBe(6);
   });
 
   it('le taux de croissance se change à tout moment et agit immédiatement', () => {
-    // Le même jour, trois taux, trois prévisions : rien n'est figé en base.
-    const taux = [0, 0.25, 0.3];
-    const previsions = taux.map(
+    const previsions = [0, 0.25, 0.3].map(
       (growthRate) => computeForecast({ date: '2026-06-25', history, growthRate }).forecastRevenue,
     );
     expect(previsions).toEqual([2000, 2500, 2600]);
   });
 
   it('le coefficient du jour se cumule au taux de croissance', () => {
-    // Jour férié annoncé calme : coefficient 0,8 par-dessus les +25 %.
+    // Jour annoncé calme : coefficient 0,8 par-dessus les +25 %.
     const forecast = computeForecast({
       date: '2026-06-25',
       history,

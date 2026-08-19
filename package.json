@@ -12,9 +12,9 @@
     "typecheck": "tsc --noEmit",
     "db:test": "./scripts/db-test.sh",
     "db:types": "supabase gen types typescript --db-url \"$SUPABASE_DB_URL\" > src/lib/supabase/database.types.ts",
-    "import:calculateur": "tsx --env-file-if-exists=.env.local scripts/import-calculator.ts",
     "import:ca": "tsx --env-file-if-exists=.env.local scripts/import-revenue.ts",
-    "pwa:assets": "tsx scripts/generate-pwa-assets.ts"
+    "pwa:assets": "tsx scripts/generate-pwa-assets.ts",
+    "import:produits": "tsx --env-file-if-exists=.env.local scripts/import-products.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.7.0",

@@ -35,7 +35,7 @@ export async function GET(request: NextRequest) {
         [
           'Produit',
           'Catégorie',
-          'Format GN',
+          'Unité',
           'Saladbar',
           'Frigo',
           'Total',
@@ -49,7 +49,7 @@ export async function GET(request: NextRequest) {
         lines.map((line) => [
           line.productName,
           line.categoryName,
-          line.gnFormat,
+          line.unit,
           line.qtySaladbar,
           line.qtyFridge,
           line.qtyTotal,

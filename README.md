@@ -122,48 +122,91 @@ fausse pas la conclusion.
 
 ### Étape 2 — Le chiffre d'affaires de référence
 
-On ajoute une **marge de sécurité** (10 % par défaut) : mieux vaut un peu trop
-que la rupture.
+Une **marge de sécurité** peut être ajoutée, mais elle est réglée à **0 par
+défaut** : le multiplicateur de famille (× 2 pour la mise en place) porte déjà
+la sécurité. Sans cela, un chiffre d'affaires prévu de 4 000 € entrerait dans le
+calcul à 4 400 € et donnerait 11 gastros de saumon au lieu des 10 attendus.
 
 ```
-Matin      : CA de référence = CA prévu × 1,10
-Après-midi : CA de référence = CA prévu × 1,10 × coefficient de l'après-midi (1,0 par défaut)
+Matin      : CA de référence = CA prévu × (1 + marge)
+Après-midi : CA de référence = CA prévu × (1 + marge) × coefficient de l'après-midi (1,0 par défaut)
 ```
 
 ### Étape 3 — La cible de chaque produit
 
-Deux manières de la calculer, au choix, produit par produit :
+Une seule donnée pilote un produit : sa valeur **« VENTE POUR »**, reprise du
+Google Sheet. Tout le reste en découle.
 
-- **par paliers** : « entre 2 500 € et 4 000 € de CA, il faut 8 gastros de saumon » ;
-- **par ratio** : « il faut 2,5 gastros de saumon pour 1 000 € de CA ».
+```
+cible = « VENTE POUR » × multiplicateur × (CA de référence / CA de la famille)
+```
 
-La cible est ensuite bornée par un **plancher** (on ne descend jamais en dessous,
-même un jour creux) et un **plafond** (la capacité du frigo), puis arrondie au
-demi-gastro supérieur.
+Chaque produit appartient à l'une des deux familles :
 
-### Étape 4 — Le seuil de relance
+| Famille | Base exprimée pour | Multiplicateur | Compté en |
+|---|---|---|---|
+| **Mise en place** — protéines, ingrédients | 4 000 € | × 2 | gastros |
+| **Les plus** — gyozas, baos, desserts | 1 000 € | × 1 | pièces |
 
-Soit un pourcentage de la cible (50 % par défaut), soit une valeur fixe en
-gastros. Le seuil est arrondi au demi-gastro le plus proche et **ne peut jamais
-dépasser la cible**.
+**Exemple.** Le saumon a une base de 4,6. À 4 000 € :
+4,6 × 2 × (4 000 / 4 000) = 9,2 → **cible 10 gastros**. À 5 000 € : 11,5 → **12**.
+
+La cible est ensuite bornée par un plancher et un plafond éventuels, puis
+**arrondie à l'entier supérieur**.
+
+### Étape 4 — Le minimum de relance
+
+Deux modes, réglables produit par produit et modifiables à tout moment :
+
+- **Automatique** (par défaut) : le minimum vaut la **moitié de la cible**. Il
+  suit donc le chiffre d'affaires tout seul, sans rien à régler. Un diviseur
+  autre que 2 est possible.
+- **Fixe** : une valeur en dur, que le chiffre d'affaires ne fait pas bouger.
+
+Le minimum s'arrondit au demi supérieur et **ne dépasse jamais la cible**.
+Saumon à 4 000 € : cible 10, minimum 5.
+
+Le mode se bascule **en deux clics depuis le tableau des produits**, sans ouvrir
+de fiche.
 
 ### Étape 5 — La décision
 
 ```
 stock total = saladbar + frigo
 
-Si stock total ≥ seuil  →  rien à faire, le produit n'apparaît pas
-Sinon                   →  relancer (cible − stock total), arrondi au demi-gastro supérieur
+Si stock total ≥ minimum  →  rien à faire, le produit n'apparaît pas
+Sinon                     →  relancer (cible − stock total), à l'entier supérieur
 ```
 
-Attention : **au seuil exactement, on ne relance pas.** Il faut être passé
-*sous* le seuil.
+Attention : **au minimum exactement, on ne relance pas.** Il faut être passé
+*sous* le minimum.
+
+### Les arrondis, en un mot
+
+**Tout ce qui est produit ou visé s'arrondit à l'entier supérieur.** 9,2 donne
+10, 4,1 donne 5, 4,0 reste 4. On ne produit jamais moins que nécessaire.
+
+Seul le **comptage** accepte les demis : l'employé constate un stock réel, il
+peut donc saisir 3,5 gastros.
+
+> Le Google Sheet, lui, arrondit au plus proche — un Bao à 8,3 y devient 8.
+> L'application monte à 9. C'est volontaire.
 
 ### Étape 6 — L'ordre du rapport
 
-Les produits les plus urgents d'abord (niveau d'urgence de 1 à 5), puis les plus
-dégarnis. Un badge rouge **« RUPTURE IMMINENTE »** signale un produit tombé à
-zéro, ou un produit urgent dont il reste moins d'un quart de la cible.
+Chaque produit porte une **priorité de 1 à 5**, où **1 est le plus urgent** et
+5 le moins. Le rapport place donc les priorités 1 en tête, puis, à priorité
+égale, les produits les plus dégarnis.
+
+| Priorité | Pastille |
+|---|---|
+| 1 — le plus urgent | 🔴 rouge |
+| 2 | 🟠 orange |
+| 3 | 🟡 jaune |
+| 4 | 🔵 bleu |
+| 5 — le moins urgent | ⚪ gris |
+
+La priorité se modifie à tout moment, directement dans le tableau des produits.
 
 Le rapport affiche le **temps de préparation total estimé**, compté par gastro
 entier : 5 gastros de saumon à 6 minutes le gastro font 30 minutes.
@@ -303,9 +346,13 @@ trop basse — on a consommé plus que prévu, donc frôlé la rupture.
 | Liste des produits à compter | ✅ | ✅ |
 | Liste de ce qu'il faut relancer | ✅ | ✅ |
 | Chiffre d'affaires, prévisions | ❌ | ✅ |
-| Ratios du calculateur | ❌ | ✅ |
-| Cibles et seuils | ❌ | ✅ |
+| Valeurs « VENTE POUR » et familles | ❌ | ✅ |
+| Cibles et minimums | ❌ | ✅ |
 | Historique complet, exports | ❌ | ✅ |
+
+Un employé qui connaîtrait à la fois la base d'un produit et sa cible pourrait
+en déduire le chiffre d'affaires du restaurant. C'est pourquoi ni l'une ni
+l'autre ne quitte jamais le serveur.
 
 **Cette séparation est appliquée dans la base de données, pas seulement dans
 l'affichage.** Un employé qui ouvrirait les outils de développement de son
@@ -422,7 +469,7 @@ en TypeScript (pour le simulateur du back-office) et en SQL (pour la validation
 d'un comptage). Les deux doivent donner exactement le même résultat.
 
 ```bash
-pnpm test       # 150 tests TypeScript : calcul, croissance, steppers, consommation, CSV
+pnpm test       # 139 tests TypeScript : calcul, croissance, steppers, consommation, CSV
 pnpm db:test    # tests SQL : calcul, sécurité RLS, audit, comptage, rappels
 ```
 
@@ -471,22 +518,22 @@ scripts/              Imports CSV, génération des icônes, rejeu de la base
 
 ## 11. Charger vos données
 
-### Le calculateur
+### Le référentiel produits
 
 Exportez le Google Sheet en CSV, puis :
 
 ```bash
-pnpm import:calculateur --file data/calculateur.csv --dry-run   # simulation
-pnpm import:calculateur --file data/calculateur.csv             # pour de vrai
+pnpm import:produits --file data/produits.csv --dry-run   # simulation
+pnpm import:produits --file data/produits.csv             # pour de vrai
 ```
 
-`--dry-run` lit le fichier, signale les produits introuvables, les valeurs qui
-ne tombent pas sur un demi-gastro et les trous entre tranches de CA — sans rien
-écrire. Modèle de fichier : `data/calculateur.example.csv`.
+Seules deux colonnes sont obligatoires : **Produit** et **VENTE POUR**. Les
+colonnes `DLC`, `Famille`, `Catégorie` et `Unité` sont reconnues si elles sont
+présentes. Modèle de fichier : `data/produits.example.csv`.
 
-L'import est **versionné** : les anciennes règles sont closes à la veille, pas
-effacées. Ajoutez `--date 2026-09-01` pour faire entrer un nouveau calculateur
-en vigueur à une date précise.
+> La colonne **`conso/1000`** du Sheet est **ignorée volontairement** : elle
+> vaut la base divisée par deux et fausserait le calcul du minimum. Le script
+> le signale si elle est présente dans votre fichier.
 
 ### Le chiffre d'affaires
 
@@ -517,20 +564,21 @@ de doublon.
 | 3 | Historique, exports, consommation réelle, détection d'anomalies | ✅ |
 | 4 | PWA : installation iOS, mode hors ligne, rappels, impression | ✅ |
 
-**Hors périmètre de la version 1 :** la gestion des DLC et la production en
-avance pour le lendemain.
+**Hors périmètre de la version 1 :** la gestion des DLC, la production en
+avance pour le lendemain, les formats GN détaillés (l'unité se dit simplement
+« gastro » ou « pièce ») et le temps de préparation. Les colonnes `DLC` et
+`temps de prépa` sont **stockées en base** mais n'entrent dans aucun calcul.
 
 ---
 
 ## 13. Données encore à fournir
 
-Le jeu de démonstration contient des valeurs **provisoires**, signalées par la
-mention « à confirmer » à côté de chaque format GN. Elles ne doivent pas servir
-en production. Il reste à fournir :
+Le référentiel des **39 produits** et leurs valeurs « VENTE POUR » sont chargés.
+Il reste :
 
-1. l'export du Google Sheet du calculateur (produits × tranches de CA) ;
-2. le chiffre d'affaires jour par jour de l'an dernier ;
-3. les formats GN réels de chaque produit ;
-4. les seuils de relance et niveaux d'urgence par produit.
-
-Voir `docs/questions-metier.md` pour le détail.
+1. l'**historique du chiffre d'affaires** de l'an dernier, jour par jour — en
+   attendant, la prévision de chaque journée se saisit à la main dans
+   *Chiffre d'affaires → Calendrier*, ce qui suffit pour tester ;
+2. les **priorités réelles** de chaque produit — tous sont à 3 pour l'instant,
+   et se règlent en un clic dans le tableau des produits ;
+3. les **planchers et plafonds** par produit, laissés vides.

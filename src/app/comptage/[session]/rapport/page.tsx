@@ -51,10 +51,10 @@ export default async function ReportPage({ params }: { params: Promise<{ session
   const reorderTasks: ReportTask[] = (tasks ?? []).map((row) => ({
     taskId: taskIdByProduct.get(row.product_id) ?? row.product_id,
     productName: row.product_name,
-    gnFormat: row.gn_format,
     notes: row.notes,
     qtyToProduce: toNumber(row.qty_to_produce, 0),
-    urgencyLevel: Number(row.urgency_level),
+    unit: row.unit,
+    priority: Number(row.priority),
     isDone: row.is_done,
   }));
 
@@ -63,19 +63,12 @@ export default async function ReportPage({ params }: { params: Promise<{ session
     (line) => !reorderedIds.has(line.product_id) && !line.is_not_applicable,
   ).length;
 
-  // Le temps de prépa se compte par gastro entier : le back-office détient
-  // prep_time_min, l'employé ne reçoit que le total déjà calculé.
-  const { data: prepRows } = await supabase.rpc('mep_reorder_prep_time', {
-    p_session_id: countSession.id,
-  });
-
   return (
     <main className="mx-auto w-full max-w-md px-5 py-6">
       <ReorderReport
         title={config.title}
         tasks={reorderTasks}
         sufficientCount={sufficientCount}
-        totalPrepMinutes={prepRows === null ? null : toNumber(prepRows as number, 0)}
       />
 
       <Link href="/" className={buttonVariants({ variant: 'ghost', className: 'mt-8 h-11 w-full' })}>
