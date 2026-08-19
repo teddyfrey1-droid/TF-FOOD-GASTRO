@@ -3,15 +3,17 @@
 import { useRef, useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { roundToNearestStep } from '@/lib/mep/rounding';
 
 /**
- * Compteur de gastros.
+ * Le stepper en pilule — composant signature de l'application.
  *
  * Contraintes du terrain : l'employé tient son téléphone d'une main, souvent
- * avec des gants humides. Les cibles tactiles font 48 px minimum, le clavier
- * ne s'ouvre jamais tout seul, et un appui long sur la valeur donne accès au
- * pavé numérique pour les grosses quantités.
+ * avec des doigts humides, et compte 39 produits d'affilée. Donc :
+ *   • des cibles tactiles de 48 px minimum ;
+ *   • le nombre en très gras, c'est l'élément le plus lu de l'app ;
+ *   • le libellé de zone en gris dessous, discret ;
+ *   • aucun clavier qui s'ouvre — appui long sur le nombre pour le pavé
+ *     numérique de secours, réservé aux grosses quantités.
  */
 export function BacStepper({
   label,
@@ -30,12 +32,10 @@ export function BacStepper({
   const [draft, setDraft] = useState('');
   const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /**
-   * Recale sur le pas, sans dérive flottante. On réutilise l'arrondi du moteur
-   * métier plutôt que d'en écrire un second : c'est la même règle des demi-gastros.
-   */
+  /** Recale sur le pas et efface la dérive flottante (0,1 + 0,2). */
   function snap(next: number): number {
-    return Math.max(0, roundToNearestStep(next, step));
+    const steps = Math.round(next / step);
+    return Math.max(0, Math.round(steps * step * 1e6) / 1e6);
   }
 
   function openKeypad() {
@@ -50,34 +50,26 @@ export function BacStepper({
     setEditing(false);
   }
 
-  function startLongPress() {
-    longPress.current = setTimeout(openKeypad, 500);
-  }
-
-  function cancelLongPress() {
-    if (longPress.current) clearTimeout(longPress.current);
-    longPress.current = null;
-  }
-
   return (
-    <div className="flex flex-col items-center gap-1">
-      <span className="text-muted-foreground text-[11px] font-medium tracking-wide uppercase">
-        {label}
-      </span>
-
-      <div className="flex items-center gap-1">
+    <div className="no-select flex flex-col items-center gap-1">
+      <div
+        className={cn(
+          'bg-card flex items-center rounded-full border shadow-sm',
+          disabled && 'opacity-40',
+        )}
+      >
         <button
           type="button"
           aria-label={`Retirer ${step} à ${label}`}
           disabled={disabled || value <= 0}
           onClick={() => onChange(snap(value - step))}
           className={cn(
-            'flex size-12 shrink-0 items-center justify-center rounded-l-lg border',
-            'active:bg-muted disabled:opacity-30 disabled:pointer-events-none',
-            'touch-manipulation select-none',
+            'flex size-12 shrink-0 items-center justify-center rounded-full',
+            'active:bg-muted transition-colors disabled:opacity-25',
+            'touch-manipulation',
           )}
         >
-          <Minus className="size-5" />
+          <Minus className="size-5" strokeWidth={2.5} />
         </button>
 
         {editing ? (
@@ -93,24 +85,27 @@ export function BacStepper({
               if (event.key === 'Enter') commitDraft();
               if (event.key === 'Escape') setEditing(false);
             }}
-            className="border-primary h-12 w-14 rounded-none border-y border-x-0 text-center text-lg font-semibold tabular-nums outline-none"
+            className="ring-primary w-14 rounded-lg bg-transparent text-center text-2xl font-black tabular-nums ring-2 outline-none"
           />
         ) : (
           <button
             type="button"
             aria-label={`Quantité ${label} : ${value}. Appui long pour saisir au clavier.`}
             disabled={disabled}
-            onPointerDown={startLongPress}
-            onPointerUp={cancelLongPress}
-            onPointerLeave={cancelLongPress}
+            onPointerDown={() => {
+              longPress.current = setTimeout(openKeypad, 500);
+            }}
+            onPointerUp={() => {
+              if (longPress.current) clearTimeout(longPress.current);
+            }}
+            onPointerLeave={() => {
+              if (longPress.current) clearTimeout(longPress.current);
+            }}
             onContextMenu={(event) => {
               event.preventDefault();
               openKeypad();
             }}
-            className={cn(
-              'flex h-12 w-14 items-center justify-center border-y text-lg font-semibold tabular-nums',
-              'touch-manipulation select-none disabled:opacity-40',
-            )}
+            className="flex h-12 w-14 items-center justify-center text-2xl font-black tabular-nums touch-manipulation"
           >
             {value.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}
           </button>
@@ -122,14 +117,16 @@ export function BacStepper({
           disabled={disabled}
           onClick={() => onChange(snap(value + step))}
           className={cn(
-            'flex size-12 shrink-0 items-center justify-center rounded-r-lg border',
-            'active:bg-muted disabled:opacity-30 disabled:pointer-events-none',
-            'touch-manipulation select-none',
+            'flex size-12 shrink-0 items-center justify-center rounded-full',
+            'active:bg-muted transition-colors disabled:opacity-25',
+            'touch-manipulation',
           )}
         >
-          <Plus className="size-5" />
+          <Plus className="size-5" strokeWidth={2.5} />
         </button>
       </div>
+
+      <span className="text-muted-foreground text-[11px] font-medium tracking-wide">{label}</span>
     </div>
   );
 }

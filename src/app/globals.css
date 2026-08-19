@@ -24,6 +24,8 @@
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
   --color-ring: var(--ring);
+  --color-alert: var(--alert);
+  --color-alert-foreground: var(--alert-foreground);
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
@@ -49,38 +51,61 @@
 }
 
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+  /* --------------------------------------------------------------------
+   * Palette MEP — inspirée de Foodflow.
+   *
+   * Fond crème chaud, JAMAIS blanc pur : l'écran de comptage se regarde
+   * pendant plusieurs minutes d'affilée, en cuisine, sous néon.
+   * -------------------------------------------------------------------- */
+
+  --background: oklch(0.976 0.008 85);      /* crème chaud */
+  --foreground: oklch(0.205 0.012 65);      /* encre chaude, pas de noir pur */
+
+  --card: oklch(0.995 0.005 85);            /* à peine plus clair que le fond */
+  --card-foreground: var(--foreground);
+  --popover: oklch(0.995 0.005 85);
+  --popover-foreground: var(--foreground);
+
+  --primary: oklch(0.52 0.14 155);          /* vert cuisine, sobre */
+  --primary-foreground: oklch(0.99 0.005 85);
+
+  --secondary: oklch(0.94 0.012 85);
+  --secondary-foreground: var(--foreground);
+
+  --muted: oklch(0.945 0.010 85);
+  --muted-foreground: oklch(0.52 0.015 70);  /* gris moyen des libellés */
+
+  --accent: oklch(0.93 0.018 85);
+  --accent-foreground: var(--foreground);
+
+  --destructive: oklch(0.58 0.20 27);
+  --destructive-foreground: oklch(0.99 0.005 85);
+
+  /* Badge d'alerte : pastille jaune vif, texte noir gras. */
+  --alert: oklch(0.88 0.17 95);
+  --alert-foreground: oklch(0.20 0.02 80);
+
+  --border: oklch(0.90 0.012 85);
+  --input: oklch(0.90 0.012 85);
+  --ring: oklch(0.52 0.14 155);
+
+  --chart-1: oklch(0.52 0.14 155);
+  --chart-2: oklch(0.68 0.15 60);
+  --chart-3: oklch(0.58 0.13 250);
+  --chart-4: oklch(0.72 0.16 35);
+  --chart-5: oklch(0.62 0.10 300);
+
+  /* Coins arrondis généreux : 16 px de base, jusqu'à 28 px sur les cartes. */
+  --radius: 1rem;
+
+  --sidebar: oklch(0.965 0.010 85);
+  --sidebar-foreground: var(--foreground);
+  --sidebar-primary: var(--primary);
+  --sidebar-primary-foreground: var(--primary-foreground);
+  --sidebar-accent: var(--accent);
+  --sidebar-accent-foreground: var(--accent-foreground);
+  --sidebar-border: var(--border);
+  --sidebar-ring: var(--ring);
 }
 
 .dark {
@@ -170,6 +195,46 @@
 
   /* Les pastilles de couleur ne survivent pas au noir et blanc : on les
      remplace par le niveau d'urgence en toutes lettres via ::after. */
+  .print\:hidden {
+    display: none !important;
+  }
+}
+
+/* ---------------------------------------------------------------------
+ * Réglages propres au terrain
+ * ------------------------------------------------------------------- */
+
+@layer base {
+  /* L'écran de comptage se manipule d'une main, avec des doigts humides :
+     une sélection de texte accidentelle sur un stepper est une gêne. */
+  .no-select {
+    -webkit-user-select: none;
+    user-select: none;
+    -webkit-touch-callout: none;
+  }
+
+  /* iOS zoome dès qu'un champ fait moins de 16 px. Le pavé numérique de
+     secours doit donc rester à 16 px minimum. */
+  input[inputmode='decimal'],
+  input[type='text'],
+  input[type='number'] {
+    font-size: max(1rem, 16px);
+  }
+
+  /* Encoche et barre d'accueil de l'iPhone. */
+  .pb-safe {
+    padding-bottom: max(1rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+}
+
+@media print {
+  /* Le rapport de relance s'imprime en format ticket. */
+  body {
+    background: #fff;
+  }
   .print\:hidden {
     display: none !important;
   }

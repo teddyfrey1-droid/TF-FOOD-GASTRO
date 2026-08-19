@@ -1,10 +1,9 @@
-import Link from 'next/link';
 import { requireUser, isManagerRole } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { SignOutButton } from '@/components/pwa/sign-out-button';
 import { NotificationToggle } from '@/components/pwa/notification-toggle';
-import { buttonVariants } from '@/components/ui/button';
 import { SessionCard } from '@/components/session-card';
+import { BottomTabs } from '@/components/bottom-tabs';
 import type { SessionKind } from '@/lib/supabase/database.types';
 
 export const dynamic = 'force-dynamic';
@@ -42,38 +41,37 @@ export default async function HomePage() {
   );
 
   return (
-    <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 py-8">
-      <header className="mb-8">
-        <p className="text-muted-foreground text-sm capitalize">{DATE_FORMAT.format(today)}</p>
-        <h1 className="mt-1 text-2xl font-bold tracking-tight">Bonjour {user.fullName}</h1>
-      </header>
+    <>
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-8 pb-28">
+        <header className="mb-8">
+          <p className="text-muted-foreground text-sm font-medium capitalize">
+            {DATE_FORMAT.format(today)}
+          </p>
+          <h1 className="mt-1 text-3xl font-black tracking-tight">Bonjour {user.fullName}</h1>
+        </header>
 
-      <div className="flex flex-col gap-4">
-        <SessionCard
-          kind="morning"
-          title="Comptage du matin"
-          description="Avant l'ouverture — mise en place de la journée"
-          session={bySession.get('morning') ?? null}
-        />
-        <SessionCard
-          kind="afternoon"
-          title="Comptage de l'après-midi"
-          description="Après le rush du midi — relance pour le soir"
-          session={bySession.get('afternoon') ?? null}
-        />
-      </div>
+        <div className="flex flex-col gap-4">
+          <SessionCard
+            kind="morning"
+            title="Comptage du matin"
+            description="Avant l'ouverture — mise en place de la journée"
+            session={bySession.get('morning') ?? null}
+          />
+          <SessionCard
+            kind="afternoon"
+            title="Comptage de l'après-midi"
+            description="Après le service du midi — relance pour le soir"
+            session={bySession.get('afternoon') ?? null}
+          />
+        </div>
 
-      <div className="mt-auto space-y-3 pt-10">
-        <NotificationToggle />
+        <div className="mt-auto space-y-3 pt-10">
+          <NotificationToggle />
+          <SignOutButton />
+        </div>
+      </main>
 
-        {isManagerRole(user.role) ? (
-          <Link href="/admin" className={buttonVariants({ variant: 'outline', className: 'h-11 w-full' })}>
-            Back-office
-          </Link>
-        ) : null}
-
-        <SignOutButton className="text-muted-foreground h-11 w-full" />
-      </div>
-    </main>
+      <BottomTabs isManager={isManagerRole(user.role)} />
+    </>
   );
 }

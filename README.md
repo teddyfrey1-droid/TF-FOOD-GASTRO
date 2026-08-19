@@ -571,14 +571,26 @@ avance pour le lendemain, les formats GN détaillés (l'unité se dit simplement
 
 ---
 
-## 13. Données encore à fournir
+## 13. Mise en ligne
 
-Le référentiel des **39 produits** et leurs valeurs « VENTE POUR » sont chargés.
-Il reste :
+La marche à suivre complète est dans **[docs/deploiement.md](docs/deploiement.md)** :
+créer la base Supabase, charger le schéma et les données, brancher Vercel,
+créer les comptes. Comptez trois quarts d'heure.
 
-1. l'**historique du chiffre d'affaires** de l'an dernier, jour par jour — en
-   attendant, la prévision de chaque journée se saisit à la main dans
-   *Chiffre d'affaires → Calendrier*, ce qui suffit pour tester ;
-2. les **priorités réelles** de chaque produit — tous sont à 3 pour l'instant,
+---
+
+## 14. Données encore à fournir
+
+Le référentiel des **39 produits** et l'**historique du chiffre d'affaires**
+(660 journées, du 9 septembre 2024 au 31 juillet 2026) sont chargés.
+
+Il reste, et cela se fait entièrement depuis le back-office :
+
+1. les **priorités réelles** de chaque produit — tous sont à 3 pour l'instant,
    et se règlent en un clic dans le tableau des produits ;
-3. les **planchers et plafonds** par produit, laissés vides.
+2. les **planchers et plafonds** par produit, laissés vides ;
+3. les **jours de fermeture** à cocher dans le calendrier.
+
+> ⚠️ **Les montants sont en TTC**, conformément à l'export fourni. Les valeurs
+> « VENTE POUR » doivent donc être calées sur du TTC elles aussi. Le réglage
+> `revenue_basis` rend cette base explicite dans la base de données.

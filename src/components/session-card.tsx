@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { cn } from '@/lib/utils';
 import type { SessionKind, SessionStatus } from '@/lib/supabase/database.types';
 
 const TIME_FORMAT = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -49,12 +49,33 @@ export function SessionCard({
 
   return (
     <Link href={`/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}`} className="block">
-      <Card className="hover:bg-accent/50 flex min-h-32 flex-col justify-between gap-3 p-5 transition-colors">
+      <Card
+        className={cn(
+          'bg-card flex min-h-36 flex-col justify-between gap-3 rounded-3xl p-6 transition-transform active:scale-[0.99]',
+          status === 'submitted' && 'opacity-70',
+        )}
+      >
         <div className="flex items-start justify-between gap-3">
-          <h2 className="text-lg font-semibold">{title}</h2>
-          <Badge variant={status === 'submitted' ? 'secondary' : 'default'}>{label}</Badge>
+          <h2 className="text-xl font-black tracking-tight">{title}</h2>
+          <span
+            className={cn(
+              'shrink-0 rounded-full px-3 py-1 text-xs font-bold',
+              status === 'submitted'
+                ? 'bg-primary/10 text-primary'
+                : status === 'draft'
+                  ? 'bg-alert text-alert-foreground'
+                  : 'bg-foreground text-background',
+            )}
+          >
+            {label}
+          </span>
         </div>
-        <p className="text-muted-foreground text-sm">{detail ?? description}</p>
+        <div>
+          <p className="text-muted-foreground text-sm">{description}</p>
+          {detail ? (
+            <p className="text-muted-foreground mt-1 text-sm font-medium">{detail}</p>
+          ) : null}
+        </div>
       </Card>
     </Link>
   );

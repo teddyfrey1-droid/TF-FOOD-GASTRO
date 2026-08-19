@@ -45,26 +45,30 @@ export function ProductRow({
   const total = Math.round((line.qtySaladbar + line.qtyFridge) * 1e6) / 1e6;
 
   return (
-    <div className={cn('py-3', line.isNotApplicable && 'opacity-60')}>
+    <div
+      className={cn(
+        'bg-card rounded-2xl border p-4 transition-colors',
+        line.isNotApplicable && 'opacity-50',
+        line.counted && !line.isNotApplicable && 'border-primary/30',
+      )}
+    >
       <div className="flex items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          <p className="leading-tight font-medium">{product.name}</p>
+          <p className="text-[17px] leading-tight font-bold">{product.name}</p>
           <p className="text-muted-foreground mt-0.5 text-xs">
             {product.unit === 'piece' ? 'pièces' : 'gastros'}
+            {product.notes ? ` · ${product.notes}` : ''}
           </p>
-          {product.notes ? (
-            <p className="text-muted-foreground mt-0.5 text-xs italic">{product.notes}</p>
-          ) : null}
         </div>
 
-        <div className="text-right">
-          <span className="text-muted-foreground block text-[11px] tracking-wide uppercase">
+        <div className="shrink-0 text-right">
+          <span className="text-muted-foreground block text-[10px] font-semibold tracking-wide uppercase">
             Total
           </span>
           <span
             className={cn(
-              'block text-xl font-bold tabular-nums',
-              !line.counted && 'text-muted-foreground/50',
+              'block text-3xl font-black tabular-nums',
+              !line.counted && 'text-muted-foreground/30',
             )}
           >
             {line.isNotApplicable
@@ -75,9 +79,9 @@ export function ProductRow({
       </div>
 
       {line.isNotApplicable ? (
-        <div className="mt-2 flex items-center justify-between gap-3">
+        <div className="mt-3 flex items-center justify-between gap-3">
           <p className="text-muted-foreground text-xs">
-            Non applicable — {line.notApplicableReason}
+            Absent — {line.notApplicableReason}
           </p>
           <Button
             type="button"
@@ -94,8 +98,8 @@ export function ProductRow({
             autoFocus
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Pourquoi ? (produit non reçu, hors carte…)"
-            className="h-11"
+            placeholder="Pourquoi ? (non reçu, hors carte…)"
+            className="h-11 rounded-xl"
           />
           <div className="flex gap-2">
             <Button
@@ -115,7 +119,7 @@ export function ProductRow({
           </div>
         </div>
       ) : (
-        <div className="mt-3 flex items-end justify-between gap-3">
+        <div className="mt-4 flex items-end justify-between gap-2">
           <div className="flex gap-3">
             {product.inSaladbar ? (
               <BacStepper

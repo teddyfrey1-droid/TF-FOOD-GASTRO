@@ -10,6 +10,7 @@ import { cn } from '@/lib/utils';
 import { saveCountLine, saveCountLines, submitCount } from '@/app/comptage/actions';
 import { clearSession, dequeue, enqueue, listPending, pendingKey } from '@/lib/offline/queue';
 import { ProductRow, type CountState } from './product-row';
+import { CategoryPills } from './category-pills';
 
 export interface CountProduct {
   id: string;
@@ -41,6 +42,7 @@ export function CountingScreen({
   const router = useRouter();
   const [state, setState] = useState<Record<string, CountState>>(initial);
   const [search, setSearch] = useState('');
+  const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [online, setOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -184,15 +186,32 @@ export function CountingScreen({
       .toLowerCase()
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '');
-    if (!needle) return products;
-    return products.filter((product) =>
-      product.name
+    return products.filter((product) => {
+      if (activeCategory && product.categoryName !== activeCategory) return false;
+      if (!needle) return true;
+      return product.name
         .toLowerCase()
         .normalize('NFD')
         .replace(/[̀-ͯ]/g, '')
-        .includes(needle),
-    );
-  }, [products, search]);
+        .includes(needle);
+    });
+  }, [products, search, activeCategory]);
+
+  /** Avancement par catégorie, affiché dans les pills. */
+  const categories = useMemo(() => {
+    const byName = new Map<string, { name: string; counted: number; total: number }>();
+    for (const product of products) {
+      const entry = byName.get(product.categoryName) ?? {
+        name: product.categoryName,
+        counted: 0,
+        total: 0,
+      };
+      entry.total += 1;
+      if (state[product.id]?.counted) entry.counted += 1;
+      byName.set(product.categoryName, entry);
+    }
+    return [...byName.values()];
+  }, [products, state]);
 
   const grouped = useMemo(() => {
     const byCategory = new Map<string, CountProduct[]>();
@@ -224,35 +243,40 @@ export function CountingScreen({
   }
 
   return (
-    <div className="pb-32">
+    <div className="pb-40">
       <header className="bg-background/95 sticky top-0 z-20 border-b backdrop-blur">
         <div className="px-5 pt-4 pb-3">
-          <h1 className="text-xl font-bold tracking-tight">{title}</h1>
+          <div className="flex items-baseline justify-between gap-3">
+            <h1 className="text-2xl font-black tracking-tight">{title}</h1>
+            <span className="text-muted-foreground shrink-0 text-sm font-semibold tabular-nums">
+              {countedTotal} / {products.length}
+            </span>
+          </div>
 
           <div className="relative mt-3">
-            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2" />
+            <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-3.5 size-4 -translate-y-1/2" />
             <Input
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Rechercher un produit…"
               autoCapitalize="none"
               autoCorrect="off"
-              className="h-11 pl-9 text-base"
+              className="h-11 rounded-full pl-10 text-base"
             />
           </div>
 
-          <div className="mt-3 flex items-center gap-3">
-            <Progress value={(countedTotal / Math.max(products.length, 1)) * 100} className="h-2" />
-            <span className="text-muted-foreground shrink-0 text-xs tabular-nums">
-              {countedTotal} / {products.length}
-            </span>
+          <div className="mt-3">
+            <CategoryPills
+              categories={categories}
+              active={activeCategory}
+              onSelect={setActiveCategory}
+            />
           </div>
 
-          {error ? (
-            <p role="alert" className="text-destructive mt-2 text-xs font-medium">
-              {error}
-            </p>
-          ) : null}
+          <Progress
+            value={(countedTotal / Math.max(products.length, 1)) * 100}
+            className="mt-3 h-1.5"
+          />
 
           {!online || pendingCount > 0 ? (
             <p className="text-muted-foreground mt-2 flex items-center gap-1.5 text-xs">
@@ -274,11 +298,11 @@ export function CountingScreen({
 
         {grouped.map(([category, items]) => (
           <section key={category} className="pt-6">
-            <h2 className="text-muted-foreground bg-background/95 sticky top-[172px] z-10 py-1 text-xs font-semibold tracking-wide uppercase">
+            <h2 className="text-muted-foreground mb-2 text-xs font-bold tracking-wider uppercase">
               {category}
             </h2>
 
-            <div className="divide-y">
+            <div className="space-y-2.5">
               {items.map((product) => (
                 <ProductRow
                   key={product.id}
@@ -293,7 +317,7 @@ export function CountingScreen({
       </div>
 
       <footer className="bg-background/95 fixed inset-x-0 bottom-0 z-20 border-t backdrop-blur">
-        <div className="mx-auto w-full max-w-md space-y-2 px-5 py-4">
+        <div className="pb-safe mx-auto w-full max-w-md space-y-2 px-5 pt-4">
           {error ? (
             <p role="alert" className="text-destructive text-sm font-medium">
               {error}
@@ -303,7 +327,7 @@ export function CountingScreen({
           <Button
             onClick={handleSubmit}
             disabled={remaining > 0 || submitting}
-            className="h-14 w-full text-base"
+            className="h-14 w-full rounded-2xl text-base font-bold"
           >
             {submitting ? (
               'Validation…'
