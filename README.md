@@ -582,7 +582,8 @@ créer les comptes. Comptez trois quarts d'heure.
 ## 14. Données encore à fournir
 
 Le référentiel des **39 produits** et l'**historique du chiffre d'affaires**
-(660 journées, du 9 septembre 2024 au 31 juillet 2026) sont chargés.
+(691 journées, du 9 septembre 2024 au 31 juillet 2026, en HT) sont chargés
+en base de production.
 
 Il reste, et cela se fait entièrement depuis le back-office :
 
@@ -591,6 +592,7 @@ Il reste, et cela se fait entièrement depuis le back-office :
 2. les **planchers et plafonds** par produit, laissés vides ;
 3. les **jours de fermeture** à cocher dans le calendrier.
 
-> ⚠️ **Les montants sont en TTC**, conformément à l'export fourni. Les valeurs
-> « VENTE POUR » doivent donc être calées sur du TTC elles aussi. Le réglage
-> `revenue_basis` rend cette base explicite dans la base de données.
+> Tous les montants sont en **HT** — la seule base que manipule le restaurant.
+> Le réglage `revenue_basis` la rend explicite dans la base de données : un
+> export qui arriverait un jour en TTC se verrait, au lieu de décaler
+> silencieusement toutes les cibles de 10 %.
