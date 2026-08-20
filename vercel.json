@@ -1,9 +1,6 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-
-  "//": "La base Supabase est à Paris (eu-west-3). Sans ce réglage, Vercel exécute les fonctions à Washington (iad1) : chaque requête traversait l'Atlantique deux fois, soit ~90 ms perdues PAR requête, et une page en fait cinq à dix. C'était la cause principale de la lenteur ressentie.",
   "regions": ["cdg1"],
-
   "crons": [
     {
       "path": "/api/rappels?session=morning",
