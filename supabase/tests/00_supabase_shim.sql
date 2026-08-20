@@ -74,3 +74,38 @@ alter default privileges in schema public
   grant all on functions to anon, authenticated, service_role;
 alter default privileges in schema public
   grant all on sequences to anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------
+-- Coffre-fort Supabase (`vault`)
+--
+-- Reproduit la SURFACE de l'extension, pas son chiffrement : les valeurs
+-- sont stockées en clair. C'est volontaire — le harnais sert à vérifier
+-- que les fonctions lisent le bon secret et que personne d'autre n'y
+-- accède, pas à éprouver la cryptographie de Supabase.
+-- ---------------------------------------------------------------------
+create schema if not exists vault;
+
+create table if not exists vault.secrets (
+  id          uuid primary key default gen_random_uuid(),
+  name        text unique,
+  description text,
+  secret      text not null,
+  created_at  timestamptz not null default now()
+);
+
+create or replace view vault.decrypted_secrets as
+  select id, name, description, secret, secret as decrypted_secret, created_at
+  from vault.secrets;
+
+create or replace function vault.create_secret(
+  new_secret text,
+  new_name text default null,
+  new_description text default ''
+)
+returns uuid
+language sql
+as $$
+  insert into vault.secrets (secret, name, description)
+  values (new_secret, new_name, new_description)
+  returning id;
+$$;

@@ -1,6 +1,23 @@
+/**
+ * Clé publique VAPID de l'application.
+ *
+ * Elle est écrite ici EN CLAIR, et c'est correct : le navigateur la
+ * transmet de toute façon au service de notifications, elle est publique
+ * par construction. Seule sa jumelle privée signe les messages, et celle-là
+ * vit au coffre-fort de la base, hors du dépôt.
+ *
+ * L'inscrire dans le code plutôt que dans une variable d'hébergeur évite
+ * la seule chose qui restait à poser à la main pour que les rappels
+ * fonctionnent.
+ */
+const CLE_PUBLIQUE_VAPID =
+  'BHAiUD8ckLQ401igy87qYl8yPjaM6btdiZFlsWbdT75iCwAPZk8aKznIL_S8rJQ6_n2cPykpRfFcXUv0wfh2cOg';
+
 /** Clé publique VAPID, exposée au navigateur (elle n'a rien de secret). */
 export function getVapidPublicKey(): string | null {
-  return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || null;
+  // La variable d'environnement reste prioritaire : elle permet de faire
+  // tourner un second exemplaire de l'application avec ses propres clés.
+  return process.env.NEXT_PUBLIC_VAPID_PUBLIC_KEY || CLE_PUBLIQUE_VAPID;
 }
 
 /** Le format attendu par `pushManager.subscribe` est un Uint8Array. */

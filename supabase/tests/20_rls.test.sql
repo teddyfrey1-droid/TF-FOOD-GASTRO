@@ -720,4 +720,59 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 11. LES SECRETS DES RAPPELS SONT HORS DE PORTÉE ---'
+
+-- La clé privée VAPID signe les notifications : qui la détient peut en
+-- envoyer à tous les téléphones abonnés. Le secret d'appel, lui, ouvre la
+-- fonction Edge. Ni l'un ni l'autre ne doit être lisible par un compte
+-- applicatif, DIRECTEUR COMPRIS — seul le serveur en a l'usage.
+insert into vault.secrets (name, secret) values
+  ('vapid_private_key', 'cle-privee-de-test'),
+  ('vapid_public_key',  'cle-publique-de-test'),
+  ('rappels_cron_secret', 'secret-de-test')
+on conflict (name) do nothing;
+
+do $$
+declare
+  v_role text;
+begin
+  foreach v_role in array array['employee', 'directeur'] loop
+    perform set_config('request.jwt.claim.sub',
+      case v_role
+        when 'employee' then 'a0000000-0000-0000-0000-00000000000e'
+        else 'a0000000-0000-0000-0000-00000000000d'
+      end, true);
+
+    -- On prend le rôle applicatif pour que les droits d'exécution jouent.
+    execute 'set local role authenticated';
+
+    begin
+      perform public.mep_vapid_keys();
+      raise exception 'ÉCHEC — les clés VAPID sont lisibles par : %', v_role;
+    exception when insufficient_privilege then
+      raise notice 'OK   — clés VAPID refusées à : %', v_role;
+    end;
+
+    begin
+      perform public.mep_rappels_secret();
+      raise exception 'ÉCHEC — le secret des rappels est lisible par : %', v_role;
+    exception when insufficient_privilege then
+      raise notice 'OK   — secret des rappels refusé à : %', v_role;
+    end;
+
+    execute 'set local role none';
+  end loop;
+end
+$$;
+reset "request.jwt.claim.sub";
+
+-- Le coffre-fort lui-même reste fermé.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('Le coffre-fort est inaccessible, même au directeur',
+  'select decrypted_secret from vault.decrypted_secrets');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

@@ -1,14 +1,4 @@
 {
   "$schema": "https://openapi.vercel.sh/vercel.json",
-  "regions": ["cdg1"],
-  "crons": [
-    {
-      "path": "/api/rappels?session=morning",
-      "schedule": "30 6 * * *"
-    },
-    {
-      "path": "/api/rappels?session=afternoon",
-      "schedule": "0 14 * * *"
-    }
-  ]
+  "regions": ["cdg1"]
 }
