@@ -9,9 +9,10 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { saveCountLine, saveCountLines, submitCount } from '@/app/comptage/actions';
 import { clearSession, dequeue, enqueue, listPending, pendingKey } from '@/lib/offline/queue';
-import { ProductRow, isLineDone, type CountState } from './product-row';
+import { ProductRow, isLineDone, EMPTY_LINE, type CountState } from './product-row';
 import { CategoryPills } from './category-pills';
 import { ZoneTabs, ZONE_LABELS, type CountZone } from './zone-tabs';
+import { LienRetour } from '@/components/lien-retour';
 
 export interface CountProduct {
   id: string;
@@ -23,6 +24,7 @@ export interface CountProduct {
   inSaladbar: boolean;
   inFridge: boolean;
   notes: string | null;
+  imageUrl: string | null;
 }
 
 const AUTOSAVE_DELAY_MS = 600;
@@ -170,22 +172,33 @@ export function CountingScreen({
     [sessionId, refreshPending],
   );
 
+  /**
+   * Miroir synchrone de l'état.
+   *
+   * `update` doit rester STABLE d'un rendu à l'autre, sinon les lignes
+   * mémoïsées se redessineraient toutes. Il ne peut donc pas dépendre de
+   * `state` : il lit cette référence, tenue à jour au moment même de
+   * l'écriture. Et l'enregistrement sort du calcul d'état — un effet de
+   * bord n'a rien à faire dans une fonction que React peut rejouer.
+   */
+  const stateRef = useRef(state);
+
   const update = useCallback(
     (productId: string, patch: Partial<CountState>, touchedZone?: CountZone) => {
-      setState((current) => {
-        const previous = current[productId];
-        const next: CountState = {
-          ...previous,
-          ...patch,
-          // Seule la zone que l'employé vient de toucher est marquée relevée.
-          countedSaladbar:
-            previous.countedSaladbar || touchedZone === 'saladbar' || patch.isNotApplicable === true,
-          countedFridge:
-            previous.countedFridge || touchedZone === 'fridge' || patch.isNotApplicable === true,
-        };
-        void persist(productId, next);
-        return { ...current, [productId]: next };
-      });
+      const previous = stateRef.current[productId] ?? EMPTY_LINE;
+      const next: CountState = {
+        ...previous,
+        ...patch,
+        // Seule la zone que l'employé vient de toucher est marquée relevée.
+        countedSaladbar:
+          previous.countedSaladbar || touchedZone === 'saladbar' || patch.isNotApplicable === true,
+        countedFridge:
+          previous.countedFridge || touchedZone === 'fridge' || patch.isNotApplicable === true,
+      };
+
+      stateRef.current = { ...stateRef.current, [productId]: next };
+      setState(stateRef.current);
+      void persist(productId, next);
     },
     [persist],
   );
@@ -300,7 +313,11 @@ export function CountingScreen({
   return (
     <div className="pb-40">
       <header className="bg-background/95 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="px-5 pt-4 pb-3">
+        <div className="px-5 pt-2 pb-3">
+          {/* La saisie est enregistrée à chaque appui : quitter en cours de
+              comptage ne perd rien, et le bouton doit le montrer. */}
+          <LienRetour label="Quitter" className="mb-1" />
+
           <div className="flex items-baseline justify-between gap-3">
             <h1 className="text-2xl font-black tracking-tight">{title}</h1>
             <span className="text-muted-foreground shrink-0 text-sm font-bold tabular-nums">
@@ -383,7 +400,7 @@ export function CountingScreen({
                     product={product}
                     state={state[product.id]}
                     zone={zone}
-                    onChange={(patch) => update(product.id, patch, zone)}
+                    onChange={update}
                   />
                 ))}
               </div>

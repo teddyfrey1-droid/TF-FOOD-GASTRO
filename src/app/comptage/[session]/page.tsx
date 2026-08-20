@@ -65,6 +65,7 @@ export default async function CountPage({ params }: { params: Promise<{ session:
       inSaladbar: row.in_saladbar,
       inFridge: row.in_fridge,
       notes: row.notes,
+      imageUrl: row.image_url,
     }))
     .sort((a, b) => {
       const orderA = categoryById.get(a.categoryId)?.sort_order ?? 0;

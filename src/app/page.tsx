@@ -1,6 +1,7 @@
+import Link from 'next/link';
+import { ChevronRight, Settings2, UserRound } from 'lucide-react';
 import { requireUser, isManagerRole } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
-import { SignOutButton } from '@/components/pwa/sign-out-button';
 import { NotificationToggle } from '@/components/pwa/notification-toggle';
 import { SessionCard } from '@/components/session-card';
 import { BottomTabs } from '@/components/bottom-tabs';
@@ -55,17 +56,44 @@ export default async function HomePage() {
     }),
   );
 
+  const done = (['morning', 'afternoon'] as const).filter(
+    (kind) => bySession.get(kind)?.status === 'submitted',
+  ).length;
+  const pendingTasks = (tasks ?? []).filter((task) => !task.is_done).length;
+
+  const isManager = isManagerRole(user.role);
+
   return (
     <>
-      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-8 pb-28">
-        <header className="mb-8">
-          <p className="text-muted-foreground text-sm font-medium capitalize">
-            {DATE_FORMAT.format(today)}
-          </p>
-          <h1 className="mt-1 text-3xl font-black tracking-tight">Bonjour {user.fullName}</h1>
+      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-6 pb-28">
+        {/* En-tête façon Foodflow : le titre en très gras à gauche, l'état de
+            la journée dans une pastille verte à droite. */}
+        <header className="mb-7 flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="text-muted-foreground text-sm font-semibold capitalize">
+              {DATE_FORMAT.format(today)}
+            </p>
+            <h1 className="mt-1 truncate text-3xl font-black tracking-tight">
+              Bonjour {user.fullName.split(' ')[0]}
+            </h1>
+          </div>
+
+          <span
+            className={
+              done === 2
+                ? 'bg-primary text-primary-foreground flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-black'
+                : 'bg-alert text-alert-foreground flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-black'
+            }
+          >
+            {done === 2 ? '✓ Journée faite' : `${done}/2 comptages`}
+          </span>
         </header>
 
-        <div className="flex flex-col gap-4">
+        <h2 className="mb-3 text-xl font-black tracking-tight">
+          Aujourd&apos;hui <span className="text-muted-foreground">(2)</span>
+        </h2>
+
+        <div className="flex flex-col gap-3">
           <SessionCard
             kind="morning"
             title="Comptage du matin"
@@ -80,13 +108,45 @@ export default async function HomePage() {
           />
         </div>
 
-        <div className="mt-auto space-y-3 pt-10">
+        {pendingTasks > 0 ? (
+          <p className="text-muted-foreground mt-4 text-center text-sm font-semibold">
+            {pendingTasks} relance{pendingTasks > 1 ? 's' : ''} encore à produire aujourd&apos;hui.
+          </p>
+        ) : null}
+
+        {/* Les actions secondaires, en pilules pleine largeur : elles se
+            touchent au pouce sans viser, et ne concurrencent pas les deux
+            cartes de comptage. */}
+        <nav className="mt-auto space-y-2.5 pt-10">
+          <Link
+            href="/compte"
+            className="bg-muted/70 hover:bg-muted flex h-14 w-full items-center justify-between gap-3 rounded-2xl px-5 font-bold transition-colors"
+          >
+            <span className="flex items-center gap-3">
+              <UserRound className="size-5" strokeWidth={2.5} />
+              Mon compte
+            </span>
+            <ChevronRight className="text-muted-foreground size-4" />
+          </Link>
+
+          {isManager ? (
+            <Link
+              href="/admin"
+              className="bg-muted/70 hover:bg-muted flex h-14 w-full items-center justify-between gap-3 rounded-2xl px-5 font-bold transition-colors"
+            >
+              <span className="flex items-center gap-3">
+                <Settings2 className="size-5" strokeWidth={2.5} />
+                Gestion
+              </span>
+              <ChevronRight className="text-muted-foreground size-4" />
+            </Link>
+          ) : null}
+
           <NotificationToggle />
-          <SignOutButton />
-        </div>
+        </nav>
       </main>
 
-      <BottomTabs isManager={isManagerRole(user.role)} />
+      <BottomTabs isManager={isManager} />
     </>
   );
 }

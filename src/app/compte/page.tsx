@@ -7,10 +7,11 @@ import { BottomTabs } from '@/components/bottom-tabs';
 import { isManagerRole } from '@/lib/auth';
 import { Card } from '@/components/ui/card';
 import { buttonVariants } from '@/components/ui/button';
+import { LienRetour } from '@/components/lien-retour';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: 'Mon compte — MEP' };
+export const metadata = { title: 'Mon compte — Heiko' };
 
 export default async function AccountPage() {
   const user = await requireUser();
@@ -19,6 +20,7 @@ export default async function AccountPage() {
     <>
       <main className="mx-auto w-full max-w-md px-5 pt-8 pb-28">
         <header className="mb-7">
+          <LienRetour className="mb-2" />
           <h1 className="text-3xl font-black tracking-tight">Mon compte</h1>
           <p className="text-muted-foreground mt-1.5 text-sm">{user.email}</p>
         </header>

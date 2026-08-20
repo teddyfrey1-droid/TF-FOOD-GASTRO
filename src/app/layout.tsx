@@ -4,13 +4,13 @@ import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registra
 import { IOS_SPLASH_SCREENS, splashHref, splashMediaQuery } from '@/lib/pwa/splash-screens';
 
 export const metadata: Metadata = {
-  title: 'MEP — Mise en place',
+  title: 'Heiko — Mise en place',
   description: 'Comptage des stocks et relance de production, Heiko Poké Bowl Lafayette.',
-  applicationName: 'MEP',
+  applicationName: 'Heiko',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'MEP',
+    title: 'Heiko',
   },
   formatDetection: { telephone: false },
   manifest: '/manifest.webmanifest',

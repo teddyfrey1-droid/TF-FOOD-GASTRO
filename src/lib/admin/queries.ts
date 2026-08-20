@@ -129,7 +129,7 @@ export async function simulateTargets(caRef: number): Promise<SimulationRow[]> {
  * Compare, jour par jour, le CA réalisé au CA du même jour de semaine de
  * l'an dernier — exactement la référence qu'utilise la prévision.
  */
-export async function getObservedGrowth(from: string, to: string): Promise<GrowthObservation> {
+async function collectGrowthSamples(from: string, to: string): Promise<GrowthSample[]> {
   const supabase = await createClient();
 
   const { data: actuals } = await supabase
@@ -138,9 +138,7 @@ export async function getObservedGrowth(from: string, to: string): Promise<Growt
     .gte('date', from)
     .lte('date', to);
 
-  if (!actuals || actuals.length === 0) {
-    return { observedRate: null, sampleDays: 0, totalActual: 0, totalReference: 0 };
-  }
+  if (!actuals || actuals.length === 0) return [];
 
   const referenceByDate = new Map(
     actuals.map((row) => [row.date, referenceDateLastYear(row.date)] as const),
@@ -165,7 +163,11 @@ export async function getObservedGrowth(from: string, to: string): Promise<Growt
     });
   }
 
-  return observedGrowthRate(samples);
+  return samples;
+}
+
+export async function getObservedGrowth(from: string, to: string): Promise<GrowthObservation> {
+  return observedGrowthRate(await collectGrowthSamples(from, to));
 }
 
 export interface DailyCountStatus {
@@ -240,12 +242,19 @@ export async function getGrowthWindows(today: string): Promise<GrowthWindowResul
     { label: '12 derniers mois', days: 365 },
   ];
 
-  return Promise.all(
-    windows.map(async (window) => ({
+  // Les trois fenêtres se déduisent d'un SEUL jeu de données : la plus
+  // large les contient toutes. Interroger la base une fois par fenêtre
+  // coûtait six requêtes là où deux suffisent.
+  const widest = Math.max(...windows.map((window) => window.days));
+  const samples = await collectGrowthSamples(shiftDays(today, -widest), today);
+
+  return windows.map((window) => {
+    const since = shiftDays(today, -window.days);
+    return {
       ...window,
-      observation: await getObservedGrowth(shiftDays(today, -window.days), today),
-    })),
-  );
+      observation: observedGrowthRate(samples.filter((sample) => sample.date >= since)),
+    };
+  });
 }
 
 export interface RevenueCoverage {

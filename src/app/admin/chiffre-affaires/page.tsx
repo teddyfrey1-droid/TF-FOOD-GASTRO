@@ -41,25 +41,23 @@ export default async function RevenuePage({
     return date.toISOString().slice(0, 10);
   })();
 
-  const [settings, forecasts, actuals, history, growth] = await Promise.all([
+  // Le CA prévisionnel du mois entier arrive en UN appel. Le calculer jour
+  // par jour coûtait trente-et-un allers-retours pour afficher un tableau :
+  // c'était la première cause de lenteur de cet écran.
+  const [settings, forecasts, actuals, history, growth, computed] = await Promise.all([
     getRevenueSettings(),
     supabase.from('daily_forecast').select('*').gte('date', first).lte('date', last),
     supabase.from('revenue_actuals').select('*').gte('date', first).lte('date', last),
     supabase.from('revenue_history').select('date').limit(1),
     getObservedGrowth(growthWindowStart, today),
+    supabase.rpc('mep_forecast_range', { d_from: first, d_to: last }),
   ]);
 
   const forecastByDate = new Map((forecasts.data ?? []).map((row) => [row.date, row]));
   const actualByDate = new Map((actuals.data ?? []).map((row) => [row.date, row]));
-
-  // Le CA prévisionnel est calculé en base, jour par jour (§5.1).
-  const computed = await Promise.all(
-    days.map(async (date) => {
-      const { data } = await supabase.rpc('mep_forecast_revenue', { d: date });
-      return [date, toNullableNumber(data as number | null)] as const;
-    }),
+  const computedByDate = new Map(
+    (computed.data ?? []).map((row) => [row.date, toNullableNumber(row.forecast)] as const),
   );
-  const computedByDate = new Map(computed);
 
   const rows: MonthDay[] = days.map((date) => {
     const forecast = forecastByDate.get(date);

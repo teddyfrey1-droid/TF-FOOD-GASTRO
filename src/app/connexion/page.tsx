@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import { LoginForm } from './login-form';
 
 export const metadata = {
-  title: 'Connexion — MEP',
+  title: 'Connexion — Heiko',
 };
 
 export default async function LoginPage({
@@ -20,9 +20,9 @@ export default async function LoginPage({
               doit reconnaître où on est en un dixième de seconde. */}
           <div
             aria-hidden
-            className="bg-primary text-primary-foreground mx-auto flex size-16 items-center justify-center rounded-3xl text-2xl font-black shadow-sm"
+            className="bg-primary mx-auto flex size-16 items-center justify-center rounded-3xl text-3xl shadow-sm"
           >
-            MEP
+            🥗
           </div>
 
           <h1 className="mt-5 text-3xl font-black tracking-tight">Mise en place</h1>

@@ -47,6 +47,8 @@ const productSchema = z
     sort_order: z.coerce.number().int(),
     is_active: z.boolean(),
     notes: z.string().trim().max(500).nullable(),
+    // Adresse d'une photo. Vide : l'application affiche une vignette illustrée.
+    image_url: z.union([z.url(), z.literal('')]).nullable(),
   })
   .refine((data) => data.count_step === null || data.count_step > 0, {
     message: 'Le pas de comptage doit être strictement positif.',
@@ -105,6 +107,7 @@ function readForm(formData: FormData) {
     sort_order: String(formData.get('sort_order') ?? '0'),
     is_active: bool('is_active'),
     notes: text('notes'),
+    image_url: text('image_url'),
   };
 }
 
@@ -133,6 +136,7 @@ export async function saveProduct(
     // Le mode non retenu est vidé : pas de minimum manuel fantôme derrière un
     // produit repassé en automatique.
     min_qty_manual: values.min_mode === 'manual' ? values.min_qty_manual : null,
+    image_url: values.image_url || null,
   };
 
   const supabase = await createClient();

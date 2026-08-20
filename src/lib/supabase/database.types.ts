@@ -1,5 +1,5 @@
 /**
- * Types de la base MEP.
+ * Types de la base de données.
  *
  * Ce fichier est normalement REGÉNÉRÉ depuis le schéma, jamais édité à la main :
  *
@@ -57,6 +57,8 @@ type ProductRow = {
   /** DLC indicative (J, J+1, J+2, J+4). Stockée, non utilisée. */
   shelf_life_label: string | null;
   weight_per_bac_kg: number | null;
+  /** Photo du produit. Vide : l'application affiche une vignette illustrée. */
+  image_url: string | null;
   in_saladbar: boolean;
   in_fridge: boolean;
   sort_order: number;
@@ -85,6 +87,7 @@ type ProductForCountRow = {
   in_fridge: boolean;
   sort_order: number;
   notes: string | null;
+  image_url: string | null;
 };
 
 type RevenueHistoryRow = {
@@ -224,6 +227,7 @@ export type Database = {
         | 'prep_time_min'
         | 'weight_per_bac_kg'
         | 'shelf_life_label'
+        | 'image_url'
         | 'family'
         | 'unit'
         | 'base_qty'
@@ -332,6 +336,15 @@ export type Database = {
         }[];
       };
       mep_forecast_revenue: { Args: { d: string }; Returns: number | null };
+      /**
+       * Un mois de prévisions en un seul aller-retour.
+       * Appeler mep_forecast_revenue jour par jour coûtait trente-et-un
+       * allers-retours pour afficher un tableau.
+       */
+      mep_forecast_range: {
+        Args: { d_from: string; d_to: string };
+        Returns: { date: string; forecast: number | null }[];
+      };
       mep_reference_revenue: {
         Args: { d: string; p_session: SessionKind };
         Returns: number | null;

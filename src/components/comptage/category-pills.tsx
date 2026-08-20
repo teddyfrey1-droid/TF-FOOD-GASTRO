@@ -1,6 +1,7 @@
 'use client';
 
 import { cn } from '@/lib/utils';
+import { pictogrammeCategorie } from '@/lib/produits/vignette';
 
 /**
  * Pills de catégorie, collantes en haut et défilables horizontalement.
@@ -18,12 +19,18 @@ export function CategoryPills({
   return (
     <div className="-mx-5 overflow-x-auto px-5 [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
       <div className="flex w-max gap-2 pb-1">
-        <Pill label="Tout" active={active === null} onClick={() => onSelect(null)} />
+        <Pill
+          label="Tout"
+          emoji="✨"
+          active={active === null}
+          onClick={() => onSelect(null)}
+        />
 
         {categories.map((category) => (
           <Pill
             key={category.name}
             label={category.name}
+            emoji={pictogrammeCategorie(category.name)}
             badge={
               category.counted < category.total
                 ? `${category.counted}/${category.total}`
@@ -41,12 +48,15 @@ export function CategoryPills({
 
 function Pill({
   label,
+  emoji,
   badge,
   done,
   active,
   onClick,
 }: {
   label: string;
+  /** Le pictogramme se repère avant que le mot ne se lise. */
+  emoji?: string;
   badge?: string;
   done?: boolean;
   active: boolean;
@@ -64,6 +74,7 @@ function Pill({
           : 'bg-card text-muted-foreground border hover:text-foreground',
       )}
     >
+      {emoji ? <span aria-hidden>{emoji}</span> : null}
       {label}
       {badge ? (
         <span

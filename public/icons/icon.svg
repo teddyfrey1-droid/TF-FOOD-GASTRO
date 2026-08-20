@@ -1,10 +1,14 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="MEP">
-  <rect width="512" height="512" rx="112" fill="#0f172a"/>
-  <!-- Bac gastro vu de dessus, avec sa collerette. -->
-  <rect x="104" y="128" width="304" height="256" rx="28" fill="none" stroke="#f8fafc" stroke-width="20"/>
-  <rect x="144" y="168" width="224" height="176" rx="14" fill="#f8fafc" opacity="0.14"/>
-  <!-- Niveau de remplissage : la moitié, comme un seuil de relance. -->
-  <path d="M144 256h224v74a14 14 0 0 1-14 14H158a14 14 0 0 1-14-14z" fill="#38bdf8"/>
-  <text x="256" y="452" font-family="system-ui, -apple-system, Segoe UI, sans-serif"
-        font-size="72" font-weight="700" fill="#f8fafc" text-anchor="middle" letter-spacing="4">MEP</text>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Heiko">
+  <!-- Fond crème et vert cuisine : la palette de l'application, pour que
+       l'icône de l'écran d'accueil et le premier écran se répondent. -->
+  <rect width="512" height="512" rx="112" fill="#2f7d55"/>
+
+  <!-- Bol vu de trois quarts : c'est un poké, pas un tableur. -->
+  <path d="M104 232h304c0 92-68 152-152 152S104 324 104 232z" fill="#fdf8ef"/>
+  <path d="M104 232h304" stroke="#fdf8ef" stroke-width="26" stroke-linecap="round"/>
+
+  <!-- Garnitures, dans les couleurs des produits comptés. -->
+  <circle cx="196" cy="196" r="34" fill="#f6b93b"/>
+  <circle cx="268" cy="176" r="26" fill="#e4572e"/>
+  <circle cx="330" cy="200" r="30" fill="#8fbf5f"/>
 </svg>

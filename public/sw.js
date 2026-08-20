@@ -1,5 +1,5 @@
 /**
- * Service worker de l'application MEP.
+ * Service worker de l'application de mise en place.
  *
  * Objectif unique : permettre à un employé de compter dans une chambre froide
  * ou au sous-sol, sans réseau. Ce n'est pas un cache de performance.
@@ -124,7 +124,7 @@ self.addEventListener('push', (event) => {
     payload = { body: event.data ? event.data.text() : '' };
   }
 
-  const title = payload.title || 'MEP';
+  const title = payload.title || 'Mise en place';
   const options = {
     body: payload.body || 'Un comptage est à faire.',
     icon: '/icons/icon-192.png',

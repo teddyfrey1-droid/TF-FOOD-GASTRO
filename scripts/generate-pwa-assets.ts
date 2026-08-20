@@ -33,7 +33,9 @@ export const IOS_SCREENS = [
   { width: 1290, height: 2796, deviceWidth: 430, deviceHeight: 932, ratio: 3 },
 ] as const;
 
-const BACKGROUND = { r: 15, g: 23, b: 42, alpha: 1 };
+// Vert cuisine de l'application : l'écran de démarrage iOS doit prolonger
+// l'icône, pas afficher un aplat sombre qui n'existe nulle part ailleurs.
+const BACKGROUND = { r: 47, g: 125, b: 85, alpha: 1 };
 
 async function main(): Promise<void> {
   mkdirSync(ICONS, { recursive: true });

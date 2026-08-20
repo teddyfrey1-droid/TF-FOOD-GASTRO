@@ -104,7 +104,7 @@ export function NotificationToggle() {
   if (state === 'a-installer') {
     return (
       <p className="text-muted-foreground rounded-lg border border-dashed p-4 text-xs">
-        Pour recevoir les rappels de comptage, ajoutez d&apos;abord MEP à votre écran d&apos;accueil :
+        Pour recevoir les rappels de comptage, ajoutez d&apos;abord l&apos;application à votre écran d&apos;accueil :
         bouton <strong>Partager</strong> puis <strong>« Sur l&apos;écran d&apos;accueil »</strong>.
       </p>
     );

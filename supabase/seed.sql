@@ -29,7 +29,7 @@ insert into public.product_categories (name, sort_order) values
 on conflict (name) do update set sort_order = excluded.sort_order;
 
 -- ---------------------------------------------------------------------
--- Produits — 39 articles
+-- Produits — 37 articles
 --
 -- « Pastèque » figure deux fois, volontairement : une fois en ingrédient
 -- (comptée au gastro) et une fois en dessert (comptée à la pièce). Ce sont
@@ -79,9 +79,11 @@ from (values
   ('Bao',                  'Les plus',    'les_plus',      'piece',  1.7, '',     30),
 
   -- ---- Desserts ----
-  ('Sunny Bowl',           'Desserts',    'les_plus',      'piece',  0.4, '',     10),
-  ('Daily Bowl',           'Desserts',    'les_plus',      'piece',  0.3, '',     20),
-  ('Berry Bowl',           'Desserts',    'les_plus',      'piece',  1.0, '',     30),
+  -- On compte la BASE, pas le bowl assemblé : Sunny, Daily et Berry Bowl
+  -- se montent à la commande à partir de l'açaï et du pudding chia. La base
+  -- de l'açaï (1,7) est la somme des trois bowls qu'il remplace — un point
+  -- de départ, à corriger après une semaine d'observation.
+  ('Açaï',                 'Desserts',    'les_plus',      'piece',  1.7, '',      5),
   ('Pastèques',            'Desserts',    'les_plus',      'piece',  0.6, '',     40),
   ('Melon',                'Desserts',    'les_plus',      'piece',  0.3, '',     50),
   ('Ananas',               'Desserts',    'les_plus',      'piece',  0.3, '',     60),
@@ -89,7 +91,7 @@ from (values
   ('Tiramisu Jap',         'Desserts',    'les_plus',      'piece',  1.1, '',     80),
   ('Brookie',              'Desserts',    'les_plus',      'piece',  0.3, '',     90),
   ('Cœur coulant',         'Desserts',    'les_plus',      'piece',  0.1, '',    100),
-  ('Pudding chia',         'Desserts',    'les_plus',      'piece',  2.9, '',    110),
+  ('Pudding chia',         'Desserts',    'les_plus',      'piece',  2.9, '',      6),
   ('Nachos',               'Desserts',    'les_plus',      'piece',  0.3, '',    120)
 ) as d(name, category, family, unit, base_qty, shelf_life, sort_order)
 join public.product_categories c on c.name = d.category

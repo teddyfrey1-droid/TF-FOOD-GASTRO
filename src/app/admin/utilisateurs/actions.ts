@@ -32,6 +32,20 @@ export interface UserFormState {
   success?: string;
 }
 
+/**
+ * Message affiché quand la clé de service manque.
+ *
+ * Créer un compte pour quelqu'un d'autre est la SEULE opération de
+ * l'application qui l'exige : elle écrit dans le service d'authentification,
+ * hors de portée d'une clé publique. Plutôt qu'une erreur technique, on
+ * indique le geste exact à faire.
+ */
+const CLE_DE_SERVICE_MANQUANTE =
+  'Création de comptes indisponible : la clé de service Supabase n’est pas encore ' +
+  'renseignée sur Vercel. Réglages du projet → Environment Variables → ajouter ' +
+  'SUPABASE_SERVICE_ROLE_KEY (Supabase → Project Settings → API keys → service_role), ' +
+  'puis redéployer. Les autres réglages de cette page fonctionnent sans elle.';
+
 export async function createTeamMember(
   _state: UserFormState,
   formData: FormData,
@@ -53,7 +67,12 @@ export async function createTeamMember(
     return { error: parsed.error.issues[0]?.message ?? 'Formulaire invalide.' };
   }
 
-  const admin = createAdminClient();
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { error: CLE_DE_SERVICE_MANQUANTE };
+  }
 
   // `email_confirm` évite d'envoyer un e-mail de validation : en cuisine,
   // personne n'ira relever sa boîte pour activer un compte.
@@ -146,7 +165,13 @@ export async function resetMemberPassword(
   const parsed = passwordSchema.safeParse(password);
   if (!parsed.success) return { error: parsed.error.issues[0]?.message };
 
-  const admin = createAdminClient();
+  let admin: ReturnType<typeof createAdminClient>;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { error: CLE_DE_SERVICE_MANQUANTE };
+  }
+
   const { error } = await admin.auth.admin.updateUserById(userId, { password: parsed.data });
   if (error) return { error: `Réinitialisation impossible : ${error.message}` };
 

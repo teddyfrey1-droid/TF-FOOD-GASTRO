@@ -10,8 +10,8 @@ import type { MetadataRoute } from 'next';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'MEP — Mise en place',
-    short_name: 'MEP',
+    name: 'Heiko — Mise en place',
+    short_name: 'Heiko',
     description:
       'Comptage des stocks et relance de production — Heiko Poké Bowl Lafayette.',
     lang: 'fr',
@@ -20,8 +20,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: '/',
     display: 'standalone',
     orientation: 'portrait',
-    background_color: '#0f172a',
-    theme_color: '#0f172a',
+    background_color: '#2f7d55',
+    theme_color: '#2f7d55',
     categories: ['business', 'productivity', 'food'],
     icons: [
       { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },

@@ -1,10 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { BacStepper } from './bac-stepper';
+import { VignetteProduit } from '@/components/produits/vignette-produit';
 import { ZONE_LABELS, type CountZone } from './zone-tabs';
 import type { CountProduct } from './counting-screen';
 
@@ -19,7 +20,7 @@ export interface CountState {
   countedFridge: boolean;
 }
 
-const EMPTY: CountState = {
+export const EMPTY_LINE: CountState = {
   qtySaladbar: 0,
   qtyFridge: 0,
   isNotApplicable: false,
@@ -47,7 +48,7 @@ export function isLineDone(
  * minimum, et l'employé doit pouvoir constater ce qu'il a déjà saisi en haut
  * quand il compte en bas.
  */
-export function ProductRow({
+function ProductRowImpl({
   product,
   state,
   zone,
@@ -56,9 +57,14 @@ export function ProductRow({
   product: CountProduct;
   state: CountState | undefined;
   zone: CountZone;
-  onChange: (patch: Partial<CountState>) => void;
+  /**
+   * Volontairement (produit, zone, correctif) plutôt qu'un simple
+   * correctif : une fermeture recréée par ligne à chaque rendu rendrait la
+   * mémoïsation ci-dessous parfaitement inutile.
+   */
+  onChange: (productId: string, patch: Partial<CountState>, zone: CountZone) => void;
 }) {
-  const line = state ?? EMPTY;
+  const line = state ?? EMPTY_LINE;
   const zoneCounted = zone === 'saladbar' ? line.countedSaladbar : line.countedFridge;
   const [askingReason, setAskingReason] = useState(false);
   const [reason, setReason] = useState(line.notApplicableReason ?? '');
@@ -83,7 +89,14 @@ export function ProductRow({
         zoneCounted && !line.isNotApplicable && 'border-primary/40',
       )}
     >
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex items-center gap-3">
+        <VignetteProduit
+          name={product.name}
+          categoryName={product.categoryName}
+          imageUrl={product.imageUrl}
+          taille="sm"
+        />
+
         <div className="min-w-0 flex-1">
           <p className="text-[17px] leading-tight font-black">{product.name}</p>
           <p className="text-muted-foreground mt-0.5 text-xs font-medium">
@@ -98,7 +111,7 @@ export function ProductRow({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => onChange({ isNotApplicable: false, notApplicableReason: null })}
+            onClick={() => onChange(product.id, { isNotApplicable: false, notApplicableReason: null }, zone)}
           >
             Annuler
           </Button>
@@ -110,7 +123,7 @@ export function ProductRow({
               value={value}
               step={product.countStep}
               onChange={(next) =>
-                onChange(isSaladbar ? { qtySaladbar: next } : { qtyFridge: next })
+                onChange(product.id, isSaladbar ? { qtySaladbar: next } : { qtyFridge: next }, zone)
               }
             />
 
@@ -150,7 +163,7 @@ export function ProductRow({
               size="sm"
               disabled={reason.trim() === ''}
               onClick={() => {
-                onChange({ isNotApplicable: true, notApplicableReason: reason.trim() });
+                onChange(product.id, { isNotApplicable: true, notApplicableReason: reason.trim() }, zone);
                 setAskingReason(false);
               }}
             >
@@ -173,3 +186,10 @@ export function ProductRow({
     </div>
   );
 }
+
+/**
+ * Trente-neuf lignes à l'écran, et chaque appui sur un « + » change l'état
+ * global : sans cette mémoïsation, React redessinait les trente-neuf à
+ * chaque incrément. C'est ce qui donnait cette impression de ralenti.
+ */
+export const ProductRow = memo(ProductRowImpl);

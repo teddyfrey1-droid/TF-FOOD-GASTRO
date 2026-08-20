@@ -1,7 +1,7 @@
 import { WifiOff } from 'lucide-react';
 
 export const metadata = {
-  title: 'Hors ligne — MEP',
+  title: 'Hors ligne — Heiko',
 };
 
 /**

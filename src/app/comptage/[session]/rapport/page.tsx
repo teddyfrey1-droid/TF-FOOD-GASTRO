@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { buttonVariants } from '@/components/ui/button';
+import { LienRetour } from '@/components/lien-retour';
 import { ReorderReport, type ReportTask } from '@/components/comptage/reorder-report';
 import { SESSION_SLUGS, type SessionSlug } from '../../slugs';
 import { toNumber } from '@/lib/admin/mappers';
@@ -64,7 +65,9 @@ export default async function ReportPage({ params }: { params: Promise<{ session
   ).length;
 
   return (
-    <main className="mx-auto w-full max-w-md px-5 py-6">
+    <main className="mx-auto w-full max-w-md px-5 pt-4 pb-6">
+      <LienRetour className="mb-3" />
+
       <ReorderReport
         title={config.title}
         tasks={reorderTasks}

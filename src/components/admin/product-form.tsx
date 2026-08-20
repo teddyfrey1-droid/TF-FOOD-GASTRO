@@ -266,6 +266,22 @@ export function ProductForm({
             <FieldError message={errors.count_step} />
           </div>
 
+          <div className="space-y-2 sm:col-span-2">
+            <Label htmlFor="image_url">Photo (adresse web)</Label>
+            <Input
+              id="image_url"
+              name="image_url"
+              inputMode="url"
+              placeholder="https://…"
+              defaultValue={product?.image_url ?? ''}
+            />
+            <FieldError message={errors.image_url} />
+            <p className="text-muted-foreground text-xs">
+              Facultatif. Sans photo, l&apos;écran de comptage affiche une vignette illustrée
+              déduite du nom du produit.
+            </p>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="sort_order">Ordre d&apos;affichage</Label>
             <Input
