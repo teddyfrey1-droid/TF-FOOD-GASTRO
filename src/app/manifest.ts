@@ -10,10 +10,10 @@ import type { MetadataRoute } from 'next';
  */
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: 'Heiko — Mise en place',
-    short_name: 'Heiko',
+    name: 'Lafayette — Mise en place',
+    short_name: 'Lafayette',
     description:
-      'Comptage des stocks et relance de production — Heiko Poké Bowl Lafayette.',
+      'Comptage des stocks et relance de production — Poké Bowl Lafayette.',
     lang: 'fr',
     dir: 'ltr',
     start_url: '/',

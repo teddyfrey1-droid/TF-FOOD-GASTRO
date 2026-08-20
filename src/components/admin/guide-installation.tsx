@@ -123,7 +123,7 @@ export function GuideInstallation({ adresse }: { adresse: string }) {
               texte: (
                 <>
                   Touchez <strong>Ajouter</strong>. L&apos;icône verte apparaît sur
-                  l&apos;écran d&apos;accueil, sous le nom <strong>Heiko</strong>.
+                  l&apos;écran d&apos;accueil, sous le nom <strong>Lafayette</strong>.
                 </>
               ),
             },

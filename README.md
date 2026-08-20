@@ -1,6 +1,6 @@
 # MEP — Mise En Place
 
-Application de gestion des stocks de mise en place du restaurant **Heiko Poké Bowl**,
+Application de gestion des stocks de mise en place du restaurant **Lafayette** (Heiko Poké Bowl, 76 rue La Fayette, Paris 9ᵉ),
 76 rue La Fayette, Paris 9e.
 
 L'application répond à une seule question, deux fois par jour :
@@ -425,7 +425,7 @@ cp .env.example .env.local   # puis remplir les valeurs
 | `SUPABASE_DB_URL` | Connexion directe, pour les migrations et la génération des types |
 | `NEXT_PUBLIC_VAPID_PUBLIC_KEY` | Clé publique des notifications push (facultatif) |
 | `VAPID_PRIVATE_KEY` | Clé privée des notifications push (facultatif) |
-| `VAPID_SUBJECT` | Contact du responsable, ex. `mailto:directeur@heiko.fr` |
+| `VAPID_SUBJECT` | Contact du responsable, ex. `mailto:directeur@lafayette.fr` |
 | `CRON_SECRET` | Protège `/api/rappels`. Sans lui, n'importe qui pourrait notifier l'équipe |
 
 ### Base de données

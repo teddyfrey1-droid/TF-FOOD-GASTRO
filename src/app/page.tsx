@@ -1,10 +1,11 @@
-import Link from 'next/link';
-import { ChevronRight, Settings2, UserRound } from 'lucide-react';
-import { requireUser, isManagerRole } from '@/lib/auth';
+import { requireUser } from '@/lib/auth';
+import { isStaffLeadRole } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { NotificationToggle } from '@/components/pwa/notification-toggle';
 import { SessionCard } from '@/components/session-card';
 import { BottomTabs } from '@/components/bottom-tabs';
+import { AvatarCompte } from '@/components/avatar-compte';
+import { PastilleEtat } from '@/components/rangee-menu';
 import { todayInParis } from '@/lib/format';
 import type { SessionKind } from '@/lib/supabase/database.types';
 
@@ -23,8 +24,6 @@ export default async function HomePage() {
   const user = await requireUser();
   const supabase = await createClient();
 
-  // La RLS ne laisse passer que les sessions DU JOUR (§6.2 : l'accueil doit
-  // indiquer qui a fait le comptage, pas seulement s'il est fait).
   // `toISOString()` donne la date UTC : entre minuit et 2 h à Paris, elle
   // vaut encore la veille, et l'accueil interrogeait alors le comptage
   // d'hier. La base raisonne en heure de Paris, l'application aussi.
@@ -68,36 +67,54 @@ export default async function HomePage() {
   ).length;
   const pendingTasks = (tasks ?? []).filter((task) => !task.is_done).length;
 
-  const isManager = isManagerRole(user.role);
+  const prenom = user.fullName.trim().split(/\s+/)[0] || user.fullName;
 
   return (
     <>
-      <main className="pt-safe-header mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-6 pb-28">
-        {/* En-tête façon Foodflow : le titre en très gras à gauche, l'état de
-            la journée dans une pastille verte à droite. */}
-        <header className="mb-7 flex items-start justify-between gap-3">
+      <main className="pt-safe-header mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-4 pb-28">
+        <header className="mb-6 flex items-center justify-between gap-3">
           <div className="min-w-0">
-            <p className="text-muted-foreground text-sm font-semibold capitalize">
+            <p className="text-muted-foreground text-sm font-bold capitalize">
               {DATE_FORMAT.format(today)}
             </p>
-            <h1 className="mt-1 truncate text-3xl font-black tracking-tight">
-              Bonjour {user.fullName.trim().split(/\s+/)[0] || user.fullName}
+            <h1 className="mt-0.5 truncate text-[28px] leading-tight font-black tracking-tight">
+              Bonjour {prenom}
             </h1>
           </div>
 
-          <span
-            className={
-              done === 2
-                ? 'bg-primary text-primary-foreground flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-black'
-                : 'bg-alert text-alert-foreground flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-black'
-            }
-          >
-            {done === 2 ? '✓ Journée faite' : `${done}/2 comptages`}
-          </span>
+          <AvatarCompte nom={user.fullName} />
         </header>
 
-        <h2 className="mb-3 text-xl font-black tracking-tight">
-          Aujourd&apos;hui <span className="text-muted-foreground">(2)</span>
+        {/* L'état de la journée en un coup d'œil, avant même de lire les
+            cartes : c'est la seule question qu'on se pose en arrivant. */}
+        <div
+          className={
+            done === 2 && pendingTasks === 0
+              ? 'bg-primary text-primary-foreground mb-6 rounded-3xl p-5'
+              : 'bg-alert text-alert-foreground mb-6 rounded-3xl p-5'
+          }
+        >
+          <p className="text-2xl leading-tight font-black">
+            {done === 2 && pendingTasks === 0
+              ? 'Tout est à jour.'
+              : done === 2
+                ? `${pendingTasks} relance${pendingTasks > 1 ? 's' : ''} à produire`
+                : done === 1
+                  ? 'Un comptage reste à faire'
+                  : 'Les deux comptages restent à faire'}
+          </p>
+          <p className="mt-1 text-sm font-semibold opacity-80">
+            {done === 2 && pendingTasks === 0
+              ? 'Les deux comptages sont validés, rien ne manque.'
+              : done === 2
+                ? 'Les comptages sont faits — il reste la production.'
+                : `${done} comptage sur 2 validé aujourd’hui.`}
+          </p>
+        </div>
+
+        <h2 className="mb-3 flex items-center gap-2 text-xl font-black tracking-tight">
+          Aujourd&apos;hui
+          <PastilleEtat texte={`${done}/2`} ton={done === 2 ? 'fait' : 'alerte'} />
         </h2>
 
         <div className="flex flex-col gap-3">
@@ -115,45 +132,12 @@ export default async function HomePage() {
           />
         </div>
 
-        {pendingTasks > 0 ? (
-          <p className="text-muted-foreground mt-4 text-center text-sm font-semibold">
-            {pendingTasks} relance{pendingTasks > 1 ? 's' : ''} encore à produire aujourd&apos;hui.
-          </p>
-        ) : null}
-
-        {/* Les actions secondaires, en pilules pleine largeur : elles se
-            touchent au pouce sans viser, et ne concurrencent pas les deux
-            cartes de comptage. */}
-        <nav className="mt-auto space-y-2.5 pt-10">
-          <Link
-            href="/compte"
-            className="bg-muted/70 hover:bg-muted flex h-14 w-full items-center justify-between gap-3 rounded-2xl px-5 font-bold transition-colors"
-          >
-            <span className="flex items-center gap-3">
-              <UserRound className="size-5" strokeWidth={2.5} />
-              Mon compte
-            </span>
-            <ChevronRight className="text-muted-foreground size-4" />
-          </Link>
-
-          {isManager ? (
-            <Link
-              href="/admin"
-              className="bg-muted/70 hover:bg-muted flex h-14 w-full items-center justify-between gap-3 rounded-2xl px-5 font-bold transition-colors"
-            >
-              <span className="flex items-center gap-3">
-                <Settings2 className="size-5" strokeWidth={2.5} />
-                Gestion
-              </span>
-              <ChevronRight className="text-muted-foreground size-4" />
-            </Link>
-          ) : null}
-
+        <div className="mt-auto pt-8">
           <NotificationToggle />
-        </nav>
+        </div>
       </main>
 
-      <BottomTabs isManager={isManager} />
+      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} />
     </>
   );
 }

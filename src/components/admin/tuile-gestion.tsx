@@ -3,11 +3,16 @@ import { ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
- * Une tuile du menu Gestion.
+ * Une rangée du sommaire Gestion.
  *
- * Un pictogramme se reconnaît avant qu'un mot ne se lise, et la phrase en
- * dessous dit à quoi sert l'écran — pas ce qu'il contient. « Produits » ne
- * dit rien ; « noms, bases, seuils, zones » dit quand y aller.
+ * Même motif que l'écran « Mon compte », et que les applications que
+ * l'équipe utilise déjà : pastille d'icône claire à gauche, libellé en
+ * gras, chevron à droite. Des rangées empilées se parcourent plus vite
+ * qu'une grille de cartes — l'œil suit une seule colonne.
+ *
+ * La phrase du dessous dit à quoi sert l'écran, pas ce qu'il contient :
+ * « Produits » n'apprend rien ; « noms, bases, seuils, zones » dit quand
+ * y aller.
  */
 export function TuileGestion({
   href,
@@ -28,43 +33,42 @@ export function TuileGestion({
   return (
     <Link
       href={href}
-      className={cn(
-        'group flex items-center gap-3.5 rounded-3xl border p-4 transition-colors',
-        alerte ? 'border-amber-500/50 bg-amber-500/[0.06]' : 'bg-card hover:bg-muted/50',
-      )}
+      className="hover:bg-muted/60 active:bg-muted flex min-h-16 items-center gap-3.5 rounded-2xl px-3 py-2.5 transition-colors"
     >
       <span
         aria-hidden
-        className="bg-primary/10 flex size-12 shrink-0 items-center justify-center rounded-2xl text-2xl"
+        className={cn(
+          'flex size-11 shrink-0 items-center justify-center rounded-xl text-xl',
+          alerte ? 'bg-alert' : 'bg-muted',
+        )}
       >
         {emoji}
       </span>
 
       <span className="min-w-0 flex-1">
-        <span className="flex items-center gap-2">
-          <span className="font-black">{titre}</span>
-          {badge ? (
-            <span
-              className={cn(
-                'rounded-full px-2 py-0.5 text-[11px] font-black tabular-nums',
-                alerte ? 'bg-amber-500 text-white' : 'bg-muted text-muted-foreground',
-              )}
-            >
-              {badge}
-            </span>
-          ) : null}
-        </span>
-        <span className="text-muted-foreground mt-0.5 block text-xs font-semibold">
+        <span className="block text-[17px] leading-tight font-bold">{titre}</span>
+        <span className="text-muted-foreground mt-0.5 block truncate text-[13px] font-medium">
           {description}
         </span>
       </span>
 
-      <ChevronRight className="text-muted-foreground/60 group-hover:text-foreground size-5 shrink-0" />
+      {badge ? (
+        <span
+          className={cn(
+            'shrink-0 rounded-full px-3 py-1.5 text-xs font-black tabular-nums',
+            alerte ? 'bg-alert text-alert-foreground' : 'bg-muted text-muted-foreground',
+          )}
+        >
+          {badge}
+        </span>
+      ) : null}
+
+      <ChevronRight className="text-muted-foreground/60 size-5 shrink-0" strokeWidth={2.5} />
     </Link>
   );
 }
 
-/** Un intertitre de section, avec son décompte. */
+/** Un groupe de rangées, avec son intertitre. */
 export function SectionGestion({
   titre,
   children,
@@ -73,11 +77,9 @@ export function SectionGestion({
   children: React.ReactNode;
 }) {
   return (
-    <section>
-      <h2 className="text-muted-foreground mb-2.5 text-xs font-black tracking-wider uppercase">
-        {titre}
-      </h2>
-      <div className="grid gap-2.5 sm:grid-cols-2">{children}</div>
+    <section className="space-y-1">
+      <h2 className="text-muted-foreground px-3 pb-1 text-sm font-bold">{titre}</h2>
+      <div className="bg-card space-y-0.5 rounded-3xl border p-1.5">{children}</div>
     </section>
   );
 }

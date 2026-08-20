@@ -2,31 +2,29 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClipboardList, Home, Settings2, UserRound } from 'lucide-react';
+import { ClipboardList, Home, Settings2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
  * Barre d'onglets en bas, jamais de menu hamburger : sur iPhone, le pouce
  * atteint le bas de l'écran, pas le coin haut-gauche.
+ *
+ * « Mon compte » n'y figure plus : il vit dans l'avatar en haut à droite,
+ * comme partout ailleurs. Moins d'onglets, donc des cibles plus larges pour
+ * les deux qui servent vraiment.
  */
-export function BottomTabs({ isManager }: { isManager: boolean }) {
+export function BottomTabs({ isStaffLead }: { isStaffLead: boolean }) {
   const pathname = usePathname();
 
   const tabs = [
     { href: '/', label: 'Accueil', icon: Home, match: (p: string) => p === '/' },
     {
-      href: '/comptage/matin',
+      href: '/comptage',
       label: 'Comptage',
       icon: ClipboardList,
       match: (p: string) => p.startsWith('/comptage'),
     },
-    {
-      href: '/compte',
-      label: 'Mon compte',
-      icon: UserRound,
-      match: (p: string) => p.startsWith('/compte'),
-    },
-    ...(isManager
+    ...(isStaffLead
       ? [
           {
             href: '/admin',
@@ -51,11 +49,11 @@ export function BottomTabs({ isManager }: { isManager: boolean }) {
                 href={tab.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'no-select flex h-14 flex-col items-center justify-center gap-0.5 text-[11px] font-semibold transition-colors',
-                  active ? 'text-foreground' : 'text-muted-foreground',
+                  'no-select flex h-16 flex-col items-center justify-center gap-1 text-xs font-bold transition-colors',
+                  active ? 'text-primary' : 'text-muted-foreground',
                 )}
               >
-                <Icon className="size-5" strokeWidth={active ? 2.5 : 2} />
+                <Icon className="size-6" strokeWidth={active ? 2.6 : 2} />
                 {tab.label}
               </Link>
             </li>

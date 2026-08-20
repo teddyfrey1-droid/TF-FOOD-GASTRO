@@ -4,7 +4,7 @@ import { CategoriesManager, type CategoryRow } from '@/components/admin/categori
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: 'Catégories — Heiko' };
+export const metadata = { title: 'Catégories — Lafayette' };
 
 export default async function CategoriesPage() {
   await requireManager();

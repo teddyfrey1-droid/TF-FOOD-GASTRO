@@ -2,7 +2,15 @@ import { createServerClient } from '@supabase/ssr';
 import { NextResponse, type NextRequest } from 'next/server';
 
 /** Chemins d'authentification : accessibles déconnecté, inutiles une fois connecté. */
-const AUTH_PATHS = ['/connexion', '/mot-de-passe-oublie'];
+const AUTH_PATHS = [
+  '/connexion',
+  '/mot-de-passe-oublie',
+  // Le lien d'activation arrive avec son jeton dans le FRAGMENT de l'URL
+  // (`#access_token=…`), que le navigateur n'envoie jamais au serveur. Vu
+  // d'ici la personne est donc anonyme : sans cette entrée, elle serait
+  // renvoyée à la connexion avant d'avoir pu choisir son mot de passe.
+  '/definir-mot-de-passe',
+];
 
 /**
  * Chemins toujours accessibles, connecté ou non.
@@ -11,8 +19,14 @@ const AUTH_PATHS = ['/connexion', '/mot-de-passe-oublie'];
  */
 const ALWAYS_PUBLIC_PATHS = ['/hors-ligne'];
 
-/** Chemins réservés au directeur et au propriétaire. */
-const MANAGER_PATHS = ['/admin'];
+/**
+ * Le back-office s'ouvre à l'ENCADREMENT — assistant manager compris, qui y
+ * consulte l'historique des comptages. Chaque page pose ensuite sa propre
+ * garde : la barrière du chiffre d'affaires reste `requireManager`, ici et
+ * en base.
+ */
+const STAFF_LEAD_PATHS = ['/admin'];
+const STAFF_LEAD_ROLES = ['assistant_manager', 'manager', 'owner'];
 
 export async function updateSession(request: NextRequest) {
   let response = NextResponse.next({ request });
@@ -67,14 +81,14 @@ export async function updateSession(request: NextRequest) {
   // Le back-office est rejoué ici pour éviter un aller-retour inutile, mais
   // la vraie protection reste la RLS : même en forçant l'URL, un employé ne
   // récupérerait aucune donnée.
-  if (user && MANAGER_PATHS.some((path) => pathname.startsWith(path))) {
+  if (user && STAFF_LEAD_PATHS.some((path) => pathname.startsWith(path))) {
     const { data: profile } = await supabase
       .from('profiles')
       .select('role, is_active')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (!profile?.is_active || !['manager', 'owner'].includes(profile.role)) {
+    if (!profile?.is_active || !STAFF_LEAD_ROLES.includes(profile.role)) {
       const url = request.nextUrl.clone();
       url.pathname = '/';
       url.search = '';

@@ -140,6 +140,57 @@ export async function createTeamMember(
   return { success: `${parsed.data.fullName} peut se connecter dès maintenant.` };
 }
 
+/** Adresse publique du site, pour le retour du lien d'activation. */
+function adresseDuSite(): string {
+  return (
+    process.env.NEXT_PUBLIC_SITE_URL ??
+    (process.env.VERCEL_PROJECT_PRODUCTION_URL
+      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
+      : 'https://tf-food-gastro.vercel.app')
+  );
+}
+
+/**
+ * Envoie à l'employé un lien pour choisir son mot de passe.
+ *
+ * On passe par le courriel de RÉINITIALISATION, et non par une invitation :
+ * l'invitation exige la clé de service, la réinitialisation se contente de
+ * la clé publique. Le résultat est le même pour la personne qui reçoit le
+ * message — un lien, un mot de passe à choisir.
+ *
+ * ⚠️ Le service d'envoi intégré de Supabase est limité à quelques messages
+ * par heure. C'est suffisant pour créer une équipe, pas pour un usage
+ * répété : le message le dit si la limite est atteinte.
+ */
+export async function envoyerLienActivation(
+  email: string,
+): Promise<{ error?: string; success?: string }> {
+  try {
+    await requireManagerOrThrow();
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Accès refusé.' };
+  }
+
+  const parsed = z.email().safeParse(email.trim());
+  if (!parsed.success) return { error: 'Adresse e-mail invalide.' };
+
+  const { error } = await createSignUpClient().auth.resetPasswordForEmail(parsed.data, {
+    redirectTo: `${adresseDuSite()}/definir-mot-de-passe`,
+  });
+
+  if (error) {
+    if (/rate|limit|too many|seconds/i.test(error.message)) {
+      return {
+        error:
+          'Trop d’e-mails envoyés d’affilée. Le service de Supabase n’en accepte que quelques-uns par heure : patientez avant de réessayer.',
+      };
+    }
+    return { error: `Envoi impossible : ${error.message}` };
+  }
+
+  return { success: `Lien envoyé à ${parsed.data}. Il est valable une heure.` };
+}
+
 export async function setMemberRole(userId: string, role: UserRole): Promise<{ error?: string }> {
   try {
     await requireManagerOrThrow();

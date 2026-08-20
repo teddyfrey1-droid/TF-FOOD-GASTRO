@@ -1,16 +1,17 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
+import { RattrapageLienActivation } from '@/components/pwa/rattrapage-lien-activation';
 import { IOS_SPLASH_SCREENS, splashHref, splashMediaQuery } from '@/lib/pwa/splash-screens';
 
 export const metadata: Metadata = {
-  title: 'Heiko — Mise en place',
-  description: 'Comptage des stocks et relance de production, Heiko Poké Bowl Lafayette.',
-  applicationName: 'Heiko',
+  title: 'Lafayette — Mise en place',
+  description: 'Comptage des stocks et relance de production, Poké Bowl Lafayette.',
+  applicationName: 'Lafayette',
   appleWebApp: {
     capable: true,
     statusBarStyle: 'default',
-    title: 'Heiko',
+    title: 'Lafayette',
   },
   formatDetection: { telephone: false },
   manifest: '/manifest.webmanifest',
@@ -62,6 +63,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
       <body className="bg-background text-foreground antialiased">
         {children}
         <ServiceWorkerRegistrar />
+        <RattrapageLienActivation />
       </body>
     </html>
   );

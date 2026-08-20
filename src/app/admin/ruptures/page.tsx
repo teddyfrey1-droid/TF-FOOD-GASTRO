@@ -8,7 +8,7 @@ import { RupturesTable, type RuptureRow } from '@/components/admin/ruptures-tabl
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: 'Ruptures — Heiko' };
+export const metadata = { title: 'Ruptures — Lafayette' };
 
 const FENETRES = [
   { jours: 14, label: '14 jours' },

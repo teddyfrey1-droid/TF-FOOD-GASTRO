@@ -4,7 +4,7 @@ import { PhotosManager, type PhotoRow } from '@/components/admin/photos-manager'
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: 'Photos — Heiko' };
+export const metadata = { title: 'Photos — Lafayette' };
 
 export default async function PhotosPage() {
   await requireManager();

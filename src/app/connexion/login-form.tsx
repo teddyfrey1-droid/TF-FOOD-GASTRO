@@ -51,7 +51,7 @@ export function LoginForm({ suite }: { suite?: string }) {
           autoCorrect="off"
           spellCheck={false}
           required
-          placeholder="prenom@heiko.fr"
+          placeholder="prenom@lafayette.fr"
           className="h-13 rounded-2xl px-4 text-base"
         />
       </div>

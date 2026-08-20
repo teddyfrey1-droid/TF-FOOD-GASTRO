@@ -1,0 +1,142 @@
+'use client';
+
+import { useEffect, useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Button, buttonVariants } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { createClient } from '@/lib/supabase/client';
+
+type Etat = 'verification' | 'pret' | 'lien-invalide' | 'enregistre';
+
+/**
+ * Choix du mot de passe, au bout du lien d'activation.
+ *
+ * Le lien reçu par courriel porte son jeton dans le FRAGMENT de l'URL
+ * (`#access_token=…`). Un fragment n'est jamais transmis au serveur : c'est
+ * donc le client Supabase, dans le navigateur, qui le récupère et ouvre la
+ * session. On attend cette session avant d'afficher quoi que ce soit —
+ * sinon on proposerait un formulaire qui échouerait à l'envoi.
+ */
+export function DefinirMotDePasse() {
+  const router = useRouter();
+  const [etat, setEtat] = useState<Etat>('verification');
+  const [motDePasse, setMotDePasse] = useState('');
+  const [visible, setVisible] = useState(false);
+  const [erreur, setErreur] = useState<string | null>(null);
+  const [envoi, setEnvoi] = useState(false);
+
+  useEffect(() => {
+    const supabase = createClient();
+
+    // `getSession` suffit ici : on ne cherche pas à faire confiance au
+    // jeton, seulement à savoir si le lien en a déposé un. Toute écriture
+    // passera ensuite par le serveur, qui le revalide.
+    supabase.auth.getSession().then(({ data }) => {
+      setEtat(data.session ? 'pret' : 'lien-invalide');
+    });
+
+    // Le client traite le fragment de façon asynchrone : cet écouteur
+    // rattrape le cas où la session arrive après le premier examen.
+    const { data: ecoute } = supabase.auth.onAuthStateChange((_evenement, session) => {
+      if (session) setEtat((actuel) => (actuel === 'enregistre' ? actuel : 'pret'));
+    });
+
+    return () => ecoute.subscription.unsubscribe();
+  }, []);
+
+  async function enregistrer(evenement: React.FormEvent) {
+    evenement.preventDefault();
+    setErreur(null);
+
+    if (motDePasse.length < 8) {
+      setErreur('Le mot de passe doit faire au moins 8 caractères.');
+      return;
+    }
+
+    setEnvoi(true);
+    const supabase = createClient();
+    const { error } = await supabase.auth.updateUser({ password: motDePasse });
+    setEnvoi(false);
+
+    if (error) {
+      setErreur(`Enregistrement impossible : ${error.message}`);
+      return;
+    }
+
+    setEtat('enregistre');
+    router.replace('/');
+    router.refresh();
+  }
+
+  if (etat === 'verification') {
+    return (
+      <p className="text-muted-foreground flex items-center justify-center gap-2 py-6 text-sm">
+        <Loader2 className="size-4 animate-spin" />
+        Vérification du lien…
+      </p>
+    );
+  }
+
+  if (etat === 'lien-invalide') {
+    return (
+      <div className="space-y-4 text-center">
+        <p className="font-bold">Ce lien n&apos;est plus valable.</p>
+        <p className="text-muted-foreground text-sm leading-relaxed">
+          Les liens d&apos;activation expirent au bout d&apos;une heure, et ne servent
+          qu&apos;une fois. Demandez à votre directeur de vous en renvoyer un.
+        </p>
+        <Link href="/connexion" className={buttonVariants({ variant: 'outline', className: 'w-full' })}>
+          Retour à la connexion
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <form onSubmit={enregistrer} className="space-y-4">
+      <div className="space-y-2">
+        <Label htmlFor="motDePasse" className="text-sm font-semibold">
+          Nouveau mot de passe
+        </Label>
+        <div className="relative">
+          <Input
+            id="motDePasse"
+            type={visible ? 'text' : 'password'}
+            value={motDePasse}
+            onChange={(evenement) => setMotDePasse(evenement.target.value)}
+            autoComplete="new-password"
+            autoCapitalize="none"
+            required
+            className="h-13 rounded-2xl px-4 pr-14 text-base"
+          />
+          <button
+            type="button"
+            onClick={() => setVisible((v) => !v)}
+            aria-label={visible ? 'Masquer le mot de passe' : 'Afficher le mot de passe'}
+            aria-pressed={visible}
+            className="text-muted-foreground hover:text-foreground no-select absolute top-1/2 right-1 flex size-12 -translate-y-1/2 touch-manipulation items-center justify-center rounded-xl transition-colors"
+          >
+            {visible ? <EyeOff className="size-5" /> : <Eye className="size-5" />}
+          </button>
+        </div>
+        <p className="text-muted-foreground text-xs">Au moins 8 caractères.</p>
+      </div>
+
+      {erreur ? (
+        <p
+          role="alert"
+          className="bg-destructive/10 text-destructive rounded-2xl px-4 py-3 text-sm font-semibold"
+        >
+          {erreur}
+        </p>
+      ) : null}
+
+      <Button type="submit" disabled={envoi} className="h-13 w-full rounded-2xl text-base font-bold">
+        {envoi ? <Loader2 className="size-5 animate-spin" /> : 'Enregistrer et entrer'}
+      </Button>
+    </form>
+  );
+}

@@ -22,6 +22,9 @@ create table if not exists auth.users (
   -- migration qui la renseigne passe en local et casse en production.
   confirmed_at       timestamptz generated always as
                        (least(email_confirmed_at, phone_confirmed_at)) stored,
+  -- Renseignée par GoTrue à chaque connexion réussie ; l'écran Équipe
+  -- l'affiche pour repérer les comptes jamais activés.
+  last_sign_in_at    timestamptz,
   created_at         timestamptz not null default now()
 );
 

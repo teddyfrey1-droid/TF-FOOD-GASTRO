@@ -1,6 +1,7 @@
 'use client';
 
 import { useTransition } from 'react';
+import { LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { signOut } from '@/app/connexion/actions';
@@ -27,7 +28,13 @@ export function SignOutButton({
       type="button"
       variant={variant}
       disabled={pending}
-      className={cn(className)}
+      // Pastille pleine largeur, en rouge doux : bien visible sans crier.
+      // Une déconnexion doit se trouver sans chercher, et ne jamais se
+      // déclencher par mégarde en visant autre chose.
+      className={cn(
+        'text-destructive hover:bg-destructive/10 hover:text-destructive h-12 w-full rounded-full text-sm font-black',
+        className,
+      )}
       onClick={() =>
         startTransition(async () => {
           await clearServiceWorkerCache();
@@ -35,6 +42,7 @@ export function SignOutButton({
         })
       }
     >
+      <LogOut className="size-4" strokeWidth={2.6} />
       {pending ? 'Déconnexion…' : 'Se déconnecter'}
     </Button>
   );

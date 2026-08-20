@@ -4,7 +4,7 @@ import { LienRetour } from '@/components/lien-retour';
 
 export const dynamic = 'force-dynamic';
 
-export const metadata = { title: "Installer l'application — Heiko" };
+export const metadata = { title: "Installer l'application — Lafayette" };
 
 export default async function InstallerPage() {
   // Accessible à TOUTE l'équipe : ce sont les employés qui installent

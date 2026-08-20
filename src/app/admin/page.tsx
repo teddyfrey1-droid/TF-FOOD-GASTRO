@@ -247,12 +247,6 @@ export default async function DashboardPage() {
           titre="Installer l'application"
           description="La mettre sur l'écran d'accueil des téléphones"
         />
-        <TuileGestion
-          href="/compte"
-          emoji="🔑"
-          titre="Mon compte"
-          description="Changer mon mot de passe"
-        />
       </SectionGestion>
 
       {sansBase > 0 || tousEnPrioriteParDefaut ? (

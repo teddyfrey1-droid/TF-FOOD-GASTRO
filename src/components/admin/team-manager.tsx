@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Check, KeyRound, UserPlus, X } from 'lucide-react';
+import { Check, KeyRound, Mail, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -13,6 +13,7 @@ import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '@/lib/roles';
 import {
   createTeamMember,
   resetMemberPassword,
+  envoyerLienActivation,
   setMemberActive,
   setMemberRole,
   type UserFormState,
@@ -22,9 +23,14 @@ import type { UserRole } from '@/lib/supabase/database.types';
 export interface TeamMember {
   id: string;
   fullName: string;
+  /** Nulle si le compte a été créé sans adresse : le lien d'activation
+      n'a alors nulle part où aller, et le bouton reste inerte. */
+  email: string | null;
   role: UserRole;
   isActive: boolean;
   isMe: boolean;
+  /** Jamais connecté = le compte attend encore son mot de passe. */
+  lastSignInAt: string | null;
 }
 
 const ROLES: UserRole[] = ['employee', 'assistant_manager', 'manager', 'owner'];
@@ -204,7 +210,12 @@ function MemberRow({ member }: { member: TeamMember }) {
             {ROLE_LABELS[member.role]}
           </span>
           {!member.isActive ? (
-            <span className="text-muted-foreground ml-2 text-xs">· en attente</span>
+            <span className="text-muted-foreground ml-2 text-xs">· désactivé</span>
+          ) : member.lastSignInAt === null ? (
+            <span className="text-muted-foreground ml-2 text-xs">· jamais connecté</span>
+          ) : null}
+          {member.email ? (
+            <p className="text-muted-foreground mt-1 truncate text-xs">{member.email}</p>
           ) : null}
         </div>
 
@@ -228,12 +239,37 @@ function MemberRow({ member }: { member: TeamMember }) {
             ))}
           </select>
 
+          {/* Le lien par courriel évite d'avoir à transmettre un mot de
+              passe de vive voix — et il ne demande aucune clé de service,
+              contrairement à la réinitialisation directe juste à côté. */}
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10 rounded-xl"
+            disabled={pending || !member.email}
+            title={
+              member.email
+                ? "Envoyer un lien d'activation par e-mail"
+                : 'Ce compte n’a pas d’adresse e-mail'
+            }
+            onClick={() =>
+              startTransition(async () => {
+                if (!member.email) return;
+                setMessage('Envoi du lien…');
+                const result = await envoyerLienActivation(member.email);
+                setMessage(result.error ?? result.success ?? null);
+              })
+            }
+          >
+            <Mail className="size-4" />
+          </Button>
+
           <Button
             variant="outline"
             size="sm"
             className="h-10 rounded-xl"
             onClick={() => setResetting((current) => !current)}
-            title="Réinitialiser le mot de passe"
+            title="Définir un mot de passe à la main"
           >
             <KeyRound className="size-4" />
           </Button>
@@ -300,5 +336,5 @@ function suggestPassword(): string {
     { length: 8 },
     () => alphabet[Math.floor(Math.random() * alphabet.length)],
   ).join('');
-  return `Heiko-${random}`;
+  return `Lafayette-${random}`;
 }

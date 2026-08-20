@@ -775,4 +775,38 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 12. LES ADRESSES E-MAIL NE SORTENT QUE POUR LE DIRECTEUR ---'
+
+insert into auth.users (id, email) values
+  ('a0000000-0000-0000-0000-0000000000a1', 'assistante-equipe@heiko.test')
+on conflict (id) do nothing;
+update public.profiles set role = 'assistant_manager', is_active = true
+  where id = 'a0000000-0000-0000-0000-0000000000a1';
+
+
+-- Une adresse est une donnée personnelle. L'assistant manager pilote le
+-- service, il ne gère pas les comptes : elle ne lui parvient pas non plus.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('La liste des adresses est refusée à l''employé',
+  'select * from public.mep_equipe()');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_denied('...et à l''assistant manager',
+  'select * from public.mep_equipe()');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_equal('Le directeur obtient la liste avec les adresses',
+  (select count(*)::int > 0 from public.mep_equipe() where email is not null),
+  true);
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

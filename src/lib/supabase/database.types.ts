@@ -382,6 +382,22 @@ export type Database = {
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
       /**
+       * L'équipe avec les adresses e-mail, réservée au directeur.
+       * Les adresses vivent dans `auth.users`, hors de portée de la RLS :
+       * cette fonction est le seul chemin, et elle refuse les autres rôles.
+       */
+      mep_equipe: {
+        Args: Record<string, never>;
+        Returns: {
+          id: string;
+          full_name: string;
+          email: string | null;
+          role: UserRole;
+          is_active: boolean;
+          derniere_connexion: string | null;
+        }[];
+      };
+      /**
        * Confirme l'adresse d'un compte tout juste inscrit et lui donne son
        * statut. Remplace la clé de service pour la création de comptes.
        */
