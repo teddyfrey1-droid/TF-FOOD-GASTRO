@@ -23,8 +23,11 @@ export interface SessionSummary {
   forecastSnapshot: number | null;
   productsCounted: number;
   productsTotal: number;
+  productsDeferred: number;
   tasksTotal: number;
   tasksDone: number;
+  /** Relances qui étaient sous le seuil critique ce jour-là. */
+  tasksCritical: number;
   /** Durée entre l'ouverture et la validation, en minutes. */
   durationMinutes: number | null;
 }
@@ -37,62 +40,48 @@ export interface HistoryFilters {
   productId?: string;
 }
 
+/**
+ * Historique des comptages.
+ *
+ * Passe par `mep_count_history` : le chiffre d'affaires figé n'est plus
+ * lisible en colonne, et la fonction ne le renvoie qu'à un directeur. Un
+ * assistant manager obtient donc les mêmes lignes, avec un CA à null.
+ */
 export async function getSessions(filters: HistoryFilters): Promise<SessionSummary[]> {
   const supabase = await createClient();
 
-  let query = supabase
-    .from('count_sessions')
-    .select('id, date, session, status, started_at, submitted_at, user_id, forecast_revenue_snapshot')
-    .gte('date', filters.from)
-    .lte('date', filters.to)
-    .order('date', { ascending: false })
-    .order('session', { ascending: true });
-
-  if (filters.session) query = query.eq('session', filters.session);
-  if (filters.userId) query = query.eq('user_id', filters.userId);
-
-  const [{ data: sessions }, { data: team }] = await Promise.all([
-    query,
-    supabase.from('team_members').select('id, full_name'),
-  ]);
-
-  const ids = (sessions ?? []).map((session) => session.id);
-  if (ids.length === 0) return [];
-
-  const [{ data: lines }, { data: tasks }] = await Promise.all([
-    supabase.from('count_lines').select('session_id, counted_at, product_id').in('session_id', ids),
-    supabase.from('production_tasks').select('session_id, is_done').in('session_id', ids),
-  ]);
-
-  const nameById = new Map((team ?? []).map((member) => [member.id, member.full_name]));
-
-  return (sessions ?? []).map((session) => {
-    const sessionLines = (lines ?? []).filter((line) => line.session_id === session.id);
-    const sessionTasks = (tasks ?? []).filter((task) => task.session_id === session.id);
-
-    const durationMinutes =
-      session.submitted_at && session.started_at
-        ? Math.round(
-            (new Date(session.submitted_at).getTime() - new Date(session.started_at).getTime()) /
-              60000,
-          )
-        : null;
-
-    return {
-      id: session.id,
-      date: session.date,
-      session: session.session,
-      status: session.status,
-      submittedAt: session.submitted_at,
-      authorName: nameById.get(session.user_id) ?? null,
-      forecastSnapshot: toNullableNumber(session.forecast_revenue_snapshot),
-      productsCounted: sessionLines.filter((line) => line.counted_at !== null).length,
-      productsTotal: sessionLines.length,
-      tasksTotal: sessionTasks.length,
-      tasksDone: sessionTasks.filter((task) => task.is_done).length,
-      durationMinutes,
-    };
+  const { data } = await supabase.rpc('mep_count_history', {
+    d_from: filters.from,
+    d_to: filters.to,
   });
+
+  return (data ?? [])
+    .filter((row) => {
+      if (filters.session && row.session !== filters.session) return false;
+      if (filters.userId && row.user_id !== filters.userId) return false;
+      return true;
+    })
+    .map((row) => ({
+      id: row.id,
+      date: row.date,
+      session: row.session,
+      status: row.status,
+      submittedAt: row.submitted_at,
+      authorName: row.author_name,
+      forecastSnapshot: toNullableNumber(row.forecast_revenue),
+      productsCounted: row.products_counted,
+      productsTotal: row.products_total,
+      productsDeferred: row.products_deferred,
+      tasksTotal: row.tasks_total,
+      tasksDone: row.tasks_done,
+      tasksCritical: row.tasks_critical,
+      durationMinutes:
+        row.submitted_at && row.started_at
+          ? Math.round(
+              (new Date(row.submitted_at).getTime() - new Date(row.started_at).getTime()) / 60000,
+            )
+          : null,
+    }));
 }
 
 export interface SessionDetailLine {
@@ -103,49 +92,54 @@ export interface SessionDetailLine {
   qtySaladbar: number;
   qtyFridge: number;
   qtyTotal: number;
+  /** Nul pour un assistant manager : les cibles restent au back-office. */
   targetSnapshot: number | null;
   thresholdSnapshot: number | null;
+  criticalSnapshot: number | null;
   productionNeeded: number | null;
   isNotApplicable: boolean;
   notApplicableReason: string | null;
+  isDeferred: boolean;
+  deferredReason: string | null;
   taskDone: boolean | null;
 }
 
+/**
+ * Détail d'un comptage passé.
+ *
+ * Passe par `mep_count_detail` plutôt que par la table : les cibles et
+ * seuils figés ne sont plus lisibles en colonne, et la fonction les rend
+ * NULLES pour un assistant manager. La confidentialité tient donc en base,
+ * pas dans ce fichier.
+ */
 export async function getSessionDetail(sessionId: string): Promise<SessionDetailLine[]> {
   const supabase = await createClient();
 
-  const [{ data: lines }, { data: products }, { data: categories }, { data: tasks }] =
-    await Promise.all([
-      supabase.from('count_lines').select('*').eq('session_id', sessionId),
-      supabase.from('products').select('id, name, category_id, unit'),
-      supabase.from('product_categories').select('id, name'),
-      supabase.from('production_tasks').select('product_id, is_done').eq('session_id', sessionId),
-    ]);
+  const [{ data: lines }, { data: tasks }] = await Promise.all([
+    supabase.rpc('mep_count_detail', { p_session_id: sessionId }),
+    supabase.from('production_tasks').select('product_id, is_done').eq('session_id', sessionId),
+  ]);
 
-  const productById = new Map((products ?? []).map((product) => [product.id, product]));
-  const categoryById = new Map((categories ?? []).map((category) => [category.id, category.name]));
   const taskByProduct = new Map((tasks ?? []).map((task) => [task.product_id, task.is_done]));
 
-  return (lines ?? [])
-    .map((line) => {
-      const product = productById.get(line.product_id);
-      return {
-        productId: line.product_id,
-        productName: product?.name ?? '—',
-        categoryName: product ? (categoryById.get(product.category_id) ?? '—') : '—',
-        unit: product?.unit ?? 'gastro',
-        qtySaladbar: toNumber(line.qty_saladbar, 0),
-        qtyFridge: toNumber(line.qty_fridge, 0),
-        qtyTotal: toNumber(line.qty_total, 0),
-        targetSnapshot: toNullableNumber(line.target_snapshot),
-        thresholdSnapshot: toNullableNumber(line.min_snapshot),
-        productionNeeded: toNullableNumber(line.production_needed_snapshot),
-        isNotApplicable: line.is_not_applicable,
-        notApplicableReason: line.not_applicable_reason,
-        taskDone: taskByProduct.get(line.product_id) ?? null,
-      };
-    })
-    .sort((a, b) => a.categoryName.localeCompare(b.categoryName, 'fr') || a.productName.localeCompare(b.productName, 'fr'));
+  return (lines ?? []).map((line) => ({
+    productId: line.product_id,
+    productName: line.product_name,
+    categoryName: line.category_name,
+    unit: line.unit,
+    qtySaladbar: toNumber(line.qty_saladbar, 0),
+    qtyFridge: toNumber(line.qty_fridge, 0),
+    qtyTotal: toNumber(line.qty_total, 0),
+    targetSnapshot: toNullableNumber(line.target),
+    thresholdSnapshot: toNullableNumber(line.minimum),
+    criticalSnapshot: toNullableNumber(line.critical),
+    productionNeeded: toNullableNumber(line.to_produce),
+    isNotApplicable: line.is_not_applicable,
+    notApplicableReason: line.not_applicable_reason,
+    isDeferred: line.deferred_at !== null,
+    deferredReason: line.deferred_reason,
+    taskDone: taskByProduct.get(line.product_id) ?? null,
+  }));
 }
 
 export interface ConsumptionRow {
@@ -167,6 +161,8 @@ export interface ConsumptionRow {
   completeDays: number;
   /** Nombre de journées où seul le midi a pu être mesuré. */
   lunchOnlyDays: number;
+  /** Base « VENTE POUR » en vigueur, pour proposer une correction. */
+  baseQty: number;
 }
 
 export interface ConsumptionReport {
@@ -331,6 +327,7 @@ export async function getConsumption(from: string, to: string): Promise<Consumpt
       eveningRatio: eveningToLunchRatio(lunchAvg, eveningAvg),
       completeDays: eveningSamples.length,
       lunchOnlyDays,
+      baseQty: toNumber(product.base_qty, 0),
     };
   });
 

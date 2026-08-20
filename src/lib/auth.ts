@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
-import { isManagerRole } from '@/lib/roles';
+import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
 import type { UserRole } from '@/lib/supabase/database.types';
 
 export interface CurrentUser {
@@ -59,6 +59,12 @@ export async function requireUser(): Promise<CurrentUser> {
  * données reste la RLS, qui ne renverrait rien à un employé même si celui-ci
  * forçait l'URL.
  */
+export async function requireStaffLead(): Promise<CurrentUser> {
+  const user = await requireUser();
+  if (!isStaffLeadRole(user.role)) redirect('/');
+  return user;
+}
+
 export async function requireManager(): Promise<CurrentUser> {
   const user = await requireUser();
   if (!isManagerRole(user.role)) redirect('/');

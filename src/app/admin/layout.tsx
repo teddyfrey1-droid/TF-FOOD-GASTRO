@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { requireManager } from '@/lib/auth';
+import { requireStaffLead } from '@/lib/auth';
 import { ROLE_LABELS } from '@/lib/roles';
 import { SignOutButton } from '@/components/pwa/sign-out-button';
 import { AdminNav } from '@/components/admin/admin-nav';
@@ -8,7 +8,10 @@ import { AdminNav } from '@/components/admin/admin-nav';
 export const dynamic = 'force-dynamic';
 
 export default async function AdminLayout({ children }: { children: React.ReactNode }) {
-  const user = await requireManager();
+  // L'entrée du back-office s'ouvre à l'encadrement — assistant manager
+  // compris. Chaque page sensible pose ensuite sa propre garde : la
+  // barrière du chiffre d'affaires reste `requireManager`, ici et en base.
+  const user = await requireStaffLead();
 
   return (
     <div className="min-h-dvh">
@@ -35,7 +38,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
           </div>
         </div>
 
-        <AdminNav />
+        <AdminNav role={user.role} />
       </header>
 
       <main className="mx-auto w-full max-w-6xl px-5 py-8">{children}</main>

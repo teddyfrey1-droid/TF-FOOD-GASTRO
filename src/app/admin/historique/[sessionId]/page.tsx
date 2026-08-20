@@ -1,3 +1,4 @@
+import { requireStaffLead } from '@/lib/auth';
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
@@ -17,6 +18,7 @@ export default async function SessionDetailPage({
 }: {
   params: Promise<{ sessionId: string }>;
 }) {
+  await requireStaffLead();
   const { sessionId } = await params;
   const supabase = await createClient();
 

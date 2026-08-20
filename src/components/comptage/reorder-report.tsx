@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useMemo, useState, useTransition } from 'react';
 import { Check, Printer } from 'lucide-react';
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
@@ -55,6 +56,10 @@ export function ReorderReport({
     Object.fromEntries(tasks.map((task) => [task.taskId, task.isDone])),
   );
   const [showSufficient, setShowSufficient] = useState(false);
+  // Deux façons de lire la même liste : par urgence quand on décide quoi
+  // faire, par poste quand on est devant le plan de travail et qu'on
+  // enchaîne tout ce qui se prépare au même endroit.
+  const [groupement, setGroupement] = useState<'urgence' | 'poste'>('urgence');
   const [, startTransition] = useTransition();
 
   function toggle(taskId: string, next: boolean) {
@@ -69,6 +74,23 @@ export function ReorderReport({
   const criticalRemaining = tasks.filter(
     (task) => task.isCritical && !done[task.taskId],
   ).length;
+
+  /**
+   * La liste, groupée ou non.
+   *
+   * En mode « urgence » un seul groupe sans titre : l'ordre venu du
+   * serveur (critique, puis priorité) fait déjà tout le travail, et le
+   * casser en sections le masquerait.
+   */
+  const groupes = useMemo(() => {
+    if (groupement === 'urgence') return [{ titre: null, items: tasks }] as const;
+
+    const parPoste = new Map<string, ReportTask[]>();
+    for (const task of tasks) {
+      parPoste.set(task.categoryName, [...(parPoste.get(task.categoryName) ?? []), task]);
+    }
+    return [...parPoste.entries()].map(([titre, items]) => ({ titre, items }));
+  }, [tasks, groupement]);
 
   if (tasks.length === 0) {
     return (
@@ -97,16 +119,32 @@ export function ReorderReport({
             </span>
           </h1>
 
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            onClick={() => window.print()}
-            className="mt-1 shrink-0 rounded-full print:hidden"
-          >
-            <Printer className="size-4" />
-            Imprimer
-          </Button>
+          <div className="mt-1 flex shrink-0 items-center gap-2 print:hidden">
+            <Tabs
+              value={groupement}
+              onValueChange={(value) => setGroupement(value as 'urgence' | 'poste')}
+            >
+              <TabsList className="h-9">
+                <TabsTrigger value="urgence" className="text-xs font-bold">
+                  Urgence
+                </TabsTrigger>
+                <TabsTrigger value="poste" className="text-xs font-bold">
+                  Poste
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => window.print()}
+              className="rounded-full"
+            >
+              <Printer className="size-4" />
+              Imprimer
+            </Button>
+          </div>
         </div>
 
         <p className="text-muted-foreground mt-1.5 text-sm font-semibold">
@@ -128,8 +166,17 @@ export function ReorderReport({
       {/* Une ligne = une pilule pleine largeur : la vignette du produit, puis
           la quantité en très gros. C'est la seule chose qu'on lit en cuisine,
           une gastro dans les mains. */}
-      <ul className="space-y-2.5">
-        {tasks.map((task) => {
+      {groupes.map((groupe) => (
+        <section key={groupe.titre ?? 'tout'} className={groupe.titre ? 'pt-2' : undefined}>
+          {groupe.titre ? (
+            <h2 className="mb-2.5 text-xl font-black tracking-tight">
+              {groupe.titre}{' '}
+              <span className="text-muted-foreground">({groupe.items.length})</span>
+            </h2>
+          ) : null}
+
+          <ul className="space-y-2.5">
+            {groupe.items.map((task) => {
           const isDone = done[task.taskId];
           const priorite = prioriteDe(task.priority);
 
@@ -195,10 +242,12 @@ export function ReorderReport({
                   ) : null}
                 </span>
               </button>
-            </li>
-          );
-        })}
-      </ul>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      ))}
 
       {sufficientCount > 0 ? (
         <div className="print:hidden">

@@ -1,3 +1,4 @@
+import { requireManager } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { CategoriesManager, type CategoryRow } from '@/components/admin/categories-manager';
 
@@ -6,6 +7,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Catégories — Heiko' };
 
 export default async function CategoriesPage() {
+  await requireManager();
   const supabase = await createClient();
 
   const [{ data: categories }, { data: products }] = await Promise.all([

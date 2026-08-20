@@ -47,7 +47,14 @@ export default async function CountPage({ params }: { params: Promise<{ session:
       .order('sort_order', { ascending: true })
       .order('name', { ascending: true }),
     supabase.from('product_categories').select('id, name, sort_order'),
-    supabase.from('count_lines').select('*').eq('session_id', opened.sessionId),
+    supabase
+      .from('count_lines')
+      // Colonnes explicites : les cibles et seuils figés ne sont plus
+      // lisibles par un compte connecté, et `*` échouerait.
+      .select(
+        'product_id, qty_saladbar, qty_fridge, is_not_applicable, not_applicable_reason, counted_saladbar_at, counted_fridge_at, deferred_at, deferred_reason',
+      )
+      .eq('session_id', opened.sessionId),
   ]);
 
   const categoryById = new Map(

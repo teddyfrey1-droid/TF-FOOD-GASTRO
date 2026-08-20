@@ -538,4 +538,102 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 9. L''HISTORIQUE S''OUVRE AUX CHEFS, LE CA NON ---'
+
+insert into auth.users (id, email) values
+  ('a0000000-0000-0000-0000-00000000000a', 'assistant@heiko.test')
+on conflict (id) do nothing;
+update public.profiles
+set full_name = 'Assistante (test)', role = 'assistant_manager', is_active = true
+where id = 'a0000000-0000-0000-0000-00000000000a';
+
+-- Une session validée d'hier, avec un CA figé et des cibles.
+insert into public.count_sessions (id, date, session, user_id, status, submitted_at,
+                                   forecast_revenue_snapshot)
+values ('c0000000-0000-0000-0000-00000000aaaa', current_date - 2, 'morning',
+        'a0000000-0000-0000-0000-00000000000e', 'submitted', now(), 4321.00)
+on conflict (id) do update set forecast_revenue_snapshot = 4321.00;
+
+insert into public.count_lines (session_id, product_id, qty_saladbar, counted_at,
+                                target_snapshot, min_snapshot, crit_snapshot)
+select 'c0000000-0000-0000-0000-00000000aaaa', id, 2, now(), 10, 5, 3
+from public.products where name = 'Saumon'
+on conflict (session_id, product_id) do update
+  set target_snapshot = 10, min_snapshot = 5, crit_snapshot = 3;
+
+-- --- Les colonnes sensibles ne sont plus lisibles en direct, PAR PERSONNE.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('Le CA figé n''est plus lisible en colonne, même pour le directeur',
+  'select forecast_revenue_snapshot from public.count_sessions');
+select pg_temp.check_denied('La cible figée n''est plus lisible en colonne',
+  'select target_snapshot from public.count_lines');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- --- L'assistant manager voit l'historique...
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000a';
+
+select pg_temp.check_equal('L''assistant manager voit les comptages passés',
+  (select count(*)::int > 0
+   from public.mep_count_history(current_date - 7, current_date)),
+  true);
+
+-- ...mais SANS le chiffre d'affaires.
+select pg_temp.check_equal('Le CA lui reste masqué dans l''historique',
+  (select count(*)::int
+   from public.mep_count_history(current_date - 7, current_date)
+   where forecast_revenue is not null),
+  0);
+
+select pg_temp.check_equal('Les cibles lui restent masquées dans le détail',
+  (select count(*)::int
+   from public.mep_count_detail('c0000000-0000-0000-0000-00000000aaaa')
+   where target is not null or minimum is not null or critical is not null),
+  0);
+
+select pg_temp.check_denied('L''analyse des ruptures lui est refusée',
+  'select * from public.mep_stockout_history(current_date - 7, current_date)');
+
+select pg_temp.check_no_rows('Le CA lui reste invisible, comme avant',
+  'select * from public.revenue_history');
+
+reset role;
+reset "request.jwt.claim.sub";
+
+-- --- Le directeur, lui, voit tout.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+
+select pg_temp.check_equal('Le directeur retrouve le CA figé',
+  (select forecast_revenue
+   from public.mep_count_history(current_date - 7, current_date)
+   where id = 'c0000000-0000-0000-0000-00000000aaaa'),
+  4321.00::numeric);
+
+select pg_temp.check_equal('Le directeur retrouve la cible figée',
+  (select target from public.mep_count_detail('c0000000-0000-0000-0000-00000000aaaa')
+   where product_name = 'Saumon'),
+  10::numeric);
+
+select pg_temp.check_equal('Le directeur obtient l''analyse des ruptures',
+  (select count(*)::int >= 0
+   from public.mep_stockout_history(current_date - 30, current_date)),
+  true);
+
+reset role;
+reset "request.jwt.claim.sub";
+
+-- --- L'employé reste dehors sur toute la ligne.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('L''historique est refusé à l''employé',
+  'select * from public.mep_count_history(current_date - 7, current_date)');
+select pg_temp.check_denied('Le détail d''un comptage passé est refusé à l''employé',
+  'select * from public.mep_count_detail(''c0000000-0000-0000-0000-00000000aaaa'')');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

@@ -381,6 +381,81 @@ export type Database = {
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /**
+       * Historique des comptages, pour tout chef de service.
+       * `forecast_revenue` vaut null tant que l'appelant n'est pas directeur.
+       */
+      mep_count_history: {
+        Args: { d_from: string; d_to: string };
+        Returns: {
+          id: string;
+          date: string;
+          session: SessionKind;
+          status: 'draft' | 'submitted';
+          started_at: string;
+          submitted_at: string | null;
+          user_id: string | null;
+          author_name: string | null;
+          forecast_revenue: number | null;
+          products_counted: number;
+          products_total: number;
+          products_deferred: number;
+          tasks_total: number;
+          tasks_done: number;
+          tasks_critical: number;
+        }[];
+      };
+      /** Détail d'un comptage. Cibles et seuils nuls hors direction. */
+      mep_count_detail: {
+        Args: { p_session_id: string };
+        Returns: {
+          product_id: string;
+          product_name: string;
+          category_name: string;
+          unit: ProductUnit;
+          qty_saladbar: number;
+          qty_fridge: number;
+          qty_total: number;
+          counted_at: string | null;
+          is_not_applicable: boolean;
+          not_applicable_reason: string | null;
+          deferred_at: string | null;
+          deferred_reason: string | null;
+          target: number | null;
+          minimum: number | null;
+          critical: number | null;
+          to_produce: number | null;
+        }[];
+      };
+      /** Observations ligne à ligne pour les anomalies. Directeur uniquement. */
+      mep_count_observations: {
+        Args: { d_from: string; d_to: string };
+        Returns: {
+          date: string;
+          product_name: string;
+          qty_total: number;
+          target_snapshot: number | null;
+          min_snapshot: number | null;
+          is_not_applicable: boolean;
+        }[];
+      };
+      /** Fréquence des ruptures par produit. Directeur uniquement. */
+      mep_stockout_history: {
+        Args: { d_from: string; d_to: string };
+        Returns: {
+          product_id: string;
+          product_name: string;
+          category_name: string;
+          unit: ProductUnit;
+          sessions_count: number;
+          critical_count: number;
+          empty_count: number;
+          reorder_count: number;
+          avg_coverage: number | null;
+          base_qty: number;
+          priority: number;
+        }[];
+      };
       /** Réserve l'envoi du rappel du jour. Vrai une seule fois par session. */
       mep_claim_reminder: {
         Args: { p_session: SessionKind; p_now?: string | null };

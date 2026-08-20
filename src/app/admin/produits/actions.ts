@@ -171,6 +171,7 @@ export async function updateProductInline(
     critMode?: 'auto' | 'manual';
     critQtyManual?: number | null;
     critDivisor?: number;
+    baseQty?: number;
     name?: string;
     imageUrl?: string | null;
     inSaladbar?: boolean;
@@ -186,6 +187,7 @@ export async function updateProductInline(
     critMode: z.enum(['auto', 'manual']).optional(),
     critQtyManual: z.number().min(0).nullable().optional(),
     critDivisor: z.number().positive().optional(),
+    baseQty: z.number().min(0).max(999).optional(),
     name: z.string().trim().min(1, 'Le nom ne peut pas être vide.').max(80).optional(),
     // Chaîne vide = « retirer la photo », d'où le passage par null.
     imageUrl: z.union([z.url('Adresse de photo invalide.'), z.literal('')]).nullable().optional(),
@@ -213,6 +215,7 @@ export async function updateProductInline(
     crit_mode: 'auto' | 'manual';
     crit_qty_manual: number | null;
     crit_divisor: number;
+    base_qty: number;
     name: string;
     image_url: string | null;
     in_saladbar: boolean;
@@ -233,6 +236,7 @@ export async function updateProductInline(
   }
   if (parsed.data.minQtyManual !== undefined) payload.min_qty_manual = parsed.data.minQtyManual;
   if (parsed.data.critDivisor !== undefined) payload.crit_divisor = parsed.data.critDivisor;
+  if (parsed.data.baseQty !== undefined) payload.base_qty = parsed.data.baseQty;
   if (parsed.data.critMode !== undefined) {
     payload.crit_mode = parsed.data.critMode;
     // Repasser en automatique efface le seuil critique manuel.

@@ -1,3 +1,4 @@
+import { requireManager } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getObservedGrowth, getRevenueSettings } from '@/lib/admin/queries';
 import { todayInParis } from '@/lib/format';
@@ -22,6 +23,7 @@ export default async function RevenuePage({
 }: {
   searchParams: Promise<{ mois?: string }>;
 }) {
+  await requireManager();
   const { mois } = await searchParams;
   const today = todayInParis();
   const monthKey = /^\d{4}-\d{2}$/.test(mois ?? '') ? mois! : today.slice(0, 7);

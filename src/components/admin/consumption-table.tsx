@@ -1,5 +1,13 @@
+'use client';
+
+import { useState, useTransition } from 'react';
+import { Check } from 'lucide-react';
+import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { formatPercent, formatQty } from '@/lib/format';
+import { cn } from '@/lib/utils';
+import { FACTEUR_SECURITE_VISE, safetyFactor, suggestBaseFromConsumption } from '@/lib/mep';
+import { updateProductInline } from '@/app/admin/produits/actions';
 import type { ConsumptionReport } from '@/lib/admin/history';
 
 /**
@@ -88,6 +96,15 @@ export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
                 Marge
               </th>
               <th scope="col" className="px-3 py-3 text-right font-semibold">
+                Couverture
+                <span className="text-muted-foreground block text-[11px] font-normal">
+                  journées visées : {FACTEUR_SECURITE_VISE}
+                </span>
+              </th>
+              <th scope="col" className="px-3 py-3 text-right font-semibold">
+                Base
+              </th>
+              <th scope="col" className="px-3 py-3 text-right font-semibold">
                 Jours
               </th>
             </tr>
@@ -125,6 +142,8 @@ export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
                     ? '—'
                     : `${row.deviation >= 0 ? '+' : ''}${formatPercent(row.deviation, 0)}`}
                 </td>
+                <FacteurCell row={row} />
+                <BaseCell row={row} />
                 <td className="text-muted-foreground px-3 py-2 text-right text-xs tabular-nums">
                   {row.completeDays}
                   {row.lunchOnlyDays > 0 ? (
@@ -156,5 +175,83 @@ export function ConsumptionTable({ report }: { report: ConsumptionReport }) {
         </p>
       </div>
     </div>
+  );
+}
+
+/**
+ * Combien de journées de consommation la cible couvre-t-elle réellement ?
+ *
+ * Sous 1, la cible ne couvre même pas ce qui sort dans la journée : la
+ * rupture est arithmétiquement garantie, quel que soit le sérieux de
+ * l'équipe.
+ */
+function FacteurCell({ row }: { row: ConsumptionReport['rows'][number] }) {
+  const facteur = safetyFactor({
+    dailyPer1000: row.dailyPer1000,
+    theoreticalPer1000: row.theoreticalPer1000,
+    completeDays: row.completeDays,
+    baseQty: row.baseQty,
+  });
+
+  if (facteur === null) {
+    return <td className="text-muted-foreground px-3 py-2 text-right tabular-nums">—</td>;
+  }
+
+  return (
+    <td
+      className={cn(
+        'px-3 py-2 text-right font-bold tabular-nums',
+        facteur < 1 && 'text-destructive',
+        facteur >= 1 && facteur < 1.5 && 'text-amber-600',
+        facteur > 3 && 'text-amber-600',
+      )}
+      title={
+        facteur < 1
+          ? 'La cible ne couvre pas une journée de consommation : rupture garantie.'
+          : facteur > 3
+            ? 'La cible vaut plus de trois journées de consommation.'
+            : undefined
+      }
+    >
+      {facteur.toLocaleString('fr-FR', { maximumFractionDigits: 1 })} j
+    </td>
+  );
+}
+
+/** La base actuelle, et celle que la consommation mesurée suggère. */
+function BaseCell({ row }: { row: ConsumptionReport['rows'][number] }) {
+  const [applied, setApplied] = useState(false);
+  const [pending, startTransition] = useTransition();
+
+  const propose = suggestBaseFromConsumption({
+    dailyPer1000: row.dailyPer1000,
+    theoreticalPer1000: row.theoreticalPer1000,
+    completeDays: row.completeDays,
+    baseQty: row.baseQty,
+  });
+
+  return (
+    <td className="px-3 py-2 text-right tabular-nums whitespace-nowrap">
+      <span className="font-medium">{formatQty(row.baseQty)}</span>
+      {propose !== null ? (
+        <>
+          <span className="text-primary font-bold"> → {formatQty(propose)}</span>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={pending || applied}
+            className="ml-2 h-7 rounded-full px-2 text-xs"
+            onClick={() =>
+              startTransition(async () => {
+                await updateProductInline(row.productId, { baseQty: propose });
+                setApplied(true);
+              })
+            }
+          >
+            {applied ? <Check className="size-3" /> : 'Appliquer'}
+          </Button>
+        </>
+      ) : null}
+    </td>
   );
 }

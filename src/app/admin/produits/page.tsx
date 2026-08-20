@@ -1,9 +1,11 @@
+import { requireManager } from '@/lib/auth';
 import { getCategories, getProducts } from '@/lib/admin/queries';
 import { ProductsManager } from '@/components/admin/products-manager';
 
 export const dynamic = 'force-dynamic';
 
 export default async function ProductsPage() {
+  await requireManager();
   const [products, categories] = await Promise.all([getProducts(true), getCategories()]);
 
   return (

@@ -1,3 +1,5 @@
+import { requireStaffLead } from '@/lib/auth';
+import { isManagerRole } from '@/lib/roles';
 import Link from 'next/link';
 import { getConsumption, getSessions } from '@/lib/admin/history';
 import { createClient } from '@/lib/supabase/server';
@@ -41,6 +43,8 @@ export default async function HistoryPage({
 }: {
   searchParams: Promise<{ du?: string; au?: string; session?: string; employe?: string }>;
 }) {
+  const user = await requireStaffLead();
+  const estDirecteur = isManagerRole(user.role);
   const params = await searchParams;
   const today = todayInParis();
 
@@ -55,28 +59,22 @@ export default async function HistoryPage({
 
   const [sessions, consumption, { data: team }] = await Promise.all([
     getSessions({ from, to, session: sessionFilter, userId: params.employe }),
-    getConsumption(from, to),
+    // La consommation se lit avec le CA : elle reste au directeur.
+    estDirecteur ? getConsumption(from, to) : Promise.resolve(null),
     supabase.from('team_members').select('id, full_name'),
   ]);
 
-  // Observations produit, pour la détection d'anomalies.
-  const sessionIds = sessions.map((session) => session.id);
-  const { data: lines } = sessionIds.length
-    ? await supabase
-        .from('count_lines')
-        .select(
-          'session_id, product_id, qty_total, target_snapshot, min_snapshot, is_not_applicable',
-        )
-        .in('session_id', sessionIds)
+  // Observations produit, pour la détection d'anomalies. Elles comparent
+  // le stock relevé à la cible du jour : réservées au directeur, comme
+  // toute lecture de cible. Un assistant manager n'a simplement pas
+  // l'onglet.
+  const { data: rawObservations } = estDirecteur
+    ? await supabase.rpc('mep_count_observations', { d_from: from, d_to: to })
     : { data: [] };
 
-  const { data: products } = await supabase.from('products').select('id, name');
-  const productName = new Map((products ?? []).map((product) => [product.id, product.name]));
-  const dateBySession = new Map(sessions.map((session) => [session.id, session.date]));
-
-  const observations: ProductObservation[] = (lines ?? []).map((line) => ({
-    date: dateBySession.get(line.session_id) ?? from,
-    productName: productName.get(line.product_id) ?? '—',
+  const observations: ProductObservation[] = (rawObservations ?? []).map((line) => ({
+    date: line.date,
+    productName: line.product_name,
     qtyTotal: toNumber(line.qty_total, 0),
     targetSnapshot: toNullableNumber(line.target_snapshot),
     thresholdSnapshot: toNullableNumber(line.min_snapshot),
@@ -106,18 +104,22 @@ export default async function HistoryPage({
     <div className="space-y-6">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Historique</h1>
-          <p className="text-muted-foreground mt-1 text-sm">
-            Qui a compté quoi, quand, avec quelles cibles — et ce qui a réellement été consommé.
+          <h1 className="text-3xl font-black tracking-tight">Historique</h1>
+          <p className="text-muted-foreground mt-1.5 text-sm">
+            {estDirecteur
+              ? 'Qui a compté quoi, quand, avec quelles cibles — et ce qui a réellement été consommé.'
+              : 'Qui a compté quoi, quand, et ce qui restait à produire.'}
           </p>
         </div>
 
-        <Link
-          href={`/admin/historique/export?${query.toString()}`}
-          className={buttonVariants({ variant: 'outline', size: 'sm' })}
-        >
-          Exporter en CSV
-        </Link>
+        {estDirecteur ? (
+          <Link
+            href={`/admin/historique/export?${query.toString()}`}
+            className={buttonVariants({ variant: 'outline', size: 'sm' })}
+          >
+            Exporter en CSV
+          </Link>
+        ) : null}
       </header>
 
       <HistoryFiltersBar
@@ -131,21 +133,29 @@ export default async function HistoryPage({
       <Tabs defaultValue="sessions">
         <TabsList>
           <TabsTrigger value="sessions">Comptages ({sessions.length})</TabsTrigger>
-          <TabsTrigger value="anomalies">Anomalies ({anomalies.length})</TabsTrigger>
-          <TabsTrigger value="consommation">Consommation</TabsTrigger>
+          {estDirecteur ? (
+            <>
+              <TabsTrigger value="anomalies">Anomalies ({anomalies.length})</TabsTrigger>
+              <TabsTrigger value="consommation">Consommation</TabsTrigger>
+            </>
+          ) : null}
         </TabsList>
 
         <TabsContent value="sessions" className="mt-5">
           <SessionsTable sessions={sessions} />
         </TabsContent>
 
-        <TabsContent value="anomalies" className="mt-5">
-          <AnomaliesPanel anomalies={anomalies} />
-        </TabsContent>
+        {estDirecteur ? (
+          <>
+            <TabsContent value="anomalies" className="mt-5">
+              <AnomaliesPanel anomalies={anomalies} />
+            </TabsContent>
 
-        <TabsContent value="consommation" className="mt-5">
-          <ConsumptionTable report={consumption} />
-        </TabsContent>
+            <TabsContent value="consommation" className="mt-5">
+                  {consumption ? <ConsumptionTable report={consumption} /> : null}
+            </TabsContent>
+          </>
+        ) : null}
       </Tabs>
     </div>
   );

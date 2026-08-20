@@ -1,3 +1,4 @@
+import { requireManager } from '@/lib/auth';
 import Link from 'next/link';
 import { ArrowRight, CalendarCheck2 } from 'lucide-react';
 import {
@@ -21,6 +22,7 @@ export const dynamic = 'force-dynamic';
 const TIME = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
 export default async function DashboardPage() {
+  await requireManager();
   const today = todayInParis();
 
   const [forecast, reference, statuses, products, settings, windows, coverage] = await Promise.all([
