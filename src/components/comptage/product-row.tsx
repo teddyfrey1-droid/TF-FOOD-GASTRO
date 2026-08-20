@@ -93,6 +93,17 @@ function ProductRowImpl({
   const done = zoneCounted && !misDeCote;
   const grille = layout === 'grille';
 
+  /** Un appui sur la photo ajoute une unité : c'est la plus grande cible
+   *  de la carte, et le geste le plus fréquent du comptage. */
+  const ajouterUn = () =>
+    onChange(
+      product.id,
+      isSaladbar
+        ? { qtySaladbar: value + product.countStep }
+        : { qtyFridge: value + product.countStep },
+      zone,
+    );
+
   const vignette = (
     <span className="relative block">
       <VignetteProduit
@@ -125,6 +136,7 @@ function ProductRowImpl({
         {product.name}
       </p>
       <p className="text-muted-foreground mt-0.5 text-xs font-semibold">
+        {!zoneCounted && !misDeCote ? 'Touchez la photo pour +1 · ' : ''}
         {product.unit === 'piece' ? 'pièces' : 'gastros'}
         {inBothZones && !grille ? ` · ${otherLabel} : ${otherValue}` : ''}
         {inBothZones && grille ? ` · ${otherValue} ${isSaladbar ? 'en bas' : 'en haut'}` : ''}
@@ -146,12 +158,34 @@ function ProductRowImpl({
     >
       {grille ? (
         <div className="space-y-2">
-          {vignette}
+          {misDeCote ? (
+            vignette
+          ) : (
+            <button
+              type="button"
+              onClick={ajouterUn}
+              aria-label={`Ajouter 1 à ${product.name}`}
+              className="no-select block w-full touch-manipulation transition-transform active:scale-95"
+            >
+              {vignette}
+            </button>
+          )}
           <div className="min-w-0">{titre}</div>
         </div>
       ) : (
         <div className="flex items-center gap-3">
-          <span className="shrink-0">{vignette}</span>
+          {misDeCote ? (
+            <span className="shrink-0">{vignette}</span>
+          ) : (
+            <button
+              type="button"
+              onClick={ajouterUn}
+              aria-label={`Ajouter 1 à ${product.name}`}
+              className="no-select shrink-0 touch-manipulation transition-transform active:scale-95"
+            >
+              {vignette}
+            </button>
+          )}
           <div className="min-w-0 flex-1">{titre}</div>
         </div>
       )}

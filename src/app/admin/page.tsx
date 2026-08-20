@@ -1,6 +1,5 @@
 import { requireManager } from '@/lib/auth';
-import Link from 'next/link';
-import { ArrowRight, CalendarCheck2 } from 'lucide-react';
+import { CalendarCheck2, Check } from 'lucide-react';
 import {
   getDailyCountStatus,
   getForecastRevenue,
@@ -10,11 +9,11 @@ import {
   getRevenueCoverage,
   getRevenueSettings,
 } from '@/lib/admin/queries';
+import { createClient } from '@/lib/supabase/server';
 import { formatDateLong, formatEuro, todayInParis } from '@/lib/format';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { buttonVariants } from '@/components/ui/button';
 import { GrowthCard } from '@/components/admin/growth-card';
+import { SectionGestion, TuileGestion } from '@/components/admin/tuile-gestion';
 import { referenceDateLastYear } from '@/lib/mep';
 
 export const dynamic = 'force-dynamic';
@@ -22,37 +21,67 @@ export const dynamic = 'force-dynamic';
 const TIME = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
 export default async function DashboardPage() {
-  await requireManager();
+  const user = await requireManager();
   const today = todayInParis();
+  const supabase = await createClient();
 
-  const [forecast, reference, statuses, products, settings, windows, coverage] = await Promise.all([
-    getForecastRevenue(today),
-    getReferenceRevenue(today, 'morning'),
-    getDailyCountStatus(today),
-    getProducts(false),
-    getRevenueSettings(),
-    getGrowthWindows(today),
-    getRevenueCoverage(),
-  ]);
+  const [forecast, reference, statuses, products, settings, windows, coverage, { count: equipe }] =
+    await Promise.all([
+      getForecastRevenue(today),
+      getReferenceRevenue(today, 'morning'),
+      getDailyCountStatus(today),
+      getProducts(false),
+      getRevenueSettings(),
+      getGrowthWindows(today),
+      getRevenueCoverage(),
+      supabase.from('profiles').select('id', { count: 'exact', head: true }),
+    ]);
 
-  // Un produit sans base n'a pas encore reçu sa valeur « VENTE POUR ».
-  const placeholders = products.filter((product) => Number(product.base_qty) <= 0);
+  const { count: categories } = await supabase
+    .from('product_categories')
+    .select('id', { count: 'exact', head: true });
+
+  // Deux chiffres qui méritent qu'on aille voir : une base à zéro laisse la
+  // cible à zéro, et un produit sans photo se reconnaît moins vite.
+  const sansBase = products.filter((product) => Number(product.base_qty) <= 0).length;
+  const sansPhoto = products.filter((product) => !product.image_url).length;
+  const tousEnPrioriteParDefaut = products.every((product) => product.priority === 3);
+
+  const faits = statuses.filter((status) => status.status === 'submitted').length;
+  const relancesEnAttente = statuses.reduce((sum, status) => sum + status.pendingTasks, 0);
 
   return (
-    <div className="space-y-6">
-      <header>
-        <h1 className="text-3xl font-black tracking-tight">Tableau de bord</h1>
-        <p className="text-muted-foreground mt-1 text-sm font-medium capitalize">
-          {formatDateLong(today)}
-        </p>
+    <div className="space-y-7">
+      <header className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-3xl font-black tracking-tight">Bonjour {user.fullName.split(' ')[0]}</h1>
+          <p className="text-muted-foreground mt-1 text-sm font-semibold capitalize">
+            {formatDateLong(today)}
+          </p>
+        </div>
+
+        <span
+          className={
+            faits === 2
+              ? 'bg-primary text-primary-foreground flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-black'
+              : 'bg-alert text-alert-foreground flex h-11 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-black'
+          }
+        >
+          {faits === 2 ? (
+            <>
+              <Check className="size-4" strokeWidth={3} /> Journée comptée
+            </>
+          ) : (
+            `${faits}/2 comptages`
+          )}
+        </span>
       </header>
 
       {/* ------------------------------------------------------------------
-          Le CA prévisionnel, en grand.
-          C'est lui qui décide de toute la production du jour : il doit se
-          lire d'un coup d'œil, avec sa provenance juste en dessous.
+          Le CA prévisionnel décide de toute la production du jour : il se
+          lit d'un coup d'œil, avec sa provenance juste en dessous.
          ------------------------------------------------------------------ */}
-      <section className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
+      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
         <Card className="bg-primary text-primary-foreground rounded-3xl p-6">
           <p className="text-xs font-bold tracking-wide uppercase opacity-80">
             CA prévisionnel du jour
@@ -105,76 +134,146 @@ export default async function DashboardPage() {
         />
       </section>
 
-      {placeholders.length > 0 ? (
-        <Card className="rounded-3xl border-amber-500/40 bg-amber-500/5 p-5">
-          <h2 className="font-bold">Données encore provisoires</h2>
-          <p className="text-muted-foreground mt-2 text-sm">
-            {placeholders.length} produit{placeholders.length > 1 ? 's' : ''} sur {products.length}{' '}
-            n&apos;{placeholders.length > 1 ? 'ont' : 'a'} pas encore de valeur « VENTE POUR » :
-            leur cible restera à zéro tant qu&apos;elle n&apos;est pas saisie.
-          </p>
-          <Link
-            href="/admin/produits"
-            className={buttonVariants({ variant: 'outline', size: 'sm', className: 'mt-4' })}
-          >
-            Compléter les produits
-          </Link>
-        </Card>
-      ) : null}
-
-      <section className="grid gap-4 sm:grid-cols-2">
+      <section className="grid gap-2.5 sm:grid-cols-2">
         {statuses.map((status) => (
-          <Card key={status.session} className="rounded-3xl p-5">
-            <div className="flex items-start justify-between gap-2">
-              <p className="font-bold">
-                Comptage {status.session === 'morning' ? 'du matin' : "de l'après-midi"}
-              </p>
-              <Badge variant={status.status === 'submitted' ? 'secondary' : 'outline'}>
-                {status.status === 'submitted'
-                  ? 'Fait'
-                  : status.status === 'draft'
-                    ? 'En cours'
-                    : 'À faire'}
-              </Badge>
+          <Card key={status.session} className="rounded-3xl p-4">
+            <div className="flex items-center gap-3">
+              <span
+                aria-hidden
+                className="bg-primary/10 flex size-12 shrink-0 items-center justify-center rounded-2xl text-2xl"
+              >
+                {status.session === 'morning' ? '🌅' : '🌆'}
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="font-black">
+                  Comptage {status.session === 'morning' ? 'du matin' : "de l'après-midi"}
+                </p>
+                <p className="text-muted-foreground text-xs font-semibold">
+                  {status.status === 'submitted' && status.submittedAt
+                    ? `${TIME.format(new Date(status.submittedAt))} par ${status.userName ?? '—'}`
+                    : status.status === 'draft'
+                      ? `Commencé par ${status.userName ?? '—'}`
+                      : 'Pas encore commencé'}
+                </p>
+              </div>
+              {status.status === 'submitted' ? (
+                <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full">
+                  <Check className="size-4" strokeWidth={3} />
+                </span>
+              ) : null}
             </div>
 
-            <p className="text-muted-foreground mt-2 text-sm">
-              {status.status === 'submitted' && status.submittedAt
-                ? `${TIME.format(new Date(status.submittedAt))} par ${status.userName ?? '—'}`
-                : status.status === 'draft'
-                  ? `Commencé par ${status.userName ?? '—'}`
-                  : 'Pas encore commencé'}
-            </p>
-
-            {status.status === 'submitted' ? (
-              <p className="mt-3 text-sm font-medium tabular-nums">
-                Relances : {status.doneTasks} faite{status.doneTasks > 1 ? 's' : ''} ·{' '}
-                {status.pendingTasks} en attente
+            {status.status === 'submitted' && status.pendingTasks + status.doneTasks > 0 ? (
+              <p className="mt-3 text-sm font-bold tabular-nums">
+                {status.doneTasks} relance{status.doneTasks > 1 ? 's' : ''} faite
+                {status.doneTasks > 1 ? 's' : ''} · {status.pendingTasks} en attente
               </p>
             ) : null}
           </Card>
         ))}
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-3">
-        {[
-          { href: '/admin/produits', label: 'Produits', hint: `${products.length} actifs` },
-          { href: '/admin/simulateur', label: 'Simulateur', hint: 'Cibles pour un CA donné' },
-          { href: '/admin/utilisateurs', label: 'Équipe', hint: 'Accès et mots de passe' },
-        ].map((tile) => (
-          <Link
-            key={tile.href}
-            href={tile.href}
-            className="bg-muted/50 hover:bg-muted flex items-center justify-between gap-3 rounded-2xl px-5 py-4 transition-colors"
-          >
-            <span>
-              <span className="block font-bold">{tile.label}</span>
-              <span className="text-muted-foreground block text-xs font-medium">{tile.hint}</span>
-            </span>
-            <ArrowRight className="text-muted-foreground size-4" />
-          </Link>
-        ))}
-      </section>
+      {relancesEnAttente > 0 ? (
+        <p className="bg-alert text-alert-foreground rounded-2xl px-4 py-3 text-sm font-black">
+          {relancesEnAttente} relance{relancesEnAttente > 1 ? 's' : ''} encore à produire
+          aujourd&apos;hui.
+        </p>
+      ) : null}
+
+      <SectionGestion titre="La carte">
+        <TuileGestion
+          href="/admin/produits"
+          emoji="🥗"
+          titre="Produits"
+          description="Noms, bases, seuils, priorités, zones"
+          badge={`${products.length}`}
+          alerte={sansBase > 0 || tousEnPrioriteParDefaut}
+        />
+        <TuileGestion
+          href="/admin/categories"
+          emoji="🗂️"
+          titre="Catégories"
+          description="L'ordre des rayons pendant le comptage"
+          badge={`${categories ?? 0}`}
+        />
+        <TuileGestion
+          href="/admin/photos"
+          emoji="📸"
+          titre="Photos"
+          description="Reconnaître un produit d'un coup d'œil"
+          badge={sansPhoto > 0 ? `${sansPhoto} sans` : 'complet'}
+          alerte={sansPhoto > 0}
+        />
+      </SectionGestion>
+
+      <SectionGestion titre="Piloter">
+        <TuileGestion
+          href="/admin/chiffre-affaires"
+          emoji="💶"
+          titre="Chiffre d'affaires"
+          description="Prévisions du mois, croissance, réalisé"
+        />
+        <TuileGestion
+          href="/admin/ruptures"
+          emoji="🚨"
+          titre="Ruptures"
+          description="Ce qui manque trop souvent, et pourquoi"
+        />
+        <TuileGestion
+          href="/admin/historique"
+          emoji="📋"
+          titre="Historique"
+          description="Qui a compté quoi, et ce qui a été consommé"
+        />
+        <TuileGestion
+          href="/admin/simulateur"
+          emoji="🎚️"
+          titre="Simulateur"
+          description="Essayer un CA et voir toutes les cibles"
+        />
+      </SectionGestion>
+
+      <SectionGestion titre="L'équipe">
+        <TuileGestion
+          href="/admin/utilisateurs"
+          emoji="👥"
+          titre="Équipe"
+          description="Comptes, statuts, mots de passe"
+          badge={`${equipe ?? 0}`}
+        />
+        <TuileGestion
+          href="/installer"
+          emoji="📲"
+          titre="Installer l'application"
+          description="La mettre sur l'écran d'accueil des téléphones"
+        />
+        <TuileGestion
+          href="/compte"
+          emoji="🔑"
+          titre="Mon compte"
+          description="Changer mon mot de passe"
+        />
+      </SectionGestion>
+
+      {sansBase > 0 || tousEnPrioriteParDefaut ? (
+        <Card className="rounded-3xl border-amber-500/40 bg-amber-500/[0.06] p-5">
+          <h2 className="font-black">À finir de régler</h2>
+          <ul className="text-muted-foreground mt-2 list-disc space-y-1 pl-5 text-sm">
+            {sansBase > 0 ? (
+              <li>
+                {sansBase} produit{sansBase > 1 ? 's' : ''} sans base « VENTE POUR » : leur cible
+                reste à zéro, ils ne seront jamais relancés.
+              </li>
+            ) : null}
+            {tousEnPrioriteParDefaut ? (
+              <li>
+                Tous les produits sont en priorité 3. Régler les priorités change l&apos;ordre du
+                rapport de production — c&apos;est dix minutes bien placées.
+              </li>
+            ) : null}
+          </ul>
+        </Card>
+      ) : null}
     </div>
   );
 }

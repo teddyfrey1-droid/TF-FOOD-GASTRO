@@ -2,55 +2,57 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { cn } from '@/lib/utils';
+import { ArrowLeft } from 'lucide-react';
 import { isManagerRole } from '@/lib/roles';
 import type { UserRole } from '@/lib/supabase/database.types';
 
 /**
- * `managerOnly` marque les écrans qui touchent au chiffre d'affaires, aux
- * cibles ou aux comptes. Un assistant manager ne les voit pas — et s'il
- * forçait l'adresse, la page le renverrait, puis la base refuserait.
+ * Le titre de l'écran courant, et le chemin du retour.
+ *
+ * L'ancienne barre alignait dix onglets qui débordaient de l'écran : sur un
+ * téléphone, il fallait la faire défiler pour découvrir ce qu'elle
+ * contenait, et rien n'indiquait où l'on se trouvait. Le menu Gestion est
+ * désormais un vrai sommaire ; cette barre ne fait plus qu'une chose,
+ * ramener en arrière.
  */
-const LINKS: { href: string; label: string; exact?: boolean; managerOnly?: boolean }[] = [
-  { href: '/admin', label: 'Tableau de bord', exact: true, managerOnly: true },
-  { href: '/admin/produits', label: 'Produits', managerOnly: true },
-  { href: '/admin/categories', label: 'Catégories', managerOnly: true },
-  { href: '/admin/photos', label: 'Photos', managerOnly: true },
-  { href: '/admin/simulateur', label: 'Simulateur', managerOnly: true },
-  { href: '/admin/chiffre-affaires', label: "Chiffre d'affaires", managerOnly: true },
-  { href: '/admin/ruptures', label: 'Ruptures', managerOnly: true },
-  { href: '/admin/historique', label: 'Historique' },
-  { href: '/admin/utilisateurs', label: 'Équipe', managerOnly: true },
-  { href: '/compte', label: 'Mon compte' },
+const TITRES: { prefixe: string; titre: string }[] = [
+  { prefixe: '/admin/produits', titre: 'Produits' },
+  { prefixe: '/admin/categories', titre: 'Catégories' },
+  { prefixe: '/admin/photos', titre: 'Photos' },
+  { prefixe: '/admin/chiffre-affaires', titre: "Chiffre d'affaires" },
+  { prefixe: '/admin/ruptures', titre: 'Ruptures' },
+  { prefixe: '/admin/historique', titre: 'Historique' },
+  { prefixe: '/admin/simulateur', titre: 'Simulateur' },
+  { prefixe: '/admin/utilisateurs', titre: 'Équipe' },
 ];
 
 export function AdminNav({ role }: { role: UserRole }) {
   const pathname = usePathname();
-  const canSeeAll = isManagerRole(role);
-  const links = LINKS.filter((link) => canSeeAll || !link.managerOnly);
+  const surLeSommaire = pathname === '/admin';
+
+  // Un assistant manager n'a pas de sommaire à lui : son seul écran est
+  // l'historique, et son retour le ramène donc à l'accueil.
+  const sommaireAccessible = isManagerRole(role);
+  const retour = surLeSommaire || !sommaireAccessible ? '/' : '/admin';
+  const libelle = surLeSommaire || !sommaireAccessible ? 'Menu principal' : 'Gestion';
+
+  const courant = TITRES.find((entree) => pathname.startsWith(entree.prefixe));
 
   return (
-    <nav className="mx-auto w-full max-w-6xl overflow-x-auto px-5">
-      <ul className="flex gap-1 pb-1">
-        {links.map((link) => {
-          const active = link.exact ? pathname === link.href : pathname.startsWith(link.href);
-          return (
-            <li key={link.href}>
-              <Link
-                href={link.href}
-                className={cn(
-                  'inline-block rounded-md px-3 py-2 text-sm font-medium whitespace-nowrap transition-colors',
-                  active
-                    ? 'bg-muted text-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-              >
-                {link.label}
-              </Link>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
+    <div className="mx-auto flex w-full max-w-6xl items-center gap-3 px-5 pb-2">
+      <Link
+        href={retour}
+        className="hover:bg-muted -ml-2 flex h-11 items-center gap-2 rounded-full pr-4 pl-2 font-bold transition-colors"
+      >
+        <ArrowLeft className="size-5" strokeWidth={2.5} />
+        <span>{libelle}</span>
+      </Link>
+
+      {courant ? (
+        <span className="text-muted-foreground truncate text-sm font-semibold">
+          · {courant.titre}
+        </span>
+      ) : null}
+    </div>
   );
 }

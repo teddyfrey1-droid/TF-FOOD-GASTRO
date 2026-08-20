@@ -39,6 +39,18 @@ export default async function AccountPage() {
         </Card>
 
         <div className="mt-4 space-y-3">
+          {/* Les rappels ne fonctionnent sur iPhone QUE depuis l'écran
+              d'accueil : le lien d'installation se place donc juste
+              au-dessus de l'interrupteur qui en dépend. */}
+          <Link
+            href="/installer"
+            className={buttonVariants({
+              variant: 'outline',
+              className: 'h-12 w-full rounded-2xl font-bold',
+            })}
+          >
+            📲 Installer sur mon téléphone
+          </Link>
           <NotificationToggle />
           {isManagerRole(user.role) ? (
             <Link
