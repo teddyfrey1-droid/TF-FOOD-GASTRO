@@ -15,6 +15,13 @@ create table if not exists auth.users (
   email              text unique,
   encrypted_password text,
   raw_user_meta_data jsonb default '{}'::jsonb,
+  email_confirmed_at timestamptz,
+  phone_confirmed_at timestamptz,
+  -- ⚠️ GÉNÉRÉE, comme chez Supabase. Elle figure ici précisément pour que
+  -- toute tentative de l'écrire échoue AUSSI en test : sans elle, une
+  -- migration qui la renseigne passe en local et casse en production.
+  confirmed_at       timestamptz generated always as
+                       (least(email_confirmed_at, phone_confirmed_at)) stored,
   created_at         timestamptz not null default now()
 );
 

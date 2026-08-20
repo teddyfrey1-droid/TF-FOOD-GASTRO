@@ -39,6 +39,22 @@ export async function createClient() {
  * de données depuis le back-office. Ne jamais l'utiliser pour servir une
  * requête venant du téléphone d'un employé.
  */
+/**
+ * Client anonyme SANS session, pour inscrire quelqu'un d'autre.
+ *
+ * `signUp` ouvre une session au nom du compte créé. Si ce client écrivait
+ * les cookies, le directeur se retrouverait connecté à la place de sa
+ * nouvelle recrue au milieu de sa propre page. Les cookies sont donc
+ * neutralisés : la session créée est simplement jetée.
+ */
+export function createSignUpClient() {
+  return createServerClient<Database>(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll: () => [], setAll: () => {} } },
+  );
+}
+
 export function createAdminClient() {
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceKey) {

@@ -2,7 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import { createClient, createAdminClient } from '@/lib/supabase/server';
+import { createClient, createAdminClient, createSignUpClient } from '@/lib/supabase/server';
 import { getCurrentUser, isManagerRole } from '@/lib/auth';
 import type { UserRole } from '@/lib/supabase/database.types';
 
@@ -40,11 +40,50 @@ export interface UserFormState {
  * hors de portée d'une clé publique. Plutôt qu'une erreur technique, on
  * indique le geste exact à faire.
  */
+/**
+ * Traduit les refus de Supabase à l'inscription.
+ *
+ * Le plus fréquent de loin : une adresse dont le domaine ne reçoit pas de
+ * courrier. Supabase la rejette, et son message brut ne dit pas quoi faire.
+ */
+function messageInscription(brut: string | undefined): string {
+  const message = brut ?? 'erreur inconnue';
+
+  if (/already|registered|exists/i.test(message)) {
+    return 'Un compte existe déjà avec cette adresse.';
+  }
+  if (/invalid/i.test(message) && /email/i.test(message)) {
+    return (
+      'Adresse refusée par Supabase : le domaine doit pouvoir recevoir du courrier. ' +
+      'Une adresse Gmail ou celle du restaurant fonctionne ; une adresse inventée, non.'
+    );
+  }
+  if (/rate|limit|too many/i.test(message)) {
+    return 'Trop de créations d’affilée. Patientez quelques minutes puis réessayez.';
+  }
+  if (/password/i.test(message)) {
+    return 'Mot de passe refusé : il doit faire au moins 8 caractères.';
+  }
+  return `Création impossible : ${message}`;
+}
+
+/**
+ * Message affiché quand la clé de service manque.
+ *
+ * Depuis que la création de comptes passe par l'inscription ordinaire, une
+ * SEULE opération l'exige encore : réinitialiser le mot de passe de
+ * quelqu'un d'autre. Changer le mot de passe d'un tiers se fait dans le
+ * service d'authentification, hors de portée d'une clé publique.
+ *
+ * Contournement sans la clé : désactiver le compte, en recréer un avec la
+ * même adresse — ou laisser l'employé changer son mot de passe lui-même
+ * depuis « Mon compte ».
+ */
 const CLE_DE_SERVICE_MANQUANTE =
-  'Création de comptes indisponible : la clé de service Supabase n’est pas encore ' +
-  'renseignée sur Vercel. Réglages du projet → Environment Variables → ajouter ' +
-  'SUPABASE_SERVICE_ROLE_KEY (Supabase → Project Settings → API keys → service_role), ' +
-  'puis redéployer. Les autres réglages de cette page fonctionnent sans elle.';
+  'Réinitialisation indisponible : la clé de service Supabase n’est pas renseignée sur ' +
+  'Vercel. En attendant, l’employé peut changer son mot de passe lui-même depuis ' +
+  '« Mon compte ». Pour l’activer : Vercel → Settings → Environment Variables → ' +
+  'SUPABASE_SERVICE_ROLE_KEY, puis redéployer.';
 
 export async function createTeamMember(
   _state: UserFormState,
@@ -67,43 +106,34 @@ export async function createTeamMember(
     return { error: parsed.error.issues[0]?.message ?? 'Formulaire invalide.' };
   }
 
-  let admin: ReturnType<typeof createAdminClient>;
-  try {
-    admin = createAdminClient();
-  } catch {
-    return { error: CLE_DE_SERVICE_MANQUANTE };
-  }
-
-  // `email_confirm` évite d'envoyer un e-mail de validation : en cuisine,
-  // personne n'ira relever sa boîte pour activer un compte.
-  const { data, error } = await admin.auth.admin.createUser({
+  // Inscription ordinaire, avec la clé PUBLIQUE : aucune clé de service
+  // n'est nécessaire. Le client n'écrit pas de cookies, sinon le directeur
+  // serait déconnecté au profit du compte qu'il vient de créer.
+  const { data, error } = await createSignUpClient().auth.signUp({
     email: parsed.data.email,
     password: parsed.data.password,
-    email_confirm: true,
-    user_metadata: { full_name: parsed.data.fullName },
+    options: { data: { full_name: parsed.data.fullName } },
   });
 
   if (error || !data.user) {
-    return {
-      error: error?.message?.includes('already')
-        ? 'Un compte existe déjà avec cette adresse.'
-        : `Création impossible : ${error?.message ?? 'erreur inconnue'}`,
-    };
+    return { error: messageInscription(error?.message) };
   }
 
-  // Le déclencheur crée le profil en « salarié désactivé » : le directeur
-  // ayant explicitement créé ce compte, on l'active et on pose son statut.
-  const { error: profileError } = await admin
-    .from('profiles')
-    .update({
-      full_name: parsed.data.fullName,
-      role: parsed.data.role as UserRole,
-      is_active: true,
-    })
-    .eq('id', data.user.id);
+  // Le compte naît non confirmé et le profil désactivé. Le directeur qui
+  // vient de le créer EST la validation : il remet le mot de passe en main
+  // propre. On confirme donc l'adresse à sa place — l'e-mail de Supabase
+  // n'aurait jamais été ouvert depuis une cuisine.
+  const supabase = await createClient();
+  const { error: activationError } = await supabase.rpc('mep_activer_compte', {
+    p_user_id: data.user.id,
+    p_full_name: parsed.data.fullName,
+    p_role: parsed.data.role as UserRole,
+  });
 
-  if (profileError) {
-    return { error: `Compte créé, mais statut non appliqué : ${profileError.message}` };
+  if (activationError) {
+    return {
+      error: `Compte créé, mais non activé : ${activationError.message}. Activez-le depuis la liste ci-dessous.`,
+    };
   }
 
   revalidatePath('/admin/utilisateurs');

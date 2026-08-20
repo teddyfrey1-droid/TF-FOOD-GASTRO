@@ -49,7 +49,7 @@ begin
   raise exception 'ÉCHEC — % : la requête a réussi alors qu''elle devait être refusée', label;
 exception
   when insufficient_privilege or undefined_table or undefined_function
-     or undefined_column or check_violation then
+     or undefined_column or check_violation or no_data_found then
     raise notice 'OK   — % (refusé : %)', label, sqlerrm;
 end;
 $$;
@@ -632,6 +632,90 @@ select pg_temp.check_denied('L''historique est refusé à l''employé',
   'select * from public.mep_count_history(current_date - 7, current_date)');
 select pg_temp.check_denied('Le détail d''un comptage passé est refusé à l''employé',
   'select * from public.mep_count_detail(''c0000000-0000-0000-0000-00000000aaaa'')');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
+\echo '--- 10. CRÉATION DE COMPTE SANS CLÉ DE SERVICE ---'
+
+-- Un compte tout juste inscrit : non confirmé, profil désactivé.
+insert into auth.users (id, email) values
+  ('a0000000-0000-0000-0000-0000000000b1', 'nouvelle.recrue@heiko.test')
+on conflict (id) do nothing;
+update public.profiles set role = 'employee', is_active = false
+  where id = 'a0000000-0000-0000-0000-0000000000b1';
+update auth.users set email_confirmed_at = null
+  where id = 'a0000000-0000-0000-0000-0000000000b1';
+
+-- --- Un employé ne peut pas s'auto-promouvoir.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Un employé ne peut activer aucun compte',
+  'select public.mep_activer_compte(''a0000000-0000-0000-0000-0000000000b1'',
+     ''Pirate'', ''manager'')');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- --- Un directeur ne fabrique pas un propriétaire.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('Un directeur ne peut pas nommer un propriétaire',
+  'select public.mep_activer_compte(''a0000000-0000-0000-0000-0000000000b1'',
+     ''Recrue'', ''owner'')');
+
+-- --- Mais il active bien un salarié.
+select pg_temp.check_allowed('Le directeur active une nouvelle recrue',
+  'select public.mep_activer_compte(''a0000000-0000-0000-0000-0000000000b1'',
+     ''Nouvelle recrue'', ''employee'')');
+reset role;
+reset "request.jwt.claim.sub";
+
+select pg_temp.check_equal('L''adresse est confirmée, plus d''e-mail à cliquer',
+  (select email_confirmed_at is not null from auth.users
+   where id = 'a0000000-0000-0000-0000-0000000000b1'),
+  true);
+
+select pg_temp.check_equal('Le profil est actif et porte son statut',
+  (select role::text || '/' || is_active::text from public.profiles
+   where id = 'a0000000-0000-0000-0000-0000000000b1'),
+  'employee/true');
+
+select pg_temp.check_equal('Le prénom saisi par le directeur est repris',
+  (select full_name from public.profiles
+   where id = 'a0000000-0000-0000-0000-0000000000b1'),
+  'Nouvelle recrue');
+
+-- --- Réactiver ne réécrit pas une confirmation déjà acquise.
+do $$
+declare v_avant timestamptz;
+begin
+  select email_confirmed_at into v_avant from auth.users
+   where id = 'a0000000-0000-0000-0000-0000000000b1';
+
+  perform set_config('request.jwt.claim.sub',
+    'a0000000-0000-0000-0000-00000000000d', true);
+  perform public.mep_activer_compte('a0000000-0000-0000-0000-0000000000b1',
+    'Nouvelle recrue', 'assistant_manager');
+
+  perform pg_temp.check_equal('La date de confirmation d''origine est préservée',
+    (select email_confirmed_at from auth.users
+     where id = 'a0000000-0000-0000-0000-0000000000b1'),
+    v_avant);
+
+  perform pg_temp.check_equal('Le statut, lui, se met bien à jour',
+    (select role::text from public.profiles
+     where id = 'a0000000-0000-0000-0000-0000000000b1'),
+    'assistant_manager');
+end
+$$;
+
+-- Le compte inexistant se teste EN ÉTANT directeur : sinon c'est le
+-- contrôle de rôle qui refuse, et le cas visé n'est jamais atteint.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('Un compte inexistant est refusé proprement',
+  'select public.mep_activer_compte(''00000000-0000-0000-0000-0000000000ff'',
+     ''Fantôme'', ''employee'')');
 reset role;
 reset "request.jwt.claim.sub";
 

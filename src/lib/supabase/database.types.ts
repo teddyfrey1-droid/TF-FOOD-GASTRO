@@ -382,6 +382,14 @@ export type Database = {
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
       /**
+       * Confirme l'adresse d'un compte tout juste inscrit et lui donne son
+       * statut. Remplace la clé de service pour la création de comptes.
+       */
+      mep_activer_compte: {
+        Args: { p_user_id: string; p_full_name: string; p_role: UserRole };
+        Returns: undefined;
+      };
+      /**
        * Historique des comptages, pour tout chef de service.
        * `forecast_revenue` vaut null tant que l'appelant n'est pas directeur.
        */
