@@ -83,6 +83,8 @@ export default async function CountPage({ params }: { params: Promise<{ session:
       notApplicableReason: line?.not_applicable_reason ?? null,
       countedSaladbar: Boolean(line?.counted_saladbar_at),
       countedFridge: Boolean(line?.counted_fridge_at),
+      isDeferred: Boolean(line?.deferred_at),
+      deferredReason: line?.deferred_reason ?? null,
     };
   }
 

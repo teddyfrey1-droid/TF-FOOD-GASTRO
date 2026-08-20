@@ -24,6 +24,7 @@ export function BacStepper({
   step,
   /** Vrai quand la zone a été relevée, même à zéro. */
   counted,
+  compact,
   disabled,
   onChange,
   onZero,
@@ -32,6 +33,8 @@ export function BacStepper({
   value: number;
   step: number;
   counted: boolean;
+  /** Deux produits côte à côte : le « 0 » passe sous le compteur. */
+  compact?: boolean;
   disabled?: boolean;
   onChange: (next: number) => void;
   /** Déclarer la zone vide : met à zéro ET marque la ligne relevée. */
@@ -61,30 +64,36 @@ export function BacStepper({
 
   const zeroConfirmed = counted && value === 0;
 
+  /* « Zéro » : un bac vide se déclare, il ne se devine pas. */
+  const boutonZero = (
+    <button
+      type="button"
+      aria-label={`${label} : déclarer zéro`}
+      aria-pressed={zeroConfirmed}
+      disabled={disabled}
+      onClick={onZero}
+      className={cn(
+        'flex touch-manipulation items-center justify-center',
+        'rounded-2xl font-black transition-colors',
+        compact ? 'h-11 w-full text-lg' : 'h-14 w-[4.5rem] shrink-0 text-xl',
+        zeroConfirmed
+          ? 'bg-primary text-primary-foreground'
+          : 'bg-muted text-muted-foreground active:bg-muted/70',
+        disabled && 'opacity-40',
+      )}
+    >
+      0
+    </button>
+  );
+
   return (
-    <div className="no-select flex items-stretch gap-2">
-      {/* « Zéro » : un bac vide se déclare, il ne se devine pas. */}
-      <button
-        type="button"
-        aria-label={`${label} : déclarer zéro`}
-        aria-pressed={zeroConfirmed}
-        disabled={disabled}
-        onClick={onZero}
-        className={cn(
-          'flex h-14 w-[4.5rem] shrink-0 touch-manipulation items-center justify-center',
-          'rounded-2xl text-xl font-black transition-colors',
-          zeroConfirmed
-            ? 'bg-primary text-primary-foreground'
-            : 'bg-muted text-muted-foreground active:bg-muted/70',
-          disabled && 'opacity-40',
-        )}
-      >
-        0
-      </button>
+    <div className={cn('no-select', compact ? 'space-y-2' : 'flex items-stretch gap-2')}>
+      {compact ? null : boutonZero}
 
       <div
         className={cn(
-          'bg-card flex h-14 flex-1 items-center rounded-2xl border shadow-sm',
+          'bg-card flex items-center rounded-2xl border shadow-sm',
+          compact ? 'h-13 w-full' : 'h-14 flex-1',
           disabled && 'opacity-40',
           counted && value > 0 && 'border-primary/50',
         )}
@@ -95,11 +104,12 @@ export function BacStepper({
           disabled={disabled || value <= 0}
           onClick={() => onChange(snap(value - step))}
           className={cn(
-            'flex h-full w-16 shrink-0 items-center justify-center rounded-l-2xl',
+            'flex h-full shrink-0 items-center justify-center rounded-l-2xl',
+            compact ? 'w-11' : 'w-16',
             'active:bg-muted touch-manipulation transition-colors disabled:opacity-25',
           )}
         >
-          <Minus className="size-6" strokeWidth={3} />
+          <Minus className={compact ? 'size-5' : 'size-6'} strokeWidth={3} />
         </button>
 
         {editing ? (
@@ -136,7 +146,8 @@ export function BacStepper({
               openKeypad();
             }}
             className={cn(
-              'h-full min-w-0 flex-1 touch-manipulation text-3xl font-black tabular-nums',
+              'h-full min-w-0 flex-1 touch-manipulation font-black tabular-nums',
+              compact ? 'text-2xl' : 'text-3xl',
               !counted && value === 0 && 'text-muted-foreground/30',
             )}
           >
@@ -150,13 +161,16 @@ export function BacStepper({
           disabled={disabled}
           onClick={() => onChange(snap(value + step))}
           className={cn(
-            'flex h-full w-16 shrink-0 items-center justify-center rounded-r-2xl',
+            'flex h-full shrink-0 items-center justify-center rounded-r-2xl',
+            compact ? 'w-11' : 'w-16',
             'active:bg-muted touch-manipulation transition-colors disabled:opacity-25',
           )}
         >
-          <Plus className="size-6" strokeWidth={3} />
+          <Plus className={compact ? 'size-5' : 'size-6'} strokeWidth={3} />
         </button>
       </div>
+
+      {compact ? boutonZero : null}
     </div>
   );
 }

@@ -168,6 +168,9 @@ export async function updateProductInline(
     minMode?: 'auto' | 'manual';
     minQtyManual?: number | null;
     minDivisor?: number;
+    critMode?: 'auto' | 'manual';
+    critQtyManual?: number | null;
+    critDivisor?: number;
     name?: string;
     imageUrl?: string | null;
     inSaladbar?: boolean;
@@ -180,6 +183,9 @@ export async function updateProductInline(
     minMode: z.enum(['auto', 'manual']).optional(),
     minQtyManual: z.number().min(0).nullable().optional(),
     minDivisor: z.number().positive().optional(),
+    critMode: z.enum(['auto', 'manual']).optional(),
+    critQtyManual: z.number().min(0).nullable().optional(),
+    critDivisor: z.number().positive().optional(),
     name: z.string().trim().min(1, 'Le nom ne peut pas être vide.').max(80).optional(),
     // Chaîne vide = « retirer la photo », d'où le passage par null.
     imageUrl: z.union([z.url('Adresse de photo invalide.'), z.literal('')]).nullable().optional(),
@@ -204,6 +210,9 @@ export async function updateProductInline(
     min_divisor: number;
     min_mode: 'auto' | 'manual';
     min_qty_manual: number | null;
+    crit_mode: 'auto' | 'manual';
+    crit_qty_manual: number | null;
+    crit_divisor: number;
     name: string;
     image_url: string | null;
     in_saladbar: boolean;
@@ -223,6 +232,15 @@ export async function updateProductInline(
     if (parsed.data.minMode === 'auto') payload.min_qty_manual = null;
   }
   if (parsed.data.minQtyManual !== undefined) payload.min_qty_manual = parsed.data.minQtyManual;
+  if (parsed.data.critDivisor !== undefined) payload.crit_divisor = parsed.data.critDivisor;
+  if (parsed.data.critMode !== undefined) {
+    payload.crit_mode = parsed.data.critMode;
+    // Repasser en automatique efface le seuil critique manuel.
+    if (parsed.data.critMode === 'auto') payload.crit_qty_manual = null;
+  }
+  if (parsed.data.critQtyManual !== undefined) {
+    payload.crit_qty_manual = parsed.data.critQtyManual;
+  }
 
   if (Object.keys(payload).length === 0) return {};
 

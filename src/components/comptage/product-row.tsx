@@ -1,7 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
-import { Check } from 'lucide-react';
+import { Check, Clock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,9 @@ export interface CountState {
   countedSaladbar: boolean;
   /** Le frigo du bas a été relevé (même à zéro). */
   countedFridge: boolean;
+  /** Comptage remis à plus tard : ne bloque pas, n'entre pas au rapport. */
+  isDeferred: boolean;
+  deferredReason: string | null;
 }
 
 export const EMPTY_LINE: CountState = {
@@ -28,36 +31,41 @@ export const EMPTY_LINE: CountState = {
   notApplicableReason: null,
   countedSaladbar: false,
   countedFridge: false,
+  isDeferred: false,
+  deferredReason: null,
 };
 
-/** Une ligne est faite quand TOUTES ses zones ont été relevées. */
+/** Deux façons de présenter la liste, au choix de l'employé. */
+export type CountLayout = 'grille' | 'liste';
+
+/**
+ * Une ligne est faite quand TOUTES ses zones ont été relevées.
+ *
+ * Un produit absent ou reporté ne bloque pas : dans les deux cas il n'y a
+ * rien à mesurer, pour des raisons différentes.
+ */
 export function isLineDone(
   line: CountState | null | undefined,
   product: { inSaladbar: boolean; inFridge: boolean },
 ): boolean {
   if (!line) return false;
-  if (line.isNotApplicable) return true;
+  if (line.isNotApplicable || line.isDeferred) return true;
   if (product.inSaladbar && !line.countedSaladbar) return false;
   if (product.inFridge && !line.countedFridge) return false;
   return true;
 }
 
-/**
- * Une ligne de comptage, pour UNE zone à la fois.
- *
- * Le produit en haut, le compteur pleine largeur en dessous : sur un
- * téléphone, un compteur coincé à droite d'un nom long n'offre pas de quoi
- * enchaîner cinq appuis sans viser.
- */
 function ProductRowImpl({
   product,
   state,
   zone,
+  layout,
   onChange,
 }: {
   product: CountProduct;
   state: CountState | undefined;
   zone: CountZone;
+  layout: CountLayout;
   /**
    * Volontairement (produit, zone, correctif) plutôt qu'un simple
    * correctif : une fermeture recréée par ligne à chaque rendu rendrait la
@@ -67,8 +75,8 @@ function ProductRowImpl({
 }) {
   const line = state ?? EMPTY_LINE;
   const zoneCounted = zone === 'saladbar' ? line.countedSaladbar : line.countedFridge;
-  const [askingReason, setAskingReason] = useState(false);
-  const [reason, setReason] = useState(line.notApplicableReason ?? '');
+  const [demande, setDemande] = useState<null | 'absent' | 'report'>(null);
+  const [motif, setMotif] = useState('');
 
   const isSaladbar = zone === 'saladbar';
   const value = isSaladbar ? line.qtySaladbar : line.qtyFridge;
@@ -81,63 +89,108 @@ function ProductRowImpl({
 
   if (!presentHere) return null;
 
-  const done = zoneCounted && !line.isNotApplicable;
+  const misDeCote = line.isNotApplicable || line.isDeferred;
+  const done = zoneCounted && !misDeCote;
+  const grille = layout === 'grille';
+
+  const vignette = (
+    <span className="relative block">
+      <VignetteProduit
+        name={product.name}
+        categoryName={product.categoryName}
+        imageUrl={product.imageUrl}
+        className={cn(grille && 'aspect-square size-full rounded-2xl text-4xl')}
+      />
+      {done ? (
+        <span className="bg-primary text-primary-foreground absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full">
+          <Check className="size-3.5" strokeWidth={4} />
+        </span>
+      ) : null}
+      {line.isDeferred ? (
+        <span className="bg-alert text-alert-foreground absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full">
+          <Clock className="size-3.5" strokeWidth={3} />
+        </span>
+      ) : null}
+    </span>
+  );
+
+  const titre = (
+    <>
+      <p
+        className={cn(
+          'font-black',
+          grille ? 'line-clamp-2 text-sm leading-tight' : 'text-[17px] leading-tight',
+        )}
+      >
+        {product.name}
+      </p>
+      <p className="text-muted-foreground mt-0.5 text-xs font-semibold">
+        {product.unit === 'piece' ? 'pièces' : 'gastros'}
+        {inBothZones && !grille ? ` · ${otherLabel} : ${otherValue}` : ''}
+        {inBothZones && grille ? ` · ${otherValue} ${isSaladbar ? 'en bas' : 'en haut'}` : ''}
+      </p>
+    </>
+  );
 
   return (
     <div
+      id={`produit-${product.id}`}
+      // `scroll-mt` réserve la place de l'en-tête collant : sans elle, le
+      // saut vers un produit manquant l'amènerait sous la barre de recherche.
       className={cn(
-        'rounded-3xl border p-3 transition-colors',
-        line.isNotApplicable && 'bg-card opacity-50',
-        !line.isNotApplicable && done && 'border-primary/50 bg-primary/[0.05]',
-        !line.isNotApplicable && !done && 'bg-card',
+        'scroll-mt-56 rounded-3xl border p-3 transition-colors',
+        misDeCote && 'bg-card opacity-60',
+        !misDeCote && done && 'border-primary/50 bg-primary/[0.05]',
+        !misDeCote && !done && 'bg-card',
       )}
     >
-      <div className="flex items-center gap-3">
-        <span className="relative shrink-0">
-          <VignetteProduit
-            name={product.name}
-            categoryName={product.categoryName}
-            imageUrl={product.imageUrl}
-          />
-          {done ? (
-            <span className="bg-primary text-primary-foreground absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full">
-              <Check className="size-3.5" strokeWidth={4} />
-            </span>
-          ) : null}
-        </span>
-
-        <div className="min-w-0 flex-1">
-          <p className="text-[17px] leading-tight font-black">{product.name}</p>
-          <p className="text-muted-foreground mt-0.5 text-xs font-semibold">
-            {product.unit === 'piece' ? 'pièces' : 'gastros'}
-            {inBothZones ? ` · ${otherLabel} : ${otherValue}` : ''}
-            {product.notes ? ` · ${product.notes}` : ''}
-          </p>
+      {grille ? (
+        <div className="space-y-2">
+          {vignette}
+          <div className="min-w-0">{titre}</div>
         </div>
+      ) : (
+        <div className="flex items-center gap-3">
+          <span className="shrink-0">{vignette}</span>
+          <div className="min-w-0 flex-1">{titre}</div>
+        </div>
+      )}
 
-        {line.isNotApplicable ? (
+      {misDeCote ? (
+        <div className="mt-2 flex items-center justify-between gap-2">
+          <p className="text-muted-foreground min-w-0 flex-1 truncate text-xs font-semibold">
+            {line.isDeferred ? 'Reporté' : 'Absent'} —{' '}
+            {line.deferredReason ?? line.notApplicableReason}
+          </p>
           <Button
             type="button"
             variant="ghost"
             size="sm"
+            className="h-9 shrink-0 rounded-xl"
             onClick={() =>
-              onChange(product.id, { isNotApplicable: false, notApplicableReason: null }, zone)
+              onChange(
+                product.id,
+                {
+                  isNotApplicable: false,
+                  notApplicableReason: null,
+                  isDeferred: false,
+                  deferredReason: null,
+                },
+                zone,
+              )
             }
           >
-            Annuler
+            Reprendre
           </Button>
-        ) : null}
-      </div>
-
-      {line.isNotApplicable ? (
-        <p className="text-muted-foreground mt-2 text-xs">Absent — {line.notApplicableReason}</p>
+        </div>
       ) : (
-        <div className="mt-3">
+        <div className="mt-2.5">
           <BacStepper
             label={ZONE_LABELS[zone]}
             value={value}
             step={product.countStep}
             counted={zoneCounted}
+            compact={grille}
             onChange={(next) =>
               onChange(product.id, isSaladbar ? { qtySaladbar: next } : { qtyFridge: next }, zone)
             }
@@ -148,44 +201,65 @@ function ProductRowImpl({
         </div>
       )}
 
-      {line.isNotApplicable ? null : askingReason ? (
-        <div className="mt-3 space-y-2">
+      {misDeCote ? null : demande ? (
+        <div className="mt-2.5 space-y-2">
           <Input
             autoFocus
-            value={reason}
-            onChange={(event) => setReason(event.target.value)}
-            placeholder="Pourquoi ? (non reçu, hors carte…)"
-            className="h-11 rounded-xl"
+            value={motif}
+            onChange={(event) => setMotif(event.target.value)}
+            placeholder={
+              demande === 'report' ? 'Pourquoi plus tard ?' : 'Pourquoi ? (non reçu, hors carte…)'
+            }
+            className="h-11 rounded-xl text-base"
           />
           <div className="flex gap-2">
             <Button
               type="button"
               size="sm"
-              disabled={reason.trim() === ''}
+              className="h-10 rounded-xl"
+              disabled={motif.trim() === ''}
               onClick={() => {
                 onChange(
                   product.id,
-                  { isNotApplicable: true, notApplicableReason: reason.trim() },
+                  demande === 'report'
+                    ? { isDeferred: true, deferredReason: motif.trim() }
+                    : { isNotApplicable: true, notApplicableReason: motif.trim() },
                   zone,
                 );
-                setAskingReason(false);
+                setDemande(null);
+                setMotif('');
               }}
             >
               Confirmer
             </Button>
-            <Button type="button" variant="ghost" size="sm" onClick={() => setAskingReason(false)}>
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-10 rounded-xl"
+              onClick={() => setDemande(null)}
+            >
               Annuler
             </Button>
           </div>
         </div>
       ) : (
-        <button
-          type="button"
-          onClick={() => setAskingReason(true)}
-          className="text-muted-foreground hover:text-foreground mt-2 text-xs font-semibold"
-        >
-          Produit absent ?
-        </button>
+        <div className="text-muted-foreground mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs font-semibold">
+          <button
+            type="button"
+            onClick={() => setDemande('report')}
+            className="hover:text-foreground"
+          >
+            Plus tard…
+          </button>
+          <button
+            type="button"
+            onClick={() => setDemande('absent')}
+            className="hover:text-foreground"
+          >
+            Produit absent ?
+          </button>
+        </div>
       )}
     </div>
   );

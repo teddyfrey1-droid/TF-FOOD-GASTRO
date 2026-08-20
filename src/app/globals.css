@@ -239,3 +239,62 @@
     display: none !important;
   }
 }
+
+/* ---------------------------------------------------------------------
+ * Safari sur iPhone
+ *
+ * L'application vit à 100 % sur des iPhone, ajoutée à l'écran d'accueil.
+ * Ces réglages n'ont aucun effet ailleurs et corrigent des comportements
+ * propres à WebKit qui se remarquent tout de suite en cuisine.
+ * ------------------------------------------------------------------- */
+@layer base {
+  html {
+    /* Safari grossit le texte tout seul en paysage. */
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
+  body {
+    /* Le halo gris que WebKit peint sur chaque élément touché : sur une
+       grille de compteurs, il donne l'impression d'une interface sale. */
+    -webkit-tap-highlight-color: transparent;
+
+    /* Empêche le « tirer pour rafraîchir » de se déclencher quand on
+       remonte vite une liste de trente-sept produits — un comptage à
+       moitié saisi rechargerait sous les doigts. */
+    overscroll-behavior-y: contain;
+  }
+
+  /* Supprime le délai de 300 ms que WebKit garde pour guetter un double
+     appui. Sans cela, chaque « + » répond avec un tiers de seconde de
+     retard, et enchaîner cinq appuis devient impossible. */
+  button,
+  [role='button'],
+  a,
+  input,
+  select,
+  textarea {
+    touch-action: manipulation;
+  }
+
+  /* `dvh` n'existe qu'à partir d'iOS 16.4 : les versions antérieures
+     doivent au moins occuper la hauteur visible. */
+  @supports not (height: 100dvh) {
+    .min-h-dvh {
+      min-height: 100vh;
+    }
+  }
+
+  /* Défilement inertiel sur les rangées de pastilles horizontales. */
+  .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Une fois installée, l'application passe SOUS la barre d'état : les
+     en-têtes collants doivent réserver la hauteur de l'encoche. */
+  @media (display-mode: standalone) {
+    .pt-safe-header {
+      padding-top: max(0.5rem, env(safe-area-inset-top));
+    }
+  }
+}

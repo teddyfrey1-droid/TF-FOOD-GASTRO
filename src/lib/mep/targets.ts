@@ -7,7 +7,7 @@
 
 import { familySettings } from './families';
 import { ceilTo, clamp, PRODUCTION_STEP } from './rounding';
-import type { ProductCalcConfig, ProductTarget } from './types';
+import { DEFAULT_CRIT_DIVISOR, type ProductCalcConfig, type ProductTarget } from './types';
 
 /**
  * Cible du jour :
@@ -55,16 +55,52 @@ export function computeMinimum(
   return Math.min(rounded, target);
 }
 
-/** Cible + minimum d'un produit, à partir du CA de référence. */
+/**
+ * Seuil CRITIQUE :
+ *
+ *   auto   -> critique = cible / crit_divisor   (divisor par défaut : 4)
+ *   manual -> critique = crit_qty_manual
+ *
+ *   critique = PLAFOND(critique, count_step)
+ *   critique = min(critique, minimum)
+ *
+ * Le bornage par le MINIMUM n'est pas cosmétique : un critique supérieur au
+ * minimum rendrait un produit critique avant même d'être à relancer, et le
+ * rapport afficherait des alertes rouges sur des bacs encore pleins.
+ */
+export function computeCritical(
+  product: ProductCalcConfig,
+  target: number,
+  minimum: number,
+  defaultCritDivisor: number,
+): number {
+  const divisor =
+    product.critDivisor && product.critDivisor > 0 ? product.critDivisor : defaultCritDivisor;
+
+  const raw =
+    product.critMode === 'manual'
+      ? (product.critQtyManual ?? 0)
+      : divisor > 0
+        ? target / divisor
+        : 0;
+
+  const rounded = ceilTo(Math.max(raw, 0), product.countStep);
+  return Math.min(rounded, minimum);
+}
+
+/** Cible, minimum et seuil critique d'un produit, à partir du CA de référence. */
 export function computeProductTarget(
   product: ProductCalcConfig,
   caRef: number,
   defaultMinDivisor: number,
+  defaultCritDivisor: number = DEFAULT_CRIT_DIVISOR,
 ): ProductTarget {
   const target = computeTarget(product, caRef);
+  const minimum = computeMinimum(product, target, defaultMinDivisor);
   return {
     productId: product.id,
     target,
-    minimum: computeMinimum(product, target, defaultMinDivisor),
+    minimum,
+    critical: computeCritical(product, target, minimum, defaultCritDivisor),
   };
 }

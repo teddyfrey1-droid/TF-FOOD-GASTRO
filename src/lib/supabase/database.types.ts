@@ -48,6 +48,10 @@ type ProductRow = {
   min_mode: MinMode;
   min_divisor: number;
   min_qty_manual: number | null;
+  crit_mode: MinMode;
+  /** Diviseur du seuil critique (4 = le quart de la cible), en mode auto. */
+  crit_divisor: number;
+  crit_qty_manual: number | null;
   floor_qty: number | null;
   ceiling_qty: number | null;
   /** 1 = LE PLUS urgent, 5 = le moins. */
@@ -124,6 +128,8 @@ type RevenueSettingsRow = {
   safety_margin: number;
   afternoon_target_ratio: number;
   default_min_divisor: number;
+  /** Diviseur de seuil critique par défaut (4 = le quart de la cible). */
+  default_crit_divisor: number;
   show_targets_to_employees: boolean;
   morning_reminder_time: string;
   afternoon_reminder_time: string;
@@ -153,6 +159,11 @@ type CountLineRow = {
   qty_total: number;
   target_snapshot: number | null;
   min_snapshot: number | null;
+  /** Seuil critique appliqué au moment du comptage. */
+  crit_snapshot: number | null;
+  /** Comptage reporté : ne bloque pas la validation, n'entre pas au rapport. */
+  deferred_at: string | null;
+  deferred_reason: string | null;
   production_needed_snapshot: number | null;
   is_not_applicable: boolean;
   not_applicable_reason: string | null;
@@ -168,6 +179,8 @@ type ProductionTaskRow = {
   product_id: string;
   qty_to_produce: number;
   priority_snapshot: number;
+  /** Le stock était sous le seuil critique : passe AVANT la priorité au tri. */
+  is_critical: boolean;
   is_done: boolean;
   done_at: string | null;
   done_by: string | null;
@@ -221,6 +234,9 @@ export type Database = {
         | 'min_mode'
         | 'min_divisor'
         | 'min_qty_manual'
+        | 'crit_mode'
+        | 'crit_divisor'
+        | 'crit_qty_manual'
         | 'floor_qty'
         | 'ceiling_qty'
         | 'priority'
@@ -273,6 +289,9 @@ export type Database = {
         | 'qty_fridge'
         | 'target_snapshot'
         | 'min_snapshot'
+        | 'crit_snapshot'
+        | 'deferred_at'
+        | 'deferred_reason'
         | 'production_needed_snapshot'
         | 'is_not_applicable'
         | 'not_applicable_reason'
@@ -304,6 +323,8 @@ export type Database = {
           product_name: string;
           target: number;
           minimum: number;
+          /** Sous ce seuil, le produit passe en tête du rapport, en rouge. */
+          critical: number;
           priority: number;
           unit: ProductUnit;
         }[];
@@ -321,6 +342,8 @@ export type Database = {
           qty_to_produce: number;
           unit: ProductUnit;
           priority: number;
+          /** « À faire en premier ». Prime sur la priorité au tri. */
+          is_critical: boolean;
           /** Libellés d'affichage : ni CA, ni cible, ni minimum. */
           image_url: string | null;
           category_name: string;
@@ -335,6 +358,7 @@ export type Database = {
           qty_to_produce: number;
           unit: ProductUnit;
           priority: number;
+          is_critical: boolean;
           is_done: boolean;
           image_url: string | null;
           category_name: string;

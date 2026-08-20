@@ -59,6 +59,7 @@ export default async function ReportPage({ params }: { params: Promise<{ session
     qtyToProduce: toNumber(row.qty_to_produce, 0),
     unit: row.unit,
     priority: Number(row.priority),
+    isCritical: row.is_critical,
     isDone: row.is_done,
     imageUrl: row.image_url,
     categoryName: row.category_name,

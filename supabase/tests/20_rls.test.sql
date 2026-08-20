@@ -193,11 +193,20 @@ begin
     and p.parameter_mode = 'OUT'
     -- Liste tenue à la main, VOLONTAIREMENT : toute colonne ajoutée à la
     -- fonction doit être justifiée ici avant d'atteindre un téléphone.
-    -- `image_url` et `category_name` ne disent rien du chiffre d'affaires,
-    -- de la cible ni du minimum : ce sont des libellés d'affichage.
+    --
+    -- `image_url` et `category_name` sont des libellés d'affichage.
+    --
+    -- `is_critical` est un booléen : « à faire en premier ». Il apprend à
+    -- l'employé que le seuil critique dépasse le stock qu'il vient de
+    -- compter — donc que la cible dépasse quatre fois ce stock. Or la
+    -- quantité à produire lui donne DÉJÀ la cible exacte
+    -- (cible = quantité + stock) : c'est inhérent à un rapport qui dit
+    -- quoi produire. Et la cible seule ne rend pas le chiffre d'affaires :
+    -- il y faudrait la base « VENTE POUR » et le multiplicateur de
+    -- famille, qui ne quittent jamais le back-office.
     and p.parameter_name not in ('product_id', 'product_name', 'notes',
                                  'qty_to_produce', 'unit', 'priority',
-                                 'image_url', 'category_name');
+                                 'is_critical', 'image_url', 'category_name');
   if leaked is not null then
     raise exception 'ÉCHEC — mep_submit_count renvoie des colonnes en trop : %', leaked;
   end if;

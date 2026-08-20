@@ -29,6 +29,8 @@ const lineSchema = z.object({
   notApplicableReason: z.string().trim().max(200).nullable(),
   countedSaladbar: z.boolean(),
   countedFridge: z.boolean(),
+  isDeferred: z.boolean(),
+  deferredReason: z.string().trim().max(200).nullable(),
 });
 
 export type SaveLineInput = z.input<typeof lineSchema>;
@@ -50,22 +52,32 @@ export async function saveCountLine(input: SaveLineInput): Promise<{ error?: str
     return { error: 'Indiquez pourquoi le produit n’est pas applicable.' };
   }
 
+  const { isDeferred, deferredReason } = parsed.data;
+  if (isDeferred && !deferredReason) {
+    return { error: 'Indiquez pourquoi le comptage est reporté.' };
+  }
+
   const now = new Date().toISOString();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('count_lines')
     .update({
       // Un produit non applicable ne porte pas de quantité.
-      qty_saladbar: isNotApplicable ? 0 : parsed.data.qtySaladbar,
-      qty_fridge: isNotApplicable ? 0 : parsed.data.qtyFridge,
+      qty_saladbar: isNotApplicable || isDeferred ? 0 : parsed.data.qtySaladbar,
+      qty_fridge: isNotApplicable || isDeferred ? 0 : parsed.data.qtyFridge,
       is_not_applicable: isNotApplicable,
       not_applicable_reason: isNotApplicable ? notApplicableReason : null,
       counted_at: now,
       // Un produit « absent » vaut pour les deux zones : il n'y a rien à
       // relever nulle part.
       counted_saladbar_at:
-        isNotApplicable || parsed.data.countedSaladbar ? now : null,
-      counted_fridge_at: isNotApplicable || parsed.data.countedFridge ? now : null,
+        isNotApplicable || isDeferred || parsed.data.countedSaladbar ? now : null,
+      counted_fridge_at:
+        isNotApplicable || isDeferred || parsed.data.countedFridge ? now : null,
+      // Reporté : on ne sait RIEN du stock. La quantité reste à zéro mais
+      // le produit sortira du rapport plutôt que d'y entrer comme un vide.
+      deferred_at: isDeferred ? now : null,
+      deferred_reason: isDeferred ? deferredReason : null,
     })
     .eq('session_id', sessionId)
     .eq('product_id', productId)
@@ -109,6 +121,8 @@ export interface ReorderItem {
   unit: 'gastro' | 'piece';
   /** 1 = le plus urgent, 5 = le moins. */
   priority: number;
+  /** Sous le seuil critique : passe en tête du rapport, en rouge. */
+  isCritical: boolean;
   imageUrl: string | null;
   categoryName: string;
 }
@@ -148,6 +162,7 @@ export async function submitCount(sessionId: string): Promise<{
       qtyToProduce: Number(row.qty_to_produce),
       unit: row.unit,
       priority: Number(row.priority),
+      isCritical: row.is_critical,
       imageUrl: row.image_url,
       categoryName: row.category_name,
     })),

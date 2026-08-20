@@ -24,12 +24,17 @@ export const metadata: Metadata = {
 };
 
 export const viewport: Viewport = {
-  themeColor: '#0f172a',
+  // Teinte la barre d'état de Safari et le pourtour de l'application
+  // installée. Elle valait encore l'ancien bleu ardoise, qui n'existe plus
+  // nulle part dans l'interface.
+  themeColor: '#2f7d55',
   width: 'device-width',
   initialScale: 1,
   // L'écran de comptage se manipule d'une main : on évite le zoom accidentel
   // sur les steppers, sans bloquer l'accessibilité au-delà.
   maximumScale: 5,
+  // Indispensable avec l'encoche : sans `cover`, iOS laisse deux bandes
+  // blanches en haut et en bas une fois l'app installée.
   viewportFit: 'cover',
 };
 

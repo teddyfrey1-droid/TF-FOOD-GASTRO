@@ -24,6 +24,9 @@ export interface PendingCount {
   /** Zones réellement relevées : l'employé compte en deux passes. */
   countedSaladbar: boolean;
   countedFridge: boolean;
+  /** Comptage remis à plus tard, avec son motif. */
+  isDeferred: boolean;
+  deferredReason: string | null;
   /** Horodatage local, pour ignorer une saisie périmée à la synchronisation. */
   updatedAt: number;
 }

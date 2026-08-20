@@ -27,6 +27,14 @@ export const DEFAULT_PRIORITY: Priority = 3;
 /** Diviseur par défaut du minimum : le minimum vaut la moitié de la cible. */
 export const DEFAULT_MIN_DIVISOR = 2;
 
+/**
+ * Diviseur par défaut du seuil CRITIQUE : le quart de la cible.
+ *
+ * Le critique est le seuil « on va en manquer pendant le service », par
+ * opposition au minimum qui dit seulement « il faut en refaire ».
+ */
+export const DEFAULT_CRIT_DIVISOR = 4;
+
 /** Paramètres d'un produit nécessaires au calcul. */
 export interface ProductCalcConfig {
   id: string;
@@ -42,6 +50,11 @@ export interface ProductCalcConfig {
   minDivisor: number;
   /** Minimum en valeur absolue quand minMode = 'manual'. */
   minQtyManual: number | null;
+  critMode: MinMode;
+  /** Diviseur appliqué à la cible quand critMode = 'auto'. */
+  critDivisor: number;
+  /** Seuil critique en valeur absolue quand critMode = 'manual'. */
+  critQtyManual: number | null;
   /** Plancher absolu de la CIBLE. */
   floorQty: number | null;
   /** Plafond de la CIBLE. */
@@ -56,6 +69,12 @@ export interface ProductTarget {
   target: number;
   /** Minimum sous lequel il faut relancer. Ne dépasse jamais la cible. */
   minimum: number;
+  /**
+   * Seuil critique : en dessous, on risque la rupture pendant le service.
+   * Ne dépasse jamais le minimum — un critique au-dessus du minimum
+   * n'aurait aucun sens, le produit serait critique avant d'être relancé.
+   */
+  critical: number;
 }
 
 /** Stock compté pour un produit, zone par zone. */
@@ -73,6 +92,14 @@ export interface ReorderDecision {
   minimum: number;
   /** Vrai si stockTotal < minimum : le produit doit être relancé. */
   needsReorder: boolean;
+  critical: number;
+  /**
+   * Vrai si stockTotal < critique.
+   *
+   * ⚠️ Prime sur la priorité au tri : un produit en rupture imminente passe
+   * devant un produit plus prioritaire mais encore confortable.
+   */
+  isCritical: boolean;
   /** Quantité à produire. 0 si aucune relance nécessaire. */
   qtyToProduce: number;
   /** stockTotal / target, vaut 1 quand la cible est nulle. */
@@ -92,6 +119,13 @@ export interface EmployeeReorderItem {
   qtyToProduce: number;
   unit: ProductUnit;
   priority: Priority;
+  /**
+   * Le seul état de seuil qui quitte le serveur.
+   *
+   * Un booléen ne dit ni la cible ni le stock : il dit « à faire en
+   * premier ». C'est exactement ce dont l'employé a besoin, et rien de plus.
+   */
+  isCritical: boolean;
 }
 
 /** Réglages globaux du calcul de CA. */
@@ -104,6 +138,8 @@ export interface RevenueSettings {
   afternoonTargetRatio: number;
   /** Diviseur de minimum par défaut, pour les produits en mode auto. */
   defaultMinDivisor: number;
+  /** Diviseur de seuil critique par défaut, pour les produits en mode auto. */
+  defaultCritDivisor: number;
   /** Les employés voient-ils les cibles et minimums ? (défaut false) */
   showTargetsToEmployees: boolean;
   morningReminderTime?: string | null;
@@ -117,5 +153,6 @@ export const DEFAULT_REVENUE_SETTINGS: RevenueSettings = {
   safetyMargin: 0,
   afternoonTargetRatio: 1.0,
   defaultMinDivisor: DEFAULT_MIN_DIVISOR,
+  defaultCritDivisor: DEFAULT_CRIT_DIVISOR,
   showTargetsToEmployees: false,
 };

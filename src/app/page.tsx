@@ -72,7 +72,7 @@ export default async function HomePage() {
 
   return (
     <>
-      <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-6 pb-28">
+      <main className="pt-safe-header mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-6 pb-28">
         {/* En-tête façon Foodflow : le titre en très gras à gauche, l'état de
             la journée dans une pastille verte à droite. */}
         <header className="mb-7 flex items-start justify-between gap-3">

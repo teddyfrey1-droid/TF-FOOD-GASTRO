@@ -17,6 +17,8 @@ export interface ReportTask {
   unit: ProductUnit;
   /** 1 = le plus urgent, 5 = le moins. */
   priority: number;
+  /** Sous le seuil critique : arrive en tête, en rouge. */
+  isCritical: boolean;
   isDone: boolean;
   imageUrl: string | null;
   categoryName: string;
@@ -64,6 +66,9 @@ export function ReorderReport({
 
   const doneCount = tasks.filter((task) => done[task.taskId]).length;
   const remaining = tasks.length - doneCount;
+  const criticalRemaining = tasks.filter(
+    (task) => task.isCritical && !done[task.taskId],
+  ).length;
 
   if (tasks.length === 0) {
     return (
@@ -110,6 +115,13 @@ export function ReorderReport({
             : `${doneCount} sur ${tasks.length} ${doneCount > 1 ? 'faites' : 'faite'}`}
         </p>
 
+        {criticalRemaining > 0 ? (
+          <p className="mt-2 rounded-2xl bg-red-500/10 px-3.5 py-2 text-sm font-black text-red-700">
+            {criticalRemaining} produit{criticalRemaining > 1 ? 's' : ''} sous le seuil critique —
+            à faire en premier.
+          </p>
+        ) : null}
+
         <Progress value={(doneCount / tasks.length) * 100} className="mt-3 h-2 print:hidden" />
       </header>
 
@@ -129,7 +141,11 @@ export function ReorderReport({
                 onClick={() => toggle(task.taskId, !isDone)}
                 className={cn(
                   'no-select flex w-full items-center gap-3.5 rounded-3xl p-3 text-left transition-colors',
-                  isDone ? 'bg-primary/10' : 'bg-muted/60 active:bg-muted',
+                  isDone && 'bg-primary/10',
+                  // Le critique se voit de loin : c'est ce qui manquera
+                  // pendant le service, quelle que soit sa priorité.
+                  !isDone && task.isCritical && 'bg-red-500/10 ring-2 ring-red-500/40',
+                  !isDone && !task.isCritical && 'bg-muted/60 active:bg-muted',
                 )}
               >
                 <span className="relative shrink-0">
@@ -147,10 +163,10 @@ export function ReorderReport({
                     <span
                       className={cn(
                         'absolute -top-1.5 -left-1.5 rounded-full px-2 py-0.5 text-[10px] font-black',
-                        priorite.pastille,
+                        task.isCritical ? 'bg-red-600 text-white' : priorite.pastille,
                       )}
                     >
-                      {priorite.label}
+                      {task.isCritical ? 'CRITIQUE' : priorite.label}
                     </span>
                   )}
                 </span>

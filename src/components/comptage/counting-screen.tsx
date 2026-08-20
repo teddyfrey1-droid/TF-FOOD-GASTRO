@@ -2,14 +2,20 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check, CloudOff, Search } from 'lucide-react';
+import { ArrowDown, Check, CloudOff, LayoutGrid, List, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { saveCountLine, saveCountLines, submitCount } from '@/app/comptage/actions';
 import { clearSession, dequeue, enqueue, listPending, pendingKey } from '@/lib/offline/queue';
-import { ProductRow, isLineDone, EMPTY_LINE, type CountState } from './product-row';
+import {
+  ProductRow,
+  isLineDone,
+  EMPTY_LINE,
+  type CountLayout,
+  type CountState,
+} from './product-row';
 import { CategoryPills } from './category-pills';
 import { ZoneTabs, ZONE_LABELS, type CountZone } from './zone-tabs';
 import { LienRetour } from '@/components/lien-retour';
@@ -47,6 +53,9 @@ export function CountingScreen({
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
   const [zone, setZone] = useState<CountZone>('saladbar');
+  // Deux produits côte à côte par défaut : on parcourt le rayon deux fois
+  // plus vite. La liste reste à un appui pour les noms longs.
+  const [layout, setLayout] = useState<CountLayout>('grille');
   const [online, setOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -73,6 +82,8 @@ export function CountingScreen({
         notApplicableReason: entry.notApplicableReason,
         countedSaladbar: entry.countedSaladbar,
         countedFridge: entry.countedFridge,
+        isDeferred: entry.isDeferred,
+        deferredReason: entry.deferredReason,
       })),
     );
 
@@ -134,6 +145,8 @@ export function CountingScreen({
         notApplicableReason: next.notApplicableReason,
         countedSaladbar: next.countedSaladbar,
         countedFridge: next.countedFridge,
+        isDeferred: next.isDeferred,
+        deferredReason: next.deferredReason,
         updatedAt,
       });
       await refreshPending();
@@ -154,6 +167,8 @@ export function CountingScreen({
             notApplicableReason: next.notApplicableReason,
             countedSaladbar: next.countedSaladbar,
             countedFridge: next.countedFridge,
+            isDeferred: next.isDeferred,
+            deferredReason: next.deferredReason,
           });
 
           if (result.error) {
@@ -190,10 +205,18 @@ export function CountingScreen({
         ...previous,
         ...patch,
         // Seule la zone que l'employé vient de toucher est marquée relevée.
+        // Un produit absent ou reporté, lui, vaut pour les DEUX zones : il
+        // n'y a rien à relever nulle part.
         countedSaladbar:
-          previous.countedSaladbar || touchedZone === 'saladbar' || patch.isNotApplicable === true,
+          previous.countedSaladbar ||
+          touchedZone === 'saladbar' ||
+          patch.isNotApplicable === true ||
+          patch.isDeferred === true,
         countedFridge:
-          previous.countedFridge || touchedZone === 'fridge' || patch.isNotApplicable === true,
+          previous.countedFridge ||
+          touchedZone === 'fridge' ||
+          patch.isNotApplicable === true ||
+          patch.isDeferred === true,
       };
 
       stateRef.current = { ...stateRef.current, [productId]: next };
@@ -214,7 +237,7 @@ export function CountingScreen({
     (productId: string) => {
       const line = state[productId];
       if (!line) return false;
-      if (line.isNotApplicable) return true;
+      if (line.isNotApplicable || line.isDeferred) return true;
       return zone === 'saladbar' ? line.countedSaladbar : line.countedFridge;
     },
     [state, zone],
@@ -254,7 +277,7 @@ export function CountingScreen({
       const counted = list.filter((product) => {
         const line = state[product.id];
         if (!line) return false;
-        if (line.isNotApplicable) return true;
+        if (line.isNotApplicable || line.isDeferred) return true;
         return zoneKey === 'saladbar' ? line.countedSaladbar : line.countedFridge;
       }).length;
       return { counted, total: list.length };
@@ -292,6 +315,45 @@ export function CountingScreen({
     return [...byCategory.entries()];
   }, [visible]);
 
+  /**
+   * Emmène l'employé au premier produit qu'il reste à relever.
+   *
+   * Sans cela, un bouton grisé annonçait « encore 1 produit à compter »
+   * sans dire lequel — et il fallait redescendre trente-sept lignes pour
+   * le retrouver. Les filtres actifs sont levés au passage, sinon le
+   * produit manquant peut être caché par une recherche ou une catégorie.
+   */
+  function goToNextMissing() {
+    const zoneOf = (product: CountProduct): CountZone | null => {
+      const line = state[product.id];
+      if (line?.isNotApplicable || line?.isDeferred) return null;
+      if (product.inSaladbar && !line?.countedSaladbar) return 'saladbar';
+      if (product.inFridge && !line?.countedFridge) return 'fridge';
+      return null;
+    };
+
+    // On cherche d'abord dans la zone où l'employé se trouve : le faire
+    // descendre au frigo alors qu'il lui reste du saladbar serait un
+    // aller-retour inutile à travers la cuisine.
+    const dansLaZone = products.find((product) => zoneOf(product) === zone);
+    const cible = dansLaZone ?? products.find((product) => zoneOf(product) !== null);
+    if (!cible) return;
+
+    const zoneCible = zoneOf(cible);
+    if (zoneCible && zoneCible !== zone) setZone(zoneCible);
+    setSearch('');
+    setActiveCategory(null);
+
+    // Le changement de zone doit être peint avant que le défilement vise
+    // l'élément : sinon la carte n'est pas encore montée.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const node = document.getElementById(`produit-${cible.id}`);
+        node?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    });
+  }
+
   async function handleSubmit() {
     setSubmitting(true);
     setError(null);
@@ -313,7 +375,7 @@ export function CountingScreen({
   return (
     <div className="pb-40">
       <header className="bg-background/95 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="px-5 pt-2 pb-3">
+        <div className="pt-safe-header px-5 pt-2 pb-3">
           {/* La saisie est enregistrée à chaque appui : quitter en cours de
               comptage ne perd rien, et le bouton doit le montrer. */}
           <LienRetour label="Quitter" className="mb-1" />
@@ -337,8 +399,24 @@ export function CountingScreen({
             />
           </div>
 
-          <div className="mt-3">
-            <ZoneTabs zone={zone} onChange={setZone} progress={zoneProgress} />
+          <div className="mt-3 flex items-center gap-2">
+            <div className="min-w-0 flex-1">
+              <ZoneTabs zone={zone} onChange={setZone} progress={zoneProgress} />
+            </div>
+            <button
+              type="button"
+              onClick={() => setLayout(layout === 'grille' ? 'liste' : 'grille')}
+              aria-label={
+                layout === 'grille' ? 'Afficher en liste' : 'Afficher deux par ligne'
+              }
+              className="bg-muted text-muted-foreground active:bg-muted/70 no-select flex size-12 shrink-0 items-center justify-center rounded-2xl transition-colors"
+            >
+              {layout === 'grille' ? (
+                <List className="size-5" strokeWidth={2.5} />
+              ) : (
+                <LayoutGrid className="size-5" strokeWidth={2.5} />
+              )}
+            </button>
           </div>
 
           <div className="mt-3">
@@ -408,13 +486,18 @@ export function CountingScreen({
                 </span>
               </h2>
 
-              <div className="space-y-2.5">
+              <div
+                className={
+                  layout === 'grille' ? 'grid grid-cols-2 gap-2.5' : 'space-y-2.5'
+                }
+              >
                 {items.map((product) => (
                   <ProductRow
                     key={product.id}
                     product={product}
                     state={state[product.id]}
                     zone={zone}
+                    layout={layout}
                     onChange={update}
                   />
                 ))}
@@ -445,17 +528,21 @@ export function CountingScreen({
             </Button>
           ) : (
             <Button
-              onClick={handleSubmit}
-              disabled={remaining > 0 || submitting}
+              onClick={remaining > 0 ? goToNextMissing : handleSubmit}
+              disabled={submitting}
+              variant={remaining > 0 ? 'outline' : 'default'}
               className="h-14 w-full rounded-2xl text-base font-bold"
             >
               {submitting ? (
                 'Validation…'
               ) : remaining > 0 ? (
-                `Encore ${remaining} produit${remaining > 1 ? 's' : ''} à compter`
+                <>
+                  <ArrowDown className="size-5" strokeWidth={2.5} />
+                  {`Aller au produit à compter (${remaining})`}
+                </>
               ) : (
                 <>
-                  <Check className={cn('size-5')} />
+                  <Check className="size-5" strokeWidth={2.5} />
                   Valider le comptage
                 </>
               )}

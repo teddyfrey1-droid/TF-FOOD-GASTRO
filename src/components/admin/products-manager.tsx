@@ -31,6 +31,23 @@ const PRIORITY_DOT: Record<number, string> = {
   5: 'bg-neutral-300',
 };
 
+/**
+ * Résume le seuil critique.
+ *
+ * Il ne remplace pas le minimum, il le double : sous le minimum on relance,
+ * sous le critique on relance EN PREMIER, avant tout produit plus
+ * prioritaire mais encore confortable.
+ */
+function describeCritical(product: ProductWithCategory): string {
+  if (product.crit_mode === 'manual') {
+    return product.crit_qty_manual === null
+      ? '—'
+      : `sous ${formatQty(Number(product.crit_qty_manual))}`;
+  }
+  const divisor = Number(product.crit_divisor) || 4;
+  return divisor === 4 ? 'sous le quart de la cible' : `sous la cible / ${formatQty(divisor)}`;
+}
+
 /** Résume le minimum en une phrase lisible, sans jargon. */
 function describeMinimum(product: ProductWithCategory): string {
   if (product.min_mode === 'manual') {
@@ -155,6 +172,12 @@ export function ProductsManager({
                     <dd>Relance {describeMinimum(product)}</dd>
                   </div>
                   <div>
+                    <dt className="sr-only">Seuil critique</dt>
+                    <dd className="font-semibold text-red-600">
+                      Critique {describeCritical(product)}
+                    </dd>
+                  </div>
+                  <div>
                     <dt className="sr-only">Bornes de cible</dt>
                     <dd>
                       Cible {formatQty(product.floor_qty as number | null)} –{' '}
@@ -179,6 +202,7 @@ export function ProductsManager({
                   <InlineZones product={product} />
                   <InlinePriority product={product} />
                   <InlineMinimum product={product} />
+                  <InlineCritical product={product} />
                   <Button variant="outline" size="sm" onClick={() => setEditing(product)}>
                     Modifier
                   </Button>
@@ -371,6 +395,62 @@ function CategoryZoneShortcut({ items }: { items: ProductWithCategory[] }) {
           {choice.label}
         </Button>
       ))}
+    </div>
+  );
+}
+
+/**
+ * Le seuil CRITIQUE, réglable sans ouvrir la fiche.
+ *
+ * C'est le réglage qui décide de l'ordre du rapport les jours tendus : un
+ * produit sous son critique passe devant un produit plus prioritaire.
+ */
+function InlineCritical({ product }: { product: ProductWithCategory }) {
+  const [pending, startTransition] = useTransition();
+  const [draft, setDraft] = useState(
+    product.crit_qty_manual === null ? '' : String(product.crit_qty_manual),
+  );
+
+  const isManual = product.crit_mode === 'manual';
+
+  return (
+    <div className="flex items-center gap-1">
+      <Button
+        variant={isManual ? 'destructive' : 'outline'}
+        size="sm"
+        disabled={pending}
+        title={
+          isManual ? 'Repasser en critique automatique' : 'Fixer un seuil critique manuel'
+        }
+        onClick={() =>
+          startTransition(async () => {
+            await updateProductInline(product.id, {
+              critMode: isManual ? 'auto' : 'manual',
+              critQtyManual: isManual ? null : Number(draft.replace(',', '.')) || 1,
+            });
+          })
+        }
+      >
+        {isManual ? 'Crit. fixe' : 'Crit. auto'}
+      </Button>
+
+      {isManual ? (
+        <Input
+          value={draft}
+          inputMode="decimal"
+          aria-label={`Seuil critique de ${product.name}`}
+          onChange={(event) => setDraft(event.target.value)}
+          onBlur={() => {
+            const parsed = Number(draft.replace(',', '.'));
+            if (!Number.isFinite(parsed) || parsed < 0) return;
+            if (parsed === Number(product.crit_qty_manual)) return;
+            startTransition(async () => {
+              await updateProductInline(product.id, { critQtyManual: parsed });
+            });
+          }}
+          className="h-8 w-16 text-center text-xs tabular-nums"
+        />
+      ) : null}
     </div>
   );
 }

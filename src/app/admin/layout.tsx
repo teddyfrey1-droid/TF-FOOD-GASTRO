@@ -13,7 +13,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   return (
     <div className="min-h-dvh">
       <header className="bg-background/95 sticky top-0 z-20 border-b backdrop-blur">
-        <div className="mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-5 py-3">
+        <div className="pt-safe-header mx-auto flex w-full max-w-6xl items-center justify-between gap-4 px-5 py-3">
           {/*
             La sortie du back-office, à gauche, toujours au même endroit.
             Sans elle, on entrait dans la gestion sans savoir comment revenir

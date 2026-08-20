@@ -27,6 +27,7 @@ export async function getRevenueSettings(): Promise<RevenueSettings> {
     safetyMargin: toNumber(data?.safety_margin, 0.1),
     afternoonTargetRatio: toNumber(data?.afternoon_target_ratio, 1),
     defaultMinDivisor: toNumber(data?.default_min_divisor, 2),
+    defaultCritDivisor: toNumber(data?.default_crit_divisor, 4),
     showTargetsToEmployees: data?.show_targets_to_employees ?? false,
     // Postgres renvoie « 07:30:00 » ; l'input type=time attend « 07:30 ».
     morningReminderTime: data?.morning_reminder_time?.slice(0, 5) ?? null,

@@ -47,6 +47,8 @@ export function decideReorder(
     target: target.target,
     minimum: target.minimum,
     needsReorder,
+    critical: target.critical,
+    isCritical: total < target.critical,
     qtyToProduce: needsReorder
       ? Math.max(ceilTo(target.target - total, PRODUCTION_STEP), 0)
       : 0,
@@ -58,15 +60,22 @@ export function decideReorder(
 
 /**
  * Tri du rapport :
- *   1. priorité CROISSANTE (1 d'abord — 1 est le plus urgent)
- *   2. puis taux de couverture croissant (le plus dégarni en premier)
+ *   1. le CRITIQUE d'abord — avant toute considération de priorité ;
+ *   2. puis priorité CROISSANTE (1 d'abord — 1 est le plus urgent) ;
+ *   3. puis taux de couverture croissant (le plus dégarni en premier).
  * Le nom départage, pour un rendu stable.
+ *
+ * L'ordre des deux premières règles est le cœur du sujet. Un Edamame sous
+ * son seuil critique passe DEVANT un Poulet Mayo de priorité 1 encore
+ * au-dessus du sien : la priorité dit ce qui compte le plus en général, le
+ * critique dit ce qui va manquer pendant le service. Le service gagne.
  */
 export function sortReorderDecisions(
   decisions: readonly ReorderDecision[],
   nameOf: (productId: string) => string = (id) => id,
 ): ReorderDecision[] {
   return [...decisions].sort((a, b) => {
+    if (a.isCritical !== b.isCritical) return a.isCritical ? -1 : 1;
     if (a.priority !== b.priority) return a.priority - b.priority;
     if (a.coverageRatio !== b.coverageRatio) return a.coverageRatio - b.coverageRatio;
     return nameOf(a.productId).localeCompare(nameOf(b.productId), 'fr');
@@ -123,5 +132,6 @@ export function toEmployeePayload(
     qtyToProduce: decision.qtyToProduce,
     unit: decision.unit,
     priority: decision.priority,
+    isCritical: decision.isCritical,
   }));
 }

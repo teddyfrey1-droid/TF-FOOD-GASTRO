@@ -531,5 +531,176 @@ select pg_temp.check_denied(
 reset role;
 reset "request.jwt.claim.sub";
 
+-- ---------------------------------------------------------------------
+-- Le seuil CRITIQUE passe devant la PRIORITÉ
+--
+-- Cas donné par le restaurant, reproduit à l'identique :
+--   Edamame     — priorité 3, seuil critique 3, stock 2  -> CRITIQUE
+--   Poulet Mayo — priorité 1, minimum 2,        stock 1  -> à relancer
+--
+-- Le Poulet Mayo est « normalement » plus urgent : sa priorité vaut 1.
+-- Mais l'Edamame est sous son seuil critique, donc il manquera PENDANT le
+-- service. C'est lui qui doit arriver en tête, en rouge.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  v_session  uuid;
+  v_edamame  uuid;
+  v_poulet   uuid;
+  v_premier  text;
+  v_crit_eda boolean;
+begin
+  select id into v_edamame from public.products where name = 'Edamame';
+  select id into v_poulet  from public.products where name = 'Poulet Mayo';
+
+  -- Seuils posés à la main : le test doit tenir quel que soit le CA du jour.
+  update public.products
+  set priority = 3, min_mode = 'manual', min_qty_manual = 6,
+      crit_mode = 'manual', crit_qty_manual = 3, floor_qty = 12
+  where id = v_edamame;
+
+  update public.products
+  set priority = 1, min_mode = 'manual', min_qty_manual = 2,
+      crit_mode = 'manual', crit_qty_manual = 0, floor_qty = 8
+  where id = v_poulet;
+
+  delete from public.count_sessions where date = current_date;
+  insert into public.count_sessions (date, session, user_id)
+  values (current_date, 'morning', '11111111-1111-1111-1111-111111111111')
+  returning id into v_session;
+
+  insert into public.count_lines (
+    session_id, product_id, qty_saladbar, qty_fridge,
+    counted_at, counted_saladbar_at, counted_fridge_at
+  )
+  select v_session, p.id, 999, 0, now(), now(), now()
+  from public.products p where p.is_active;
+
+  update public.count_lines set qty_saladbar = 2, qty_fridge = 0
+    where session_id = v_session and product_id = v_edamame;
+  update public.count_lines set qty_saladbar = 1, qty_fridge = 0
+    where session_id = v_session and product_id = v_poulet;
+
+  perform public.mep_submit_count(v_session);
+
+  select product_name, is_critical into v_premier, v_crit_eda
+  from public.mep_submit_count(v_session) limit 1;
+
+  perform pg_temp.check_equal(
+    'L''Edamame critique passe devant le Poulet Mayo prioritaire',
+    v_premier, 'Edamame');
+
+  perform pg_temp.check_equal(
+    'Et il est marqué critique', v_crit_eda, true);
+
+  perform pg_temp.check_equal(
+    'Le Poulet Mayo, lui, n''est pas critique',
+    (select is_critical from public.mep_submit_count(v_session)
+     where product_name = 'Poulet Mayo'),
+    false);
+
+  -- Une fois l'Edamame remonté au-dessus de son critique, l'ordre normal
+  -- reprend : la priorité redevient le premier critère.
+  update public.count_lines set qty_saladbar = 5
+    where session_id = v_session and product_id = v_edamame;
+  perform public.mep_submit_count(v_session);
+
+  select product_name into v_premier
+  from public.mep_submit_count(v_session) limit 1;
+
+  perform pg_temp.check_equal(
+    'Hors du critique, la priorité reprend la main',
+    v_premier, 'Poulet Mayo');
+
+  -- Remise en état pour les contrôles suivants.
+  update public.products
+  set priority = 3, min_mode = 'auto', min_qty_manual = null,
+      crit_mode = 'auto', crit_qty_manual = null, floor_qty = null
+  where id in (v_edamame, v_poulet);
+end
+$$;
+
+-- ---------------------------------------------------------------------
+-- Le critique ne dépasse JAMAIS le minimum
+--
+-- Sinon un produit serait « critique » avant d'être seulement à relancer,
+-- et le rapport afficherait du rouge sur des bacs encore pleins.
+-- ---------------------------------------------------------------------
+do $$
+declare v_saumon uuid;
+begin
+  select id into v_saumon from public.products where name = 'Saumon';
+
+  update public.products
+  set min_mode = 'manual', min_qty_manual = 2,
+      crit_mode = 'manual', crit_qty_manual = 99
+  where id = v_saumon;
+
+  perform pg_temp.check_equal(
+    'Un critique démesuré est ramené au minimum',
+    (select critical from public.mep_targets_internal(current_date, 'morning')
+     where product_name = 'Saumon'),
+    2::numeric);
+
+  update public.products
+  set min_mode = 'auto', min_qty_manual = null,
+      crit_mode = 'auto', crit_qty_manual = null
+  where id = v_saumon;
+end
+$$;
+
+-- ---------------------------------------------------------------------
+-- Un produit REPORTÉ ne bloque pas et n'entre pas au rapport
+--
+-- Reporté n'est pas « absent » : on ne sait RIEN de son stock. Le traiter
+-- comme un zéro ferait produire à l'aveugle une cible entière.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  v_session uuid;
+  v_melon   uuid;
+begin
+  select id into v_melon from public.products where name = 'Melon';
+
+  delete from public.count_sessions where date = current_date;
+  insert into public.count_sessions (date, session, user_id)
+  values (current_date, 'morning', '11111111-1111-1111-1111-111111111111')
+  returning id into v_session;
+
+  insert into public.count_lines (
+    session_id, product_id, qty_saladbar, qty_fridge,
+    counted_at, counted_saladbar_at, counted_fridge_at
+  )
+  select v_session, p.id, 999, 0, now(), now(), now()
+  from public.products p where p.is_active;
+
+  -- Le melon n'a pas pu être compté.
+  update public.count_lines
+  set qty_saladbar = 0, qty_fridge = 0,
+      counted_at = null, counted_saladbar_at = null, counted_fridge_at = null
+  where session_id = v_session and product_id = v_melon;
+
+  perform pg_temp.check_equal(
+    'Non compté, il bloque la validation',
+    public.mep_count_pending(v_session), 1);
+
+  update public.count_lines
+  set deferred_at = now(), deferred_reason = 'Bac au passe, à recompter'
+  where session_id = v_session and product_id = v_melon;
+
+  perform pg_temp.check_equal(
+    'Reporté, il ne bloque plus',
+    public.mep_count_pending(v_session), 0);
+
+  perform public.mep_submit_count(v_session);
+
+  perform pg_temp.check_equal(
+    'Reporté, il n''entre pas au rapport de production',
+    (select count(*)::int from public.production_tasks
+     where session_id = v_session and product_id = v_melon),
+    0);
+end
+$$;
+
 \echo ''
 \echo '===== TESTS DE CALCUL : TOUS PASSÉS ====='
