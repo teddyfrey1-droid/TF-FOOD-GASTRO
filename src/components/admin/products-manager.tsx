@@ -8,8 +8,14 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { formatQty } from '@/lib/format';
 import { cn } from '@/lib/utils';
-import { toggleProductActive, updateProductInline } from '@/app/admin/produits/actions';
+import {
+  setCategoryZones,
+  toggleProductActive,
+  updateProductInline,
+} from '@/app/admin/produits/actions';
 import { ProductForm } from './product-form';
+import { VignetteProduit } from '@/components/produits/vignette-produit';
+import { QuickEdit } from './product-quick-edit';
 import type { ProductWithCategory } from '@/lib/admin/queries';
 import type { Tables } from '@/lib/supabase/database.types';
 
@@ -106,9 +112,12 @@ export function ProductsManager({
 
       {grouped.map(([category, items]) => (
         <section key={category} className="space-y-2">
-          <h2 className="text-muted-foreground text-xs font-semibold tracking-wide uppercase">
-            {category}
-          </h2>
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-lg font-black tracking-tight">
+              {category} <span className="text-muted-foreground">({items.length})</span>
+            </h2>
+            <CategoryZoneShortcut items={items} />
+          </div>
 
           <div className="divide-y overflow-hidden rounded-lg border">
             {items.map((product) => (
@@ -116,9 +125,16 @@ export function ProductsManager({
                 key={product.id}
                 className="hover:bg-muted/40 flex flex-wrap items-center gap-x-4 gap-y-2 p-4 transition-colors"
               >
+                <VignetteProduit
+                  name={product.name}
+                  categoryName={product.category?.name}
+                  imageUrl={product.image_url}
+                  taille="sm"
+                />
+
                 <div className="min-w-48 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="font-medium">{product.name}</span>
+                    <QuickEdit product={product} />
                     {!product.is_active ? <Badge variant="outline">Désactivé</Badge> : null}
                     {Number(product.base_qty) <= 0 ? (
                       <Badge variant="outline" className="border-amber-500/50 text-amber-600">
@@ -160,6 +176,7 @@ export function ProductsManager({
                 </dl>
 
                 <div className="flex items-center gap-2">
+                  <InlineZones product={product} />
                   <InlinePriority product={product} />
                   <InlineMinimum product={product} />
                   <Button variant="outline" size="sm" onClick={() => setEditing(product)}>
@@ -260,6 +277,100 @@ function InlineMinimum({ product }: { product: ProductWithCategory }) {
           className="h-8 w-16 text-center text-xs tabular-nums"
         />
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * Les deux zones d'un produit, réglables sans ouvrir sa fiche.
+ *
+ * Cas concret : les desserts ne vivent qu'au saladbar. Tant qu'ils étaient
+ * aussi marqués « frigo du bas », l'employé devait les relever deux fois,
+ * dont une devant une étagère où ils ne se trouvent pas.
+ */
+function InlineZones({ product }: { product: ProductWithCategory }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function set(zones: { inSaladbar: boolean; inFridge: boolean }) {
+    setError(null);
+    startTransition(async () => {
+      const result = await updateProductInline(product.id, zones);
+      if (result.error) setError(result.error);
+    });
+  }
+
+  const zones = [
+    { key: 'saladbar' as const, label: 'Haut', on: product.in_saladbar },
+    { key: 'fridge' as const, label: 'Bas', on: product.in_fridge },
+  ];
+
+  return (
+    <div className="flex flex-col items-start gap-0.5">
+      <div className="bg-muted flex rounded-full p-0.5" title="Zones de stockage">
+        {zones.map((zone) => (
+          <button
+            key={zone.key}
+            type="button"
+            disabled={pending}
+            aria-pressed={zone.on}
+            aria-label={`${product.name} — ${zone.key === 'saladbar' ? 'saladbar' : 'frigo du bas'}`}
+            onClick={() =>
+              set({
+                inSaladbar: zone.key === 'saladbar' ? !zone.on : product.in_saladbar,
+                inFridge: zone.key === 'fridge' ? !zone.on : product.in_fridge,
+              })
+            }
+            className={cn(
+              'rounded-full px-2.5 py-1 text-xs font-bold transition-colors',
+              zone.on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
+            )}
+          >
+            {zone.label}
+          </button>
+        ))}
+      </div>
+      {error ? <span className="text-destructive text-[11px] font-semibold">{error}</span> : null}
+    </div>
+  );
+}
+
+/** « Tous les desserts au saladbar uniquement », en un geste. */
+function CategoryZoneShortcut({ items }: { items: ProductWithCategory[] }) {
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  const categoryId = items[0]?.category?.id;
+  if (!categoryId) return null;
+
+  function apply(zones: { inSaladbar: boolean; inFridge: boolean }) {
+    setError(null);
+    startTransition(async () => {
+      const result = await setCategoryZones(categoryId!, zones);
+      if (result.error) setError(result.error);
+    });
+  }
+
+  return (
+    <div className="flex items-center gap-2">
+      {error ? <span className="text-destructive text-xs font-semibold">{error}</span> : null}
+      <span className="text-muted-foreground text-xs font-semibold">Tout le rayon :</span>
+      {[
+        { label: 'Haut seulement', zones: { inSaladbar: true, inFridge: false } },
+        { label: 'Bas seulement', zones: { inSaladbar: false, inFridge: true } },
+        { label: 'Les deux', zones: { inSaladbar: true, inFridge: true } },
+      ].map((choice) => (
+        <Button
+          key={choice.label}
+          size="sm"
+          variant="outline"
+          disabled={pending}
+          className="h-8 rounded-full text-xs"
+          onClick={() => apply(choice.zones)}
+        >
+          {choice.label}
+        </Button>
+      ))}
     </div>
   );
 }

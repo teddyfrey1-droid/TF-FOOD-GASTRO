@@ -353,17 +353,32 @@ export function CountingScreen({
             value={(countedTotal / Math.max(products.length, 1)) * 100}
             className="mt-3 h-1.5"
           />
-
-          {!online || pendingCount > 0 ? (
-            <p className="text-muted-foreground mt-2 flex items-center gap-1.5 text-xs">
-              <CloudOff className="size-3.5" />
-              {online
-                ? `${pendingCount} saisie${pendingCount > 1 ? 's' : ''} en cours d’envoi`
-                : `Hors ligne — ${pendingCount} saisie${pendingCount > 1 ? 's' : ''} en attente`}
-            </p>
-          ) : null}
         </div>
       </header>
+
+      {/*
+        L'état d'envoi FLOTTE au-dessus de la page.
+
+        Tant qu'il vivait dans l'en-tête collant, son apparition rallongeait
+        l'en-tête et poussait toute la liste vers le bas — en plein milieu
+        d'une série d'appuis sur « + ». Le doigt visait encore l'ancienne
+        position et tapait à côté : impossible de monter à 5 d'affilée.
+        Hors du flux, il ne déplace plus rien.
+      */}
+      {!online || pendingCount > 0 ? (
+        <div
+          role="status"
+          aria-live="polite"
+          className="pointer-events-none fixed inset-x-0 bottom-24 z-30 flex justify-center px-5 print:hidden"
+        >
+          <p className="bg-foreground/85 text-background flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold shadow-lg backdrop-blur">
+            <CloudOff className="size-3.5" />
+            {online
+              ? `${pendingCount} saisie${pendingCount > 1 ? 's' : ''} en cours d’envoi`
+              : `Hors ligne — ${pendingCount} saisie${pendingCount > 1 ? 's' : ''} en attente`}
+          </p>
+        </div>
+      ) : null}
 
       <div className="px-5">
         {grouped.length === 0 ? (

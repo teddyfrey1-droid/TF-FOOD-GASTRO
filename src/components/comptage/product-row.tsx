@@ -45,9 +45,9 @@ export function isLineDone(
 /**
  * Une ligne de comptage, pour UNE zone à la fois.
  *
- * Le total des deux zones reste affiché : c'est lui qui sera comparé au
- * minimum, et l'employé doit pouvoir constater ce qu'il a déjà saisi en haut
- * quand il compte en bas.
+ * Le produit en haut, le compteur pleine largeur en dessous : sur un
+ * téléphone, un compteur coincé à droite d'un nom long n'offre pas de quoi
+ * enchaîner cinq appuis sans viser.
  */
 function ProductRowImpl({
   product,
@@ -74,7 +74,6 @@ function ProductRowImpl({
   const value = isSaladbar ? line.qtySaladbar : line.qtyFridge;
   const otherValue = isSaladbar ? line.qtyFridge : line.qtySaladbar;
   const otherLabel = isSaladbar ? ZONE_LABELS.fridge : ZONE_LABELS.saladbar;
-  const total = line.qtySaladbar + line.qtyFridge;
 
   // Un produit qui n'est pas stocké dans cette zone n'a rien à y faire.
   const presentHere = isSaladbar ? product.inSaladbar : product.inFridge;
@@ -82,13 +81,15 @@ function ProductRowImpl({
 
   if (!presentHere) return null;
 
+  const done = zoneCounted && !line.isNotApplicable;
+
   return (
     <div
       className={cn(
         'rounded-3xl border p-3 transition-colors',
         line.isNotApplicable && 'bg-card opacity-50',
-        !line.isNotApplicable && zoneCounted && 'border-primary/40 bg-primary/[0.04]',
-        !line.isNotApplicable && !zoneCounted && 'bg-card',
+        !line.isNotApplicable && done && 'border-primary/50 bg-primary/[0.05]',
+        !line.isNotApplicable && !done && 'bg-card',
       )}
     >
       <div className="flex items-center gap-3">
@@ -98,11 +99,9 @@ function ProductRowImpl({
             categoryName={product.categoryName}
             imageUrl={product.imageUrl}
           />
-          {/* Pastille verte dès que la zone est relevée : on repère d'un
-              coup d'œil ce qui reste à faire dans le rayon. */}
-          {zoneCounted && !line.isNotApplicable ? (
-            <span className="bg-primary text-primary-foreground absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full">
-              <Check className="size-3" strokeWidth={4} />
+          {done ? (
+            <span className="bg-primary text-primary-foreground absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full">
+              <Check className="size-3.5" strokeWidth={4} />
             </span>
           ) : null}
         </span>
@@ -121,44 +120,35 @@ function ProductRowImpl({
             type="button"
             variant="ghost"
             size="sm"
-            onClick={() => onChange(product.id, { isNotApplicable: false, notApplicableReason: null }, zone)}
+            onClick={() =>
+              onChange(product.id, { isNotApplicable: false, notApplicableReason: null }, zone)
+            }
           >
             Annuler
           </Button>
-        ) : (
-          <div className="flex items-center gap-3">
-            <BacStepper
-              label={ZONE_LABELS[zone]}
-              hideLabel
-              value={value}
-              step={product.countStep}
-              onChange={(next) =>
-                onChange(product.id, isSaladbar ? { qtySaladbar: next } : { qtyFridge: next }, zone)
-              }
-            />
-
-            {inBothZones ? (
-              <div className="w-11 shrink-0 text-right">
-                <span className="text-muted-foreground block text-[10px] font-bold tracking-wide uppercase">
-                  Total
-                </span>
-                <span
-                  className={cn(
-                    'block text-2xl font-black tabular-nums',
-                    !zoneCounted && 'text-muted-foreground/30',
-                  )}
-                >
-                  {total}
-                </span>
-              </div>
-            ) : null}
-          </div>
-        )}
+        ) : null}
       </div>
 
       {line.isNotApplicable ? (
         <p className="text-muted-foreground mt-2 text-xs">Absent — {line.notApplicableReason}</p>
-      ) : askingReason ? (
+      ) : (
+        <div className="mt-3">
+          <BacStepper
+            label={ZONE_LABELS[zone]}
+            value={value}
+            step={product.countStep}
+            counted={zoneCounted}
+            onChange={(next) =>
+              onChange(product.id, isSaladbar ? { qtySaladbar: next } : { qtyFridge: next }, zone)
+            }
+            onZero={() =>
+              onChange(product.id, isSaladbar ? { qtySaladbar: 0 } : { qtyFridge: 0 }, zone)
+            }
+          />
+        </div>
+      )}
+
+      {line.isNotApplicable ? null : askingReason ? (
         <div className="mt-3 space-y-2">
           <Input
             autoFocus
@@ -173,7 +163,11 @@ function ProductRowImpl({
               size="sm"
               disabled={reason.trim() === ''}
               onClick={() => {
-                onChange(product.id, { isNotApplicable: true, notApplicableReason: reason.trim() }, zone);
+                onChange(
+                  product.id,
+                  { isNotApplicable: true, notApplicableReason: reason.trim() },
+                  zone,
+                );
                 setAskingReason(false);
               }}
             >
@@ -188,7 +182,7 @@ function ProductRowImpl({
         <button
           type="button"
           onClick={() => setAskingReason(true)}
-          className="text-muted-foreground hover:text-foreground mt-2 text-xs font-medium"
+          className="text-muted-foreground hover:text-foreground mt-2 text-xs font-semibold"
         >
           Produit absent ?
         </button>
@@ -198,8 +192,8 @@ function ProductRowImpl({
 }
 
 /**
- * Trente-neuf lignes à l'écran, et chaque appui sur un « + » change l'état
- * global : sans cette mémoïsation, React redessinait les trente-neuf à
+ * Trente-sept lignes à l'écran, et chaque appui sur un « + » change l'état
+ * global : sans cette mémoïsation, React redessinait les trente-sept à
  * chaque incrément. C'est ce qui donnait cette impression de ralenti.
  */
 export const ProductRow = memo(ProductRowImpl);

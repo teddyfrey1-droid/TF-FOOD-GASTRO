@@ -43,7 +43,11 @@ insert into public.products (
 select
   d.name, c.id, d.family::public.product_family, d.unit::public.product_unit, d.base_qty,
   1, 'auto', 2, 3,
-  nullif(d.shelf_life, ''), true, true, d.sort_order
+  nullif(d.shelf_life, ''),
+  -- Tout est au saladbar ; seuls les desserts n'ont pas de doublon au frigo
+  -- du bas. Les relever en bas ferait perdre un passage devant une étagère
+  -- où ils ne se trouvent pas.
+  true, d.category <> 'Desserts', d.sort_order
 from (values
   -- ---- Mise en place · Protéines (référence 4 000 €, multiplicateur 2) ----
   ('Poulet Mayo',          'Protéines',   'mise_en_place', 'gastro', 0.8, 'J+1',  10),

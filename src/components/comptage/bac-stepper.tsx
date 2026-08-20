@@ -5,31 +5,37 @@ import { Minus, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
- * Le stepper en pilule — composant signature de l'application.
+ * Le compteur pleine largeur — composant signature de l'application.
  *
  * Contraintes du terrain : l'employé tient son téléphone d'une main, souvent
- * avec des doigts humides, et compte 39 produits d'affilée. Donc :
- *   • des cibles tactiles de 48 px minimum ;
- *   • le nombre en très gras, c'est l'élément le plus lu de l'app ;
- *   • le libellé de zone en gris dessous, discret ;
+ * avec des doigts humides, et compte trente-sept produits d'affilée. Donc :
+ *
+ *   • des cibles tactiles de 56 px, pleine largeur, qu'on atteint sans viser
+ *     — c'est ce qui permet d'enchaîner cinq appuis sans rater ;
+ *   • le nombre au centre, en très gras : l'élément le plus lu de l'app ;
+ *   • un bouton « Zéro » EXPLICITE. Sans lui, déclarer un bac vide obligeait
+ *     à faire « + » puis « − » pour que la ligne compte comme relevée ;
  *   • aucun clavier qui s'ouvre — appui long sur le nombre pour le pavé
  *     numérique de secours, réservé aux grosses quantités.
  */
 export function BacStepper({
   label,
-  hideLabel,
   value,
   step,
+  /** Vrai quand la zone a été relevée, même à zéro. */
+  counted,
   disabled,
   onChange,
+  onZero,
 }: {
   label: string;
-  /** Le libellé de zone est déjà porté par l'onglet : inutile de le répéter. */
-  hideLabel?: boolean;
   value: number;
   step: number;
+  counted: boolean;
   disabled?: boolean;
   onChange: (next: number) => void;
+  /** Déclarer la zone vide : met à zéro ET marque la ligne relevée. */
+  onZero: () => void;
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
@@ -53,12 +59,34 @@ export function BacStepper({
     setEditing(false);
   }
 
+  const zeroConfirmed = counted && value === 0;
+
   return (
-    <div className="no-select flex flex-col items-center gap-1">
+    <div className="no-select flex items-stretch gap-2">
+      {/* « Zéro » : un bac vide se déclare, il ne se devine pas. */}
+      <button
+        type="button"
+        aria-label={`${label} : déclarer zéro`}
+        aria-pressed={zeroConfirmed}
+        disabled={disabled}
+        onClick={onZero}
+        className={cn(
+          'flex h-14 w-[4.5rem] shrink-0 touch-manipulation items-center justify-center',
+          'rounded-2xl text-xl font-black transition-colors',
+          zeroConfirmed
+            ? 'bg-primary text-primary-foreground'
+            : 'bg-muted text-muted-foreground active:bg-muted/70',
+          disabled && 'opacity-40',
+        )}
+      >
+        0
+      </button>
+
       <div
         className={cn(
-          'bg-card flex items-center rounded-full border shadow-sm',
+          'bg-card flex h-14 flex-1 items-center rounded-2xl border shadow-sm',
           disabled && 'opacity-40',
+          counted && value > 0 && 'border-primary/50',
         )}
       >
         <button
@@ -67,12 +95,11 @@ export function BacStepper({
           disabled={disabled || value <= 0}
           onClick={() => onChange(snap(value - step))}
           className={cn(
-            'flex size-12 shrink-0 items-center justify-center rounded-full',
-            'active:bg-muted transition-colors disabled:opacity-25',
-            'touch-manipulation',
+            'flex h-full w-16 shrink-0 items-center justify-center rounded-l-2xl',
+            'active:bg-muted touch-manipulation transition-colors disabled:opacity-25',
           )}
         >
-          <Minus className="size-5" strokeWidth={2.5} />
+          <Minus className="size-6" strokeWidth={3} />
         </button>
 
         {editing ? (
@@ -88,7 +115,7 @@ export function BacStepper({
               if (event.key === 'Enter') commitDraft();
               if (event.key === 'Escape') setEditing(false);
             }}
-            className="ring-primary w-14 rounded-lg bg-transparent text-center text-2xl font-black tabular-nums ring-2 outline-none"
+            className="ring-primary min-w-0 flex-1 rounded-lg bg-transparent text-center text-3xl font-black tabular-nums ring-2 outline-none"
           />
         ) : (
           <button
@@ -108,7 +135,10 @@ export function BacStepper({
               event.preventDefault();
               openKeypad();
             }}
-            className="flex h-12 w-14 items-center justify-center text-2xl font-black tabular-nums touch-manipulation"
+            className={cn(
+              'h-full min-w-0 flex-1 touch-manipulation text-3xl font-black tabular-nums',
+              !counted && value === 0 && 'text-muted-foreground/30',
+            )}
           >
             {value.toLocaleString('fr-FR', { maximumFractionDigits: 1 })}
           </button>
@@ -120,18 +150,13 @@ export function BacStepper({
           disabled={disabled}
           onClick={() => onChange(snap(value + step))}
           className={cn(
-            'flex size-12 shrink-0 items-center justify-center rounded-full',
-            'active:bg-muted transition-colors disabled:opacity-25',
-            'touch-manipulation',
+            'flex h-full w-16 shrink-0 items-center justify-center rounded-r-2xl',
+            'active:bg-muted touch-manipulation transition-colors disabled:opacity-25',
           )}
         >
-          <Plus className="size-5" strokeWidth={2.5} />
+          <Plus className="size-6" strokeWidth={3} />
         </button>
       </div>
-
-      {hideLabel ? null : (
-        <span className="text-muted-foreground text-[11px] font-medium tracking-wide">{label}</span>
-      )}
     </div>
   );
 }

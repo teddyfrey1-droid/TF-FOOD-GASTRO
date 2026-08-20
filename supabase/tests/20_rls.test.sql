@@ -486,4 +486,47 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 8. LES CATÉGORIES ET LES ZONES SONT DU BACK-OFFICE ---'
+
+-- Les catégories décident de l'ordre des rayons à l'écran de comptage.
+-- Un employé les LIT — sans elles, l'écran n'aurait plus d'intertitres —
+-- mais ne les modifie pas.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+
+select pg_temp.check_no_effect('Renommer une catégorie reste sans effet',
+  'update public.product_categories set name = ''Piraté''');
+
+select pg_temp.check_no_effect('Supprimer une catégorie reste sans effet',
+  'delete from public.product_categories');
+
+select pg_temp.check_denied('Créer une catégorie est refusé',
+  'insert into public.product_categories (name, sort_order) values (''Fantôme'', 999)');
+
+-- Les zones de stockage aussi : les déplacer changerait ce que l'employé
+-- doit relever, et donc le stock total comparé au minimum.
+select pg_temp.check_no_effect('Changer la zone d''un produit reste sans effet',
+  'update public.products set in_fridge = not in_fridge');
+
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Le directeur, lui, y a bien accès : sans ce contrôle, la page Catégories
+-- se contenterait d'échouer en silence.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+
+select pg_temp.check_allowed('Le directeur crée une catégorie',
+  'insert into public.product_categories (name, sort_order) values (''Zone de test'', 999)');
+select pg_temp.check_allowed('Le directeur renomme une catégorie',
+  'update public.product_categories set name = ''Zone renommée'' where sort_order = 999');
+select pg_temp.check_allowed('Le directeur supprime une catégorie vide',
+  'delete from public.product_categories where sort_order = 999');
+select pg_temp.check_allowed('Le directeur change la zone d''un produit',
+  'update public.products set in_fridge = in_fridge where name = ''Saumon''');
+
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

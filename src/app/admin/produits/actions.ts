@@ -168,6 +168,11 @@ export async function updateProductInline(
     minMode?: 'auto' | 'manual';
     minQtyManual?: number | null;
     minDivisor?: number;
+    name?: string;
+    imageUrl?: string | null;
+    inSaladbar?: boolean;
+    inFridge?: boolean;
+    categoryId?: string;
   },
 ): Promise<{ error?: string }> {
   const schema = z.object({
@@ -175,17 +180,41 @@ export async function updateProductInline(
     minMode: z.enum(['auto', 'manual']).optional(),
     minQtyManual: z.number().min(0).nullable().optional(),
     minDivisor: z.number().positive().optional(),
+    name: z.string().trim().min(1, 'Le nom ne peut pas être vide.').max(80).optional(),
+    // Chaîne vide = « retirer la photo », d'où le passage par null.
+    imageUrl: z.union([z.url('Adresse de photo invalide.'), z.literal('')]).nullable().optional(),
+    inSaladbar: z.boolean().optional(),
+    inFridge: z.boolean().optional(),
+    categoryId: z.uuid().optional(),
   });
 
   const parsed = schema.safeParse(patch);
-  if (!parsed.success) return { error: 'Valeur invalide.' };
+  if (!parsed.success) {
+    return { error: parsed.error.issues[0]?.message ?? 'Valeur invalide.' };
+  }
+
+  // Un produit rangé nulle part ne serait plus jamais comptable : la
+  // validation du jour l'attendrait sans qu'aucun écran ne l'affiche.
+  if (parsed.data.inSaladbar === false && parsed.data.inFridge === false) {
+    return { error: 'Un produit doit rester dans au moins une zone.' };
+  }
 
   const payload: Partial<{
     priority: number;
     min_divisor: number;
     min_mode: 'auto' | 'manual';
     min_qty_manual: number | null;
+    name: string;
+    image_url: string | null;
+    in_saladbar: boolean;
+    in_fridge: boolean;
+    category_id: string;
   }> = {};
+  if (parsed.data.name !== undefined) payload.name = parsed.data.name;
+  if (parsed.data.imageUrl !== undefined) payload.image_url = parsed.data.imageUrl || null;
+  if (parsed.data.inSaladbar !== undefined) payload.in_saladbar = parsed.data.inSaladbar;
+  if (parsed.data.inFridge !== undefined) payload.in_fridge = parsed.data.inFridge;
+  if (parsed.data.categoryId !== undefined) payload.category_id = parsed.data.categoryId;
   if (parsed.data.priority !== undefined) payload.priority = parsed.data.priority;
   if (parsed.data.minDivisor !== undefined) payload.min_divisor = parsed.data.minDivisor;
   if (parsed.data.minMode !== undefined) {
@@ -199,9 +228,57 @@ export async function updateProductInline(
 
   const supabase = await createClient();
   const { error } = await supabase.from('products').update(payload).eq('id', id);
-  if (error) return { error: error.message };
+  if (error) {
+    return {
+      error: error.code === '23505' ? 'Un produit porte déjà ce nom.' : error.message,
+    };
+  }
 
   revalidatePath('/admin/produits');
+  revalidatePath('/comptage', 'layout');
+  return {};
+}
+
+/**
+ * Retire un produit d'une zone en une bascule.
+ *
+ * Cas concret : les desserts ne vivent qu'au saladbar. Tant qu'ils étaient
+ * marqués « frigo du bas » aussi, l'employé devait les relever DEUX fois,
+ * dont une devant une étagère où ils ne se trouvent pas.
+ */
+export async function setProductZones(
+  id: string,
+  zones: { inSaladbar: boolean; inFridge: boolean },
+): Promise<{ error?: string }> {
+  return updateProductInline(id, zones);
+}
+
+/** Applique les mêmes zones à toute une catégorie, d'un geste. */
+export async function setCategoryZones(
+  categoryId: string,
+  zones: { inSaladbar: boolean; inFridge: boolean },
+): Promise<{ error?: string }> {
+  if (!zones.inSaladbar && !zones.inFridge) {
+    return { error: 'Un produit doit rester dans au moins une zone.' };
+  }
+  if (!z.uuid().safeParse(categoryId).success) return { error: 'Catégorie invalide.' };
+
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from('products')
+    .update(
+      { in_saladbar: zones.inSaladbar, in_fridge: zones.inFridge },
+      { count: 'exact' },
+    )
+    .eq('category_id', categoryId);
+
+  if (error) return { error: error.message };
+  if (count === 0) {
+    return { error: 'Seul un directeur ou le propriétaire peut modifier les produits.' };
+  }
+
+  revalidatePath('/admin/produits');
+  revalidatePath('/comptage', 'layout');
   return {};
 }
 
