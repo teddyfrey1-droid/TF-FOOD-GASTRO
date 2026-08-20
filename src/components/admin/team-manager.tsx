@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Check, KeyRound, Mail, UserPlus, X } from 'lucide-react';
+import { Check, Copy, KeyRound, Link2, Mail, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ import {
   createTeamMember,
   resetMemberPassword,
   envoyerLienActivation,
+  genererLienActivation,
   setMemberActive,
   setMemberRole,
   type UserFormState,
@@ -190,6 +191,7 @@ function MemberRow({ member }: { member: TeamMember }) {
   const [resetting, setResetting] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
+  const [lien, setLien] = useState<string | null>(null);
 
   return (
     <Card className={cn('rounded-2xl p-4', !member.isActive && 'opacity-60')}>
@@ -239,9 +241,11 @@ function MemberRow({ member }: { member: TeamMember }) {
             ))}
           </select>
 
-          {/* Le lien par courriel évite d'avoir à transmettre un mot de
-              passe de vive voix — et il ne demande aucune clé de service,
-              contrairement à la réinitialisation directe juste à côté. */}
+          {/* Deux façons de donner son mot de passe à quelqu'un.
+
+              Le lien copié ne consomme aucun quota et arrive à coup sûr :
+              c'est celui à utiliser au quotidien. Le courriel est plus
+              confortable, mais Supabase n'en accepte que deux par heure. */}
           <Button
             variant="outline"
             size="sm"
@@ -249,7 +253,45 @@ function MemberRow({ member }: { member: TeamMember }) {
             disabled={pending || !member.email}
             title={
               member.email
-                ? "Envoyer un lien d'activation par e-mail"
+                ? "Copier un lien d'activation (sans e-mail)"
+                : 'Ce compte n’a pas d’adresse e-mail'
+            }
+            onClick={() =>
+              startTransition(async () => {
+                if (!member.email) return;
+                setMessage('Création du lien…');
+                const result = await genererLienActivation(member.email);
+
+                if (result.error || !result.lien) {
+                  setLien(null);
+                  setMessage(result.error ?? 'Lien impossible à créer.');
+                  return;
+                }
+
+                setLien(result.lien);
+                // Le presse-papiers n'est pas toujours accessible (Safari
+                // le refuse hors interaction directe, et en http). Le lien
+                // reste affiché juste en dessous pour être copié à la main.
+                try {
+                  await navigator.clipboard.writeText(result.lien);
+                  setMessage('Lien copié. Il est valable une heure.');
+                } catch {
+                  setMessage('Lien prêt — copiez-le ci-dessous.');
+                }
+              })
+            }
+          >
+            <Link2 className="size-4" />
+          </Button>
+
+          <Button
+            variant="outline"
+            size="sm"
+            className="h-10 rounded-xl"
+            disabled={pending || !member.email}
+            title={
+              member.email
+                ? "Envoyer un lien d'activation par e-mail (2 par heure)"
                 : 'Ce compte n’a pas d’adresse e-mail'
             }
             onClick={() =>
@@ -321,6 +363,29 @@ function MemberRow({ member }: { member: TeamMember }) {
           >
             Proposer
           </Button>
+        </div>
+      ) : null}
+
+      {lien ? (
+        <div className="bg-muted/60 mt-3 space-y-2 rounded-2xl p-3">
+          <p className="text-xs font-bold">Lien d’activation pour {member.fullName}</p>
+          <p className="bg-background rounded-xl border p-2.5 font-mono text-[11px] break-all">
+            {lien}
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="outline"
+              className="h-9 rounded-xl"
+              onClick={() => void navigator.clipboard?.writeText(lien).catch(() => {})}
+            >
+              <Copy className="size-3.5" />
+              Copier
+            </Button>
+            <Button size="sm" variant="ghost" className="h-9" onClick={() => setLien(null)}>
+              Masquer
+            </Button>
+          </div>
         </div>
       ) : null}
 

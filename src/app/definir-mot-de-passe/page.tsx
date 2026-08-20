@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { DefinirMotDePasse } from './formulaire';
 
 export const metadata = { title: 'Choisir mon mot de passe — Lafayette' };
@@ -20,7 +21,17 @@ export default function PageDefinirMotDePasse() {
         </header>
 
         <div className="bg-card rounded-3xl border p-6 shadow-sm">
-          <DefinirMotDePasse />
+          {/* Le formulaire lit le jeton dans l'adresse : sans cette
+              frontière, Next refuse de prérendre la page. */}
+          <Suspense
+            fallback={
+              <p className="text-muted-foreground py-6 text-center text-sm">
+                Vérification du lien…
+              </p>
+            }
+          >
+            <DefinirMotDePasse />
+          </Suspense>
         </div>
       </div>
     </main>

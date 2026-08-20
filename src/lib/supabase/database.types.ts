@@ -308,6 +308,15 @@ export type Database = {
         PushSubscriptionRow,
         'id' | 'created_at' | 'last_used_at' | 'revoked_at' | 'user_agent'
       >;
+      /**
+       * Les envois de liens d'activation. En lecture seule pour le
+       * directeur : le compteur ne se remet à zéro que par le temps qui
+       * passe, jamais à la main.
+       */
+      activation_email_sends: Table<
+        { id: string; email: string; sent_by: string; sent_at: string },
+        'id' | 'sent_at'
+      >;
     };
     Views: {
       products_for_count: { Row: ProductForCountRow; Relationships: [] };
@@ -381,6 +390,14 @@ export type Database = {
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /**
+       * Réserve un des deux créneaux d'envoi horaires et renvoie son
+       * identifiant. Lève une erreur — portant l'heure du prochain
+       * créneau — quand le quota est atteint.
+       */
+      mep_reserver_envoi_activation: { Args: { p_email: string }; Returns: string };
+      /** Rend un créneau quand l'envoi a finalement échoué. */
+      mep_annuler_envoi_activation: { Args: { p_id: string }; Returns: undefined };
       /**
        * L'équipe avec les adresses e-mail, réservée au directeur.
        * Les adresses vivent dans `auth.users`, hors de portée de la RLS :

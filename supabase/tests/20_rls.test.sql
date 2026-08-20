@@ -809,4 +809,93 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 13. LE QUOTA D''ENVOI DE LIENS D''ACTIVATION ---'
+
+-- Le service de courriel de Supabase plafonne à deux messages par heure.
+-- Passer outre ne fait rien partir : le compteur doit donc refuser AVANT
+-- l'appel, et le dire.
+
+-- Un refus de quota n'est pas un refus de droits : il a sa propre
+-- assertion, pour que `check_denied` reste le juge des seules permissions.
+-- On exige en plus que le message annonce l'heure du prochain créneau —
+-- c'est tout l'intérêt du compteur.
+create or replace function pg_temp.check_quota_refuse(label text, stmt text)
+returns void language plpgsql as $$
+begin
+  execute stmt;
+  raise exception 'ÉCHEC — % : l''envoi est passé alors que le quota était atteint', label;
+exception
+  when configuration_limit_exceeded then
+    if sqlerrm !~ '\d\dh\d\d' then
+      raise exception 'ÉCHEC — % : le refus n''annonce pas d''heure (%)', label, sqlerrm;
+    end if;
+    raise notice 'OK   — % (refusé : %)', label, sqlerrm;
+end;
+$$;
+
+delete from public.activation_email_sends;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Un employé ne peut pas envoyer de lien',
+  'select public.mep_reserver_envoi_activation(''x@y.test'')');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_denied('...ni un assistant manager',
+  'select public.mep_reserver_envoi_activation(''x@y.test'')');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+
+select pg_temp.check_equal('Le premier envoi de l''heure passe',
+  (select public.mep_reserver_envoi_activation('un@lafayette.test') is not null),
+  true);
+select pg_temp.check_equal('Le deuxième aussi',
+  (select public.mep_reserver_envoi_activation('deux@lafayette.test') is not null),
+  true);
+select pg_temp.check_quota_refuse('Le troisième est refusé, avec l''heure du prochain',
+  'select public.mep_reserver_envoi_activation(''trois@lafayette.test'')');
+
+-- Un envoi refusé par Supabase ne doit pas coûter un créneau : on le rend,
+-- et la place se libère immédiatement.
+select public.mep_annuler_envoi_activation(
+  (select id from public.activation_email_sends order by sent_at desc limit 1));
+select pg_temp.check_equal('Créneau rendu : un envoi redevient possible',
+  (select public.mep_reserver_envoi_activation('quatre@lafayette.test') is not null),
+  true);
+
+-- Le directeur lui-même ne peut pas retoucher le compteur à la main : il
+-- n'a que le droit de lecture. Vieillir les lignes se fait donc hors rôle.
+select pg_temp.check_denied('Même le directeur ne réécrit pas le compteur',
+  'update public.activation_email_sends set sent_at = now()');
+
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Une heure plus tard, le compteur est reparti de zéro.
+update public.activation_email_sends set sent_at = now() - interval '61 minutes';
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_equal('Passé une heure, le quota se remet à zéro',
+  (select public.mep_reserver_envoi_activation('cinq@lafayette.test') is not null),
+  true);
+reset role;
+reset "request.jwt.claim.sub";
+
+-- L'historique des envois porte des adresses : il reste au directeur.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_equal('L''employé ne voit aucun envoi',
+  (select count(*)::int from public.activation_email_sends),
+  0);
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

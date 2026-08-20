@@ -153,14 +153,15 @@ function adresseDuSite(): string {
 /**
  * Envoie à l'employé un lien pour choisir son mot de passe.
  *
- * On passe par le courriel de RÉINITIALISATION, et non par une invitation :
- * l'invitation exige la clé de service, la réinitialisation se contente de
- * la clé publique. Le résultat est le même pour la personne qui reçoit le
- * message — un lien, un mot de passe à choisir.
+ * On passe par le courriel de RÉINITIALISATION plutôt que par une
+ * invitation : le résultat est le même pour la personne qui le reçoit, et
+ * le message part même si le compte a déjà servi.
  *
- * ⚠️ Le service d'envoi intégré de Supabase est limité à quelques messages
- * par heure. C'est suffisant pour créer une équipe, pas pour un usage
- * répété : le message le dit si la limite est atteinte.
+ * ⚠️ Le service d'envoi intégré à Supabase plafonne à DEUX messages par
+ * heure pour tout le projet. Au-delà il répond 429 et n'envoie rien : le
+ * lien semblait parti et n'arrivait jamais. On réserve donc le créneau en
+ * base AVANT d'appeler Supabase, et on le rend si l'envoi échoue quand
+ * même. Le directeur sait ainsi toujours où il en est de son quota.
  */
 export async function envoyerLienActivation(
   email: string,
@@ -174,21 +175,86 @@ export async function envoyerLienActivation(
   const parsed = z.email().safeParse(email.trim());
   if (!parsed.success) return { error: 'Adresse e-mail invalide.' };
 
+  const supabase = await createClient();
+  const { data: creneau, error: quota } = await supabase.rpc('mep_reserver_envoi_activation', {
+    p_email: parsed.data,
+  });
+
+  // Le message de la base porte déjà l'heure du prochain créneau : on le
+  // montre tel quel plutôt que de le réécrire en moins précis.
+  if (quota) return { error: quota.message };
+
   const { error } = await createSignUpClient().auth.resetPasswordForEmail(parsed.data, {
     redirectTo: `${adresseDuSite()}/definir-mot-de-passe`,
   });
 
   if (error) {
+    if (creneau) await supabase.rpc('mep_annuler_envoi_activation', { p_id: creneau });
+
     if (/rate|limit|too many|seconds/i.test(error.message)) {
       return {
         error:
-          'Trop d’e-mails envoyés d’affilée. Le service de Supabase n’en accepte que quelques-uns par heure : patientez avant de réessayer.',
+          'Supabase a refusé l’envoi : son quota horaire est déjà atteint. ' +
+          'Utilisez « Copier le lien » — il fonctionne sans e-mail.',
       };
     }
     return { error: `Envoi impossible : ${error.message}` };
   }
 
-  return { success: `Lien envoyé à ${parsed.data}. Il est valable une heure.` };
+  revalidatePath('/admin/utilisateurs');
+  return {
+    success: `Lien envoyé à ${parsed.data}. Il est valable une heure.`,
+  };
+}
+
+/**
+ * Fabrique le lien d'activation sans envoyer aucun courriel.
+ *
+ * C'est le chemin fiable, et il n'a aucun quota : la clé de service
+ * demande à Supabase un jeton à usage unique, et on le pose sur NOTRE
+ * adresse. Le directeur transmet ensuite le lien par SMS ou WhatsApp —
+ * souvent plus sûr qu'un courriel qui finit en indésirables.
+ *
+ * Le lien ne passe pas par `/auth/v1/verify` de Supabase, dont la
+ * redirection retombe sur l'« adresse du site » configurée dans le tableau
+ * de bord. Il pointe droit sur `/definir-mot-de-passe`, qui échange le
+ * jeton lui-même : rien à régler ailleurs pour que ça marche.
+ */
+export async function genererLienActivation(
+  email: string,
+): Promise<{ error?: string; lien?: string }> {
+  try {
+    await requireManagerOrThrow();
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Accès refusé.' };
+  }
+
+  const parsed = z.email().safeParse(email.trim());
+  if (!parsed.success) return { error: 'Adresse e-mail invalide.' };
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return {
+      error:
+        'La clé de service manque sur l’hébergement : seul l’envoi par e-mail est possible.',
+    };
+  }
+
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'recovery',
+    email: parsed.data,
+  });
+
+  if (error) return { error: `Lien impossible à créer : ${error.message}` };
+
+  const jeton = data.properties?.hashed_token;
+  if (!jeton) return { error: 'Supabase n’a pas renvoyé de jeton utilisable.' };
+
+  return {
+    lien: `${adresseDuSite()}/definir-mot-de-passe?token_hash=${encodeURIComponent(jeton)}&type=recovery`,
+  };
 }
 
 export async function setMemberRole(userId: string, role: UserRole): Promise<{ error?: string }> {

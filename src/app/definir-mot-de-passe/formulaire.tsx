@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { Button, buttonVariants } from '@/components/ui/button';
@@ -14,14 +14,25 @@ type Etat = 'verification' | 'pret' | 'lien-invalide' | 'enregistre';
 /**
  * Choix du mot de passe, au bout du lien d'activation.
  *
- * Le lien reçu par courriel porte son jeton dans le FRAGMENT de l'URL
- * (`#access_token=…`). Un fragment n'est jamais transmis au serveur : c'est
- * donc le client Supabase, dans le navigateur, qui le récupère et ouvre la
- * session. On attend cette session avant d'afficher quoi que ce soit —
- * sinon on proposerait un formulaire qui échouerait à l'envoi.
+ * Deux formes de lien arrivent ici, et il faut les deux :
+ *
+ * 1. `?token_hash=…&type=recovery` — le lien fabriqué par l'écran Équipe.
+ *    Le jeton est échangé ici même contre une session (`verifyOtp`). Ce
+ *    chemin ne dépend d'aucun réglage du tableau de bord Supabase, et
+ *    n'use aucun quota d'envoi : c'est le chemin sûr.
+ *
+ * 2. `#access_token=…` — le lien reçu par courriel. Supabase pose alors le
+ *    jeton dans le FRAGMENT, que le navigateur ne transmet jamais au
+ *    serveur : c'est le client Supabase qui le ramasse, de façon
+ *    asynchrone. D'où l'écoute ci-dessous en plus du premier examen.
+ *
+ * Dans les deux cas on attend la session avant d'afficher le formulaire —
+ * sinon on proposerait un champ dont l'envoi échouerait.
  */
 export function DefinirMotDePasse() {
   const router = useRouter();
+  const parametres = useSearchParams();
+  const jeton = parametres.get('token_hash');
   const [etat, setEtat] = useState<Etat>('verification');
   const [motDePasse, setMotDePasse] = useState('');
   const [visible, setVisible] = useState(false);
@@ -30,22 +41,46 @@ export function DefinirMotDePasse() {
 
   useEffect(() => {
     const supabase = createClient();
+    let vivant = true;
 
-    // `getSession` suffit ici : on ne cherche pas à faire confiance au
-    // jeton, seulement à savoir si le lien en a déposé un. Toute écriture
-    // passera ensuite par le serveur, qui le revalide.
-    supabase.auth.getSession().then(({ data }) => {
+    async function ouvrirLaSession() {
+      // Forme 1 : le jeton est dans l'adresse, on l'échange nous-mêmes.
+      if (jeton) {
+        const { error } = await supabase.auth.verifyOtp({
+          token_hash: jeton,
+          type: 'recovery',
+        });
+        if (!vivant) return;
+        setEtat(error ? 'lien-invalide' : 'pret');
+
+        // Le jeton ne sert qu'une fois : on l'efface de la barre
+        // d'adresse pour qu'un rafraîchissement ne rejoue pas un échange
+        // déjà consommé — et qu'il ne traîne pas dans l'historique.
+        window.history.replaceState(null, '', '/definir-mot-de-passe');
+        return;
+      }
+
+      // Forme 2 : le client a peut-être déjà lu le fragment. `getSession`
+      // ne cherche pas à faire confiance au jeton, seulement à savoir si
+      // le lien en a déposé un ; toute écriture repasse par le serveur.
+      const { data } = await supabase.auth.getSession();
+      if (!vivant) return;
       setEtat(data.session ? 'pret' : 'lien-invalide');
-    });
+    }
 
-    // Le client traite le fragment de façon asynchrone : cet écouteur
-    // rattrape le cas où la session arrive après le premier examen.
+    void ouvrirLaSession();
+
+    // Le fragment est traité de façon asynchrone : cet écouteur rattrape
+    // le cas où la session arrive après le premier examen.
     const { data: ecoute } = supabase.auth.onAuthStateChange((_evenement, session) => {
       if (session) setEtat((actuel) => (actuel === 'enregistre' ? actuel : 'pret'));
     });
 
-    return () => ecoute.subscription.unsubscribe();
-  }, []);
+    return () => {
+      vivant = false;
+      ecoute.subscription.unsubscribe();
+    };
+  }, [jeton]);
 
   async function enregistrer(evenement: React.FormEvent) {
     evenement.preventDefault();
