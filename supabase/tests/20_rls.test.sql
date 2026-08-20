@@ -191,12 +191,17 @@ begin
   where r.routine_schema = 'public'
     and r.routine_name = 'mep_submit_count'
     and p.parameter_mode = 'OUT'
+    -- Liste tenue à la main, VOLONTAIREMENT : toute colonne ajoutée à la
+    -- fonction doit être justifiée ici avant d'atteindre un téléphone.
+    -- `image_url` et `category_name` ne disent rien du chiffre d'affaires,
+    -- de la cible ni du minimum : ce sont des libellés d'affichage.
     and p.parameter_name not in ('product_id', 'product_name', 'notes',
-                                 'qty_to_produce', 'unit', 'priority');
+                                 'qty_to_produce', 'unit', 'priority',
+                                 'image_url', 'category_name');
   if leaked is not null then
     raise exception 'ÉCHEC — mep_submit_count renvoie des colonnes en trop : %', leaked;
   end if;
-  raise notice 'OK   — mep_submit_count ne renvoie que produit, quantité, unité et priorité';
+  raise notice 'OK   — mep_submit_count ne renvoie rien de sensible';
 end
 $$;
 
@@ -244,6 +249,13 @@ select pg_temp.check_denied('Écriture directe d''un snapshot de minimum refusé
 
 select pg_temp.check_allowed('Correction de sa propre quantité comptée',
   'update public.count_lines set qty_saladbar = 3
+   where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
+
+-- Marquer les deux zones relevées, comme le fait l'écran de comptage :
+-- la validation refuse désormais une session incomplète.
+select pg_temp.check_allowed('Marquer les deux zones comme relevées',
+  'update public.count_lines
+   set counted_at = now(), counted_saladbar_at = now(), counted_fridge_at = now()
    where session_id = ''c0000000-0000-0000-0000-0000000000ee''');
 
 \echo ''

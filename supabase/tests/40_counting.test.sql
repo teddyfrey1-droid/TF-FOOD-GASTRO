@@ -185,6 +185,24 @@ begin
   where date = current_date and session = 'morning';
   select id into v_epinard from public.products_for_count where name = 'Épinard';
 
+  -- Le comptage doit être COMPLET, zone par zone : depuis que le serveur
+  -- le vérifie, valider une session à moitié relevée est refusé.
+  perform pg_temp.check_equal(
+    'Une session incomplète est refusée',
+    public.mep_count_pending(v_session) > 0,
+    true);
+
+  update public.count_lines
+  set counted_at = coalesce(counted_at, now()),
+      counted_saladbar_at = coalesce(counted_saladbar_at, now()),
+      counted_fridge_at = coalesce(counted_fridge_at, now())
+  where session_id = v_session;
+
+  perform pg_temp.check_equal(
+    'Une fois les deux zones relevées, plus rien ne manque',
+    public.mep_count_pending(v_session),
+    0);
+
   perform public.mep_submit_count(v_session);
 
   perform pg_temp.check_equal(
@@ -318,6 +336,84 @@ end
 $$;
 
 reset role;
+reset "request.jwt.claim.sub";
+
+-- ---------------------------------------------------------------------
+-- Un produit retiré du catalogue ne doit pas bloquer la journée
+--
+-- BUG VÉCU : l'ouverture d'un comptage crée une ligne par produit ACTIF et
+-- rattrape les ajouts, mais rien ne retirait la ligne d'un produit RETIRÉ.
+-- L'écran ne l'affiche plus — il ne montre que les produits actifs — donc
+-- l'employé comptait tout ce qu'il voyait, et la validation refusait quand
+-- même : « il reste 3 produits à compter », introuvables à l'écran.
+--
+-- Découvert le jour où Sunny, Daily et Berry Bowl ont laissé la place à
+-- l'açaï.
+-- ---------------------------------------------------------------------
+-- Le claim suffit : `mep_open_count_session` lit auth.uid(). On ne prend
+-- PAS le rôle `authenticated` ici — ce bloc éprouve la logique de la
+-- fonction, pas la RLS, qui a sa propre section plus haut.
+set request.jwt.claim.sub = 'b0000000-0000-0000-0000-00000000000e';
+
+do $$
+declare
+  v_session uuid;
+  v_retire  uuid;
+  v_compte  uuid;
+begin
+  delete from public.count_sessions where date = current_date;
+  v_session := public.mep_open_count_session('afternoon', null);
+
+  select id into v_retire from public.products where name = 'Melon';
+
+  -- Tout est relevé, puis un produit est retiré du catalogue.
+  update public.count_lines
+  set counted_at = now(), counted_saladbar_at = now(), counted_fridge_at = now()
+  where session_id = v_session;
+
+  perform pg_temp.check_equal(
+    'Comptage complet avant retrait', public.mep_count_pending(v_session), 0);
+
+  -- Le produit sort du catalogue APRÈS que sa ligne a été créée, et sans
+  -- avoir été relevé : c'est le cas qui bloquait.
+  update public.count_lines
+  set counted_at = null, counted_saladbar_at = null, counted_fridge_at = null
+  where session_id = v_session and product_id = v_retire;
+
+  perform pg_temp.check_equal(
+    'Sa ligne non relevée bloque encore la validation',
+    public.mep_count_pending(v_session) , 1);
+
+  update public.products set is_active = false where id = v_retire;
+
+  perform pg_temp.check_equal(
+    'Produit désactivé : il ne compte plus comme manquant',
+    public.mep_count_pending(v_session), 0);
+
+  -- Et le rechargement de l'écran fait disparaître la ligne orpheline.
+  perform public.mep_open_count_session('afternoon', null);
+
+  perform pg_temp.check_equal(
+    'La ligne orpheline est retirée au rechargement',
+    (select count(*)::int from public.count_lines
+     where session_id = v_session and product_id = v_retire),
+    0);
+
+  -- Une ligne DÉJÀ RELEVÉE, elle, est une mesure : elle reste.
+  select id into v_compte from public.products where name = 'Ananas';
+  update public.products set is_active = false where id = v_compte;
+  perform public.mep_open_count_session('afternoon', null);
+
+  perform pg_temp.check_equal(
+    'Une ligne déjà relevée survit au retrait du produit',
+    (select count(*)::int from public.count_lines
+     where session_id = v_session and product_id = v_compte),
+    1);
+
+  update public.products set is_active = true where id in (v_retire, v_compte);
+end
+$$;
+
 reset "request.jwt.claim.sub";
 
 \echo ''

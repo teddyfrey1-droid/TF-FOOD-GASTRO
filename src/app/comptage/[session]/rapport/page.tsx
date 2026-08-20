@@ -3,6 +3,7 @@ import { notFound, redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { buttonVariants } from '@/components/ui/button';
+import { todayInParis } from '@/lib/format';
 import { LienRetour } from '@/components/lien-retour';
 import { ReorderReport, type ReportTask } from '@/components/comptage/reorder-report';
 import { SESSION_SLUGS, type SessionSlug } from '../../slugs';
@@ -18,7 +19,9 @@ export default async function ReportPage({ params }: { params: Promise<{ session
   if (!config) notFound();
 
   const supabase = await createClient();
-  const today = new Date().toISOString().slice(0, 10);
+  // Date de PARIS : en UTC, entre minuit et 2 h, on chercherait le
+  // rapport de la veille.
+  const today = todayInParis();
 
   const { data: countSession } = await supabase
     .from('count_sessions')
@@ -57,6 +60,8 @@ export default async function ReportPage({ params }: { params: Promise<{ session
     unit: row.unit,
     priority: Number(row.priority),
     isDone: row.is_done,
+    imageUrl: row.image_url,
+    categoryName: row.category_name,
   }));
 
   const reorderedIds = new Set((tasks ?? []).map((row) => row.product_id));

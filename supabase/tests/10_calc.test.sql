@@ -303,8 +303,15 @@ begin
   values (current_date, 'morning', '11111111-1111-1111-1111-111111111111')
   returning id into v_session;
 
-  insert into public.count_lines (session_id, product_id, qty_saladbar, qty_fridge, counted_at)
-  select v_session, p.id, 999, 0, now() from public.products p where p.is_active;
+  -- Les deux zones sont marquées relevées, comme le ferait un vrai
+  -- comptage : depuis que la validation le vérifie côté serveur, une ligne
+  -- relevée d'un seul côté bloque la session — et c'est voulu.
+  insert into public.count_lines (
+    session_id, product_id, qty_saladbar, qty_fridge,
+    counted_at, counted_saladbar_at, counted_fridge_at
+  )
+  select v_session, p.id, 999, 0, now(), now(), now()
+  from public.products p where p.is_active;
 
   -- Saumon : cible 10, minimum 5.
   for v_case in

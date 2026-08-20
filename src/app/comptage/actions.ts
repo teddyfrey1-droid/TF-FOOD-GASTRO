@@ -109,6 +109,8 @@ export interface ReorderItem {
   unit: 'gastro' | 'piece';
   /** 1 = le plus urgent, 5 = le moins. */
   priority: number;
+  imageUrl: string | null;
+  categoryName: string;
 }
 
 /**
@@ -123,21 +125,17 @@ export async function submitCount(sessionId: string): Promise<{
 
   const supabase = await createClient();
 
-  // Refus explicite plutôt qu'un rapport partiel sur un comptage incomplet.
-  const { count: pending } = await supabase
-    .from('count_lines')
-    .select('id', { count: 'exact', head: true })
-    .eq('session_id', sessionId)
-    .is('counted_at', null);
-
-  if ((pending ?? 0) > 0) {
-    return {
-      error: `Il reste ${pending} produit${pending! > 1 ? 's' : ''} à compter.`,
-    };
-  }
-
+  // Le refus d'un comptage incomplet appartient au SERVEUR, et à lui seul.
+  // Il vérifie zone par zone : `counted_at` est renseigné dès qu'une seule
+  // zone est touchée, et s'y fier laissait valider une journée où le frigo
+  // du bas n'avait jamais été ouvert.
   const { data, error } = await supabase.rpc('mep_submit_count', { p_session_id: sessionId });
-  if (error) return { error: `Validation impossible : ${error.message}` };
+
+  if (error) {
+    // Message métier explicite (« il reste 3 produits à compter ») : on le
+    // montre tel quel plutôt que noyé dans un préfixe technique.
+    return { error: error.code === 'P0001' ? error.message : `Validation impossible : ${error.message}` };
+  }
 
   revalidatePath('/');
   revalidatePath('/comptage', 'layout');
@@ -150,6 +148,8 @@ export async function submitCount(sessionId: string): Promise<{
       qtyToProduce: Number(row.qty_to_produce),
       unit: row.unit,
       priority: Number(row.priority),
+      imageUrl: row.image_url,
+      categoryName: row.category_name,
     })),
   };
 }

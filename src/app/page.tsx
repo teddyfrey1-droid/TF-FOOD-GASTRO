@@ -5,6 +5,7 @@ import { createClient } from '@/lib/supabase/server';
 import { NotificationToggle } from '@/components/pwa/notification-toggle';
 import { SessionCard } from '@/components/session-card';
 import { BottomTabs } from '@/components/bottom-tabs';
+import { todayInParis } from '@/lib/format';
 import type { SessionKind } from '@/lib/supabase/database.types';
 
 export const dynamic = 'force-dynamic';
@@ -13,6 +14,9 @@ const DATE_FORMAT = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
+  // Le serveur tourne en UTC : sans ce fuseau, la date affichée bascule
+  // une à deux heures avant minuit à Paris.
+  timeZone: 'Europe/Paris',
 });
 
 export default async function HomePage() {
@@ -21,8 +25,11 @@ export default async function HomePage() {
 
   // La RLS ne laisse passer que les sessions DU JOUR (§6.2 : l'accueil doit
   // indiquer qui a fait le comptage, pas seulement s'il est fait).
-  const today = new Date();
-  const isoToday = today.toISOString().slice(0, 10);
+  // `toISOString()` donne la date UTC : entre minuit et 2 h à Paris, elle
+  // vaut encore la veille, et l'accueil interrogeait alors le comptage
+  // d'hier. La base raisonne en heure de Paris, l'application aussi.
+  const isoToday = todayInParis();
+  const today = new Date(`${isoToday}T12:00:00Z`);
 
   const [{ data: sessions }, { data: team }] = await Promise.all([
     supabase
@@ -74,7 +81,7 @@ export default async function HomePage() {
               {DATE_FORMAT.format(today)}
             </p>
             <h1 className="mt-1 truncate text-3xl font-black tracking-tight">
-              Bonjour {user.fullName.split(' ')[0]}
+              Bonjour {user.fullName.trim().split(/\s+/)[0] || user.fullName}
             </h1>
           </div>
 

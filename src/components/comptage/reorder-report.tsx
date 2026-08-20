@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { unitLabel, type ProductUnit } from '@/lib/mep';
+import { VignetteProduit } from '@/components/produits/vignette-produit';
 import { toggleProductionTask } from '@/app/comptage/actions';
 
 export interface ReportTask {
@@ -17,6 +18,8 @@ export interface ReportTask {
   /** 1 = le plus urgent, 5 = le moins. */
   priority: number;
   isDone: boolean;
+  imageUrl: string | null;
+  categoryName: string;
 }
 
 /**
@@ -25,16 +28,16 @@ export interface ReportTask {
  * ⚠️ L'échelle se lit comme un classement : **1 est le plus urgent**.
  * Le rouge est donc en haut de liste, le gris en bas.
  */
-const PRIORITY: Record<number, { label: string; dot: string }> = {
-  1: { label: 'Priorité 1', dot: 'bg-red-500' },
-  2: { label: 'Priorité 2', dot: 'bg-orange-500' },
-  3: { label: 'Priorité 3', dot: 'bg-yellow-400' },
-  4: { label: 'Priorité 4', dot: 'bg-blue-400' },
-  5: { label: 'Priorité 5', dot: 'bg-neutral-300' },
+const PRIORITE: Record<number, { label: string; pastille: string }> = {
+  1: { label: 'Urgent', pastille: 'bg-red-500 text-white' },
+  2: { label: 'Prioritaire', pastille: 'bg-orange-500 text-white' },
+  3: { label: 'Normal', pastille: 'bg-alert text-alert-foreground' },
+  4: { label: 'Si possible', pastille: 'bg-blue-400 text-white' },
+  5: { label: 'En dernier', pastille: 'bg-neutral-300 text-neutral-800' },
 };
 
-function priorityOf(level: number) {
-  return PRIORITY[level] ?? PRIORITY[5];
+function prioriteDe(niveau: number) {
+  return PRIORITE[niveau] ?? PRIORITE[5];
 }
 
 export function ReorderReport({
@@ -82,42 +85,41 @@ export function ReorderReport({
     <div className="space-y-5">
       <header className="print:block">
         <div className="flex items-start justify-between gap-3">
-          <div>
-            <h1 className="text-3xl font-black tracking-tight">
-              À relancer{' '}
-              <span className="text-muted-foreground font-black">({tasks.length})</span>
-            </h1>
-            <p className="text-muted-foreground mt-1 text-sm font-semibold">
-              {remaining === 0
-                ? 'Tout est produit — beau travail.'
-                : `${doneCount} sur ${tasks.length} ${doneCount > 1 ? 'faites' : 'faite'}`}
-            </p>
-          </div>
+          <h1 className="text-3xl font-black tracking-tight">
+            À produire{' '}
+            <span className="bg-primary text-primary-foreground ml-1 inline-flex size-9 items-center justify-center rounded-full align-middle text-lg tabular-nums">
+              {remaining}
+            </span>
+          </h1>
 
           <Button
             type="button"
             variant="outline"
             size="sm"
             onClick={() => window.print()}
-            className="shrink-0 rounded-full print:hidden"
+            className="mt-1 shrink-0 rounded-full print:hidden"
           >
             <Printer className="size-4" />
             Imprimer
           </Button>
         </div>
 
-        <Progress
-          value={(doneCount / tasks.length) * 100}
-          className="mt-4 h-2 print:hidden"
-        />
+        <p className="text-muted-foreground mt-1.5 text-sm font-semibold">
+          {remaining === 0
+            ? 'Tout est produit — beau travail.'
+            : `${doneCount} sur ${tasks.length} ${doneCount > 1 ? 'faites' : 'faite'}`}
+        </p>
+
+        <Progress value={(doneCount / tasks.length) * 100} className="mt-3 h-2 print:hidden" />
       </header>
 
-      {/* Une ligne = une pilule pleine largeur : la quantité à gauche, en très
-          gros, parce que c'est la seule chose qu'on lit en cuisine. */}
+      {/* Une ligne = une pilule pleine largeur : la vignette du produit, puis
+          la quantité en très gros. C'est la seule chose qu'on lit en cuisine,
+          une gastro dans les mains. */}
       <ul className="space-y-2.5">
         {tasks.map((task) => {
           const isDone = done[task.taskId];
-          const priority = priorityOf(task.priority);
+          const priorite = prioriteDe(task.priority);
 
           return (
             <li key={task.taskId}>
@@ -126,27 +128,30 @@ export function ReorderReport({
                 aria-pressed={isDone}
                 onClick={() => toggle(task.taskId, !isDone)}
                 className={cn(
-                  'no-select flex w-full items-center gap-4 rounded-2xl px-4 py-3.5 text-left transition-colors',
+                  'no-select flex w-full items-center gap-3.5 rounded-3xl p-3 text-left transition-colors',
                   isDone ? 'bg-primary/10' : 'bg-muted/60 active:bg-muted',
                 )}
               >
-                <span
-                  className={cn(
-                    'flex size-14 shrink-0 flex-col items-center justify-center rounded-2xl leading-none',
-                    isDone ? 'bg-primary text-primary-foreground' : 'bg-card border shadow-sm',
-                  )}
-                >
+                <span className="relative shrink-0">
+                  <VignetteProduit
+                    name={task.productName}
+                    categoryName={task.categoryName}
+                    imageUrl={task.imageUrl}
+                    className={cn('size-16 rounded-2xl text-3xl', isDone && 'opacity-40')}
+                  />
                   {isDone ? (
-                    <Check className="size-7" strokeWidth={3} />
+                    <span className="bg-primary text-primary-foreground absolute -right-1 -bottom-1 flex size-7 items-center justify-center rounded-full">
+                      <Check className="size-4" strokeWidth={3.5} />
+                    </span>
                   ) : (
-                    <>
-                      <span className="text-2xl font-black tabular-nums">
-                        {task.qtyToProduce.toLocaleString('fr-FR')}
-                      </span>
-                      <span className="text-muted-foreground mt-0.5 text-[10px] font-bold">
-                        {task.unit === 'piece' ? 'pcs' : 'GN'}
-                      </span>
-                    </>
+                    <span
+                      className={cn(
+                        'absolute -top-1.5 -left-1.5 rounded-full px-2 py-0.5 text-[10px] font-black',
+                        priorite.pastille,
+                      )}
+                    >
+                      {priorite.label}
+                    </span>
                   )}
                 </span>
 
@@ -159,14 +164,13 @@ export function ReorderReport({
                   >
                     {task.productName}
                   </span>
-                  <span className="text-muted-foreground mt-1 flex items-center gap-1.5 text-xs font-semibold">
-                    <span
-                      aria-hidden
-                      className={cn('size-2 shrink-0 rounded-full', priority.dot)}
-                    />
-                    {priority.label} ·{' '}
-                    {task.qtyToProduce.toLocaleString('fr-FR')}{' '}
-                    {unitLabel(task.unit, task.qtyToProduce)}
+                  <span className="mt-1 block">
+                    <span className="text-3xl leading-none font-black tabular-nums">
+                      {task.qtyToProduce.toLocaleString('fr-FR')}
+                    </span>{' '}
+                    <span className="text-muted-foreground text-sm font-bold">
+                      {unitLabel(task.unit, task.qtyToProduce)}
+                    </span>
                   </span>
                   {task.notes ? (
                     <span className="text-muted-foreground mt-1 block text-xs italic">

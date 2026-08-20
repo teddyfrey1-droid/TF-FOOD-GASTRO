@@ -321,6 +321,9 @@ export type Database = {
           qty_to_produce: number;
           unit: ProductUnit;
           priority: number;
+          /** Libellés d'affichage : ni CA, ni cible, ni minimum. */
+          image_url: string | null;
+          category_name: string;
         }[];
       };
       mep_reorder_report: {
@@ -333,6 +336,8 @@ export type Database = {
           unit: ProductUnit;
           priority: number;
           is_done: boolean;
+          image_url: string | null;
+          category_name: string;
         }[];
       };
       mep_forecast_revenue: { Args: { d: string }; Returns: number | null };
@@ -341,6 +346,8 @@ export type Database = {
        * Appeler mep_forecast_revenue jour par jour coûtait trente-et-un
        * allers-retours pour afficher un tableau.
        */
+      /** Produits qu'il reste à relever, zone par zone. */
+      mep_count_pending: { Args: { p_session_id: string }; Returns: number };
       mep_forecast_range: {
         Args: { d_from: string; d_to: string };
         Returns: { date: string; forecast: number | null }[];

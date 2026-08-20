@@ -1,6 +1,7 @@
 'use client';
 
 import { memo, useState } from 'react';
+import { Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -84,22 +85,31 @@ function ProductRowImpl({
   return (
     <div
       className={cn(
-        'bg-card rounded-2xl border p-4 transition-colors',
-        line.isNotApplicable && 'opacity-50',
-        zoneCounted && !line.isNotApplicable && 'border-primary/40',
+        'rounded-3xl border p-3 transition-colors',
+        line.isNotApplicable && 'bg-card opacity-50',
+        !line.isNotApplicable && zoneCounted && 'border-primary/40 bg-primary/[0.04]',
+        !line.isNotApplicable && !zoneCounted && 'bg-card',
       )}
     >
       <div className="flex items-center gap-3">
-        <VignetteProduit
-          name={product.name}
-          categoryName={product.categoryName}
-          imageUrl={product.imageUrl}
-          taille="sm"
-        />
+        <span className="relative shrink-0">
+          <VignetteProduit
+            name={product.name}
+            categoryName={product.categoryName}
+            imageUrl={product.imageUrl}
+          />
+          {/* Pastille verte dès que la zone est relevée : on repère d'un
+              coup d'œil ce qui reste à faire dans le rayon. */}
+          {zoneCounted && !line.isNotApplicable ? (
+            <span className="bg-primary text-primary-foreground absolute -right-1 -bottom-1 flex size-5 items-center justify-center rounded-full">
+              <Check className="size-3" strokeWidth={4} />
+            </span>
+          ) : null}
+        </span>
 
         <div className="min-w-0 flex-1">
           <p className="text-[17px] leading-tight font-black">{product.name}</p>
-          <p className="text-muted-foreground mt-0.5 text-xs font-medium">
+          <p className="text-muted-foreground mt-0.5 text-xs font-semibold">
             {product.unit === 'piece' ? 'pièces' : 'gastros'}
             {inBothZones ? ` · ${otherLabel} : ${otherValue}` : ''}
             {product.notes ? ` · ${product.notes}` : ''}
