@@ -8,6 +8,7 @@ import { BottomTabs } from '@/components/bottom-tabs';
 import { LienRetour } from '@/components/lien-retour';
 import { GroupeMenu, RangeeMenu } from '@/components/rangee-menu';
 import { Card } from '@/components/ui/card';
+import { CarteVersion } from '@/components/pwa/carte-version';
 
 export const dynamic = 'force-dynamic';
 
@@ -103,6 +104,8 @@ export default async function AccountPage() {
           <div className="pt-2">
             <SignOutButton />
           </div>
+
+          <CarteVersion />
         </div>
       </main>
 

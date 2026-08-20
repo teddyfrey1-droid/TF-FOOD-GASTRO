@@ -898,4 +898,67 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 14. LA BASE ET L''APPLICATION PARLENT DU MÊME JOUR ---'
+
+-- L'application calcule « aujourd'hui » à l'heure de Paris. Si la base
+-- répond en UTC, les deux divergent entre minuit et 2 h : un comptage
+-- ouvert dans ce créneau serait daté de la veille et invisible depuis
+-- l'accueil. Le fuseau de la base est donc réglé sur Paris.
+select pg_temp.check_equal('La base est à l''heure de Paris',
+  (select current_setting('TimeZone')),
+  'Europe/Paris');
+
+select pg_temp.check_equal('current_date est bien la date parisienne',
+  (select current_date = (now() at time zone 'Europe/Paris')::date),
+  true);
+
+-- Le garde-fou : plus aucune politique ne doit comparer une date de
+-- comptage à autre chose que le jour parisien. Cette assertion échoue si
+-- quelqu'un réintroduit un fuseau implicite ailleurs.
+select pg_temp.check_equal('Aucune politique ne fige un autre fuseau',
+  (select count(*)::int
+   from pg_policy pol
+   join pg_class c on c.oid = pol.polrelid
+   join pg_namespace n on n.oid = c.relnamespace
+   where n.nspname = 'public'
+     and (coalesce(pg_get_expr(pol.polqual, pol.polrelid), '')
+          || coalesce(pg_get_expr(pol.polwithcheck, pol.polrelid), ''))
+         ilike '%at time zone%'),
+  0);
+
+\echo ''
+\echo '--- 15. UN COMPTAGE HORS DE PORTÉE NE SE DEVINE PAS ---'
+
+-- `mep_count_pending` traverse la RLS (SECURITY DEFINER). Elle acceptait
+-- n'importe quel identifiant : un employé pouvait apprendre combien de
+-- lignes restaient sur une journée qu'il n'a pas le droit de consulter.
+do $$
+declare v_hier uuid;
+begin
+  insert into public.count_sessions (date, session, user_id, status, submitted_at)
+  values (current_date - 3, 'morning', 'a0000000-0000-0000-0000-00000000000d',
+          'submitted', now() - interval '3 days')
+  returning id into v_hier;
+
+  perform set_config('mep.session_ancienne', v_hier::text, false);
+end;
+$$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Un employé ne sonde pas un comptage passé',
+  'select public.mep_count_pending(current_setting(''mep.session_ancienne'')::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Le chef de service, lui, y a droit : c'est son historique.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_equal('Le directeur peut interroger le même comptage',
+  (select public.mep_count_pending(current_setting('mep.session_ancienne')::uuid) >= 0),
+  true);
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

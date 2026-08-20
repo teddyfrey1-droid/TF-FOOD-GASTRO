@@ -9,8 +9,6 @@ import {
   LayoutGrid,
   Salad,
   Smartphone,
-  Sunrise,
-  Sunset,
   TriangleAlert,
   Users,
 } from 'lucide-react';
@@ -31,8 +29,6 @@ import { GroupeMenu, RangeeMenu } from '@/components/rangee-menu';
 import { referenceDateLastYear } from '@/lib/mep';
 
 export const dynamic = 'force-dynamic';
-
-const TIME = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
 export default async function DashboardPage() {
   const user = await requireManager();
@@ -96,28 +92,30 @@ export default async function DashboardPage() {
           lit d'un coup d'œil, avec sa provenance juste en dessous.
          ------------------------------------------------------------------ */}
       <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        <Card className="bg-primary text-primary-foreground rounded-3xl p-6">
-          <p className="text-xs font-bold tracking-wide uppercase opacity-80">
+        {/* Vert franc mais posé : le CA reste le chiffre le plus important
+            de l'écran sans en occuper la moitié. */}
+        <Card className="bg-primary/10 border-primary/25 rounded-3xl p-5">
+          <p className="text-primary text-xs font-black tracking-wide uppercase">
             CA prévisionnel du jour
           </p>
-          <p className="mt-2 text-6xl font-black tracking-tight tabular-nums">
+          <p className="text-primary mt-1.5 text-4xl font-black tracking-tight tabular-nums">
             {formatEuro(forecast)}
           </p>
 
           {forecast === null ? (
-            <p className="mt-3 text-sm opacity-90">
+            <p className="text-muted-foreground mt-2.5 text-[13px] leading-snug">
               Aucun CA de référence pour l&apos;an dernier à cette date : la production ne peut
               pas être calculée aujourd&apos;hui.
             </p>
           ) : (
-            <p className="mt-3 text-sm leading-relaxed opacity-90">
+            <p className="text-muted-foreground mt-2.5 text-[13px] leading-snug">
               {formatEuro(reference)} le{' '}
               {formatDateLong(referenceDateLastYear(today)).replace(/ \d{4}$/, '')} de
               l&apos;an dernier, majoré du taux de croissance.
             </p>
           )}
 
-          <div className="mt-5 flex items-center gap-2 border-t border-current/20 pt-4 text-xs font-medium opacity-90">
+          <div className="text-muted-foreground border-primary/20 mt-4 flex items-center gap-2 border-t pt-3.5 text-[11px] font-medium">
             <CalendarCheck2 className="size-4" />
             {coverage.days > 0 ? (
               <span>
@@ -146,49 +144,6 @@ export default async function DashboardPage() {
               : null
           }
         />
-      </section>
-
-      <section className="grid gap-2.5 sm:grid-cols-2">
-        {statuses.map((status) => (
-          <Card key={status.session} className="rounded-3xl p-4">
-            <div className="flex items-center gap-3">
-              <span
-                aria-hidden
-                className="bg-muted text-foreground/70 flex size-12 shrink-0 items-center justify-center rounded-2xl"
-              >
-                {status.session === 'morning' ? (
-                  <Sunrise className="size-6" strokeWidth={2.2} />
-                ) : (
-                  <Sunset className="size-6" strokeWidth={2.2} />
-                )}
-              </span>
-              <div className="min-w-0 flex-1">
-                <p className="font-black">
-                  Comptage {status.session === 'morning' ? 'du matin' : "de l'après-midi"}
-                </p>
-                <p className="text-muted-foreground text-xs font-semibold">
-                  {status.status === 'submitted' && status.submittedAt
-                    ? `${TIME.format(new Date(status.submittedAt))} par ${status.userName ?? '—'}`
-                    : status.status === 'draft'
-                      ? `Commencé par ${status.userName ?? '—'}`
-                      : 'Pas encore commencé'}
-                </p>
-              </div>
-              {status.status === 'submitted' ? (
-                <span className="bg-primary text-primary-foreground flex size-8 shrink-0 items-center justify-center rounded-full">
-                  <Check className="size-4" strokeWidth={3} />
-                </span>
-              ) : null}
-            </div>
-
-            {status.status === 'submitted' && status.pendingTasks + status.doneTasks > 0 ? (
-              <p className="mt-3 text-sm font-bold tabular-nums">
-                {status.doneTasks} relance{status.doneTasks > 1 ? 's' : ''} faite
-                {status.doneTasks > 1 ? 's' : ''} · {status.pendingTasks} en attente
-              </p>
-            ) : null}
-          </Card>
-        ))}
       </section>
 
       {relancesEnAttente > 0 ? (

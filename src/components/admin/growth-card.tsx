@@ -45,10 +45,10 @@ export function GrowthCard({
   }
 
   return (
-    <Card className="rounded-3xl p-6">
+    <Card className="rounded-3xl p-5">
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
-          <p className="text-muted-foreground text-xs font-bold tracking-wide uppercase">
+          <p className="text-foreground text-xs font-black tracking-wide uppercase">
             Taux de croissance appliqué
           </p>
 
@@ -63,9 +63,9 @@ export function GrowthCard({
                   if (event.key === 'Enter') apply(Number(draft.replace(',', '.')));
                   if (event.key === 'Escape') setEditing(false);
                 }}
-                className="h-14 w-28 rounded-2xl text-center text-3xl font-black tabular-nums"
+                className="h-13 w-24 rounded-2xl text-center text-2xl font-black tabular-nums"
               />
-              <span className="text-3xl font-black">%</span>
+              <span className="text-2xl font-black">%</span>
               <Button
                 size="sm"
                 disabled={pending}
@@ -82,9 +82,12 @@ export function GrowthCard({
                 setDraft(String(Math.round(currentRate * 100)));
                 setEditing(true);
               }}
-              className="group mt-1 flex items-center gap-2"
+              className="group mt-2 flex items-center gap-2"
             >
-              <span className="text-5xl font-black tabular-nums">
+              {/* Le taux porte toute la carte : une pastille pleine le
+                  détache du texte, là où un gros chiffre nu se confondait
+                  avec les montants juste à côté. */}
+              <span className="bg-primary/15 text-primary rounded-full px-4 py-1.5 text-3xl font-black tabular-nums">
                 {currentRate >= 0 ? '+' : ''}
                 {Math.round(currentRate * 100)} %
               </span>
@@ -96,7 +99,7 @@ export function GrowthCard({
         </div>
 
         {totals ? (
-          <p className="text-muted-foreground max-w-56 text-xs leading-relaxed">
+          <p className="text-muted-foreground max-w-52 text-[11px] leading-snug">
             {formatEuro(totals.actual)} réalisés contre {formatEuro(totals.reference)} l&apos;an
             dernier, sur les mêmes jours de semaine.
           </p>

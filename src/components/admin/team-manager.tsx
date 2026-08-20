@@ -394,12 +394,19 @@ function MemberRow({ member }: { member: TeamMember }) {
   );
 }
 
-/** Un mot de passe lisible à voix haute, sans caractère ambigu. */
+/**
+ * Un mot de passe lisible à voix haute, sans caractère ambigu.
+ *
+ * Tiré du générateur cryptographique du navigateur, pas de `Math.random`
+ * dont la suite se prédit à partir de quelques tirages. Ce mot de passe
+ * ouvre un compte : il n'a pas à être devinable.
+ *
+ * Le modulo introduirait un biais si l'alphabet ne divisait pas 256 ; il
+ * en compte 32, donc le tirage reste uniforme.
+ */
 function suggestPassword(): string {
   const alphabet = 'abcdefghijkmnpqrstuvwxyz23456789';
-  const random = Array.from(
-    { length: 8 },
-    () => alphabet[Math.floor(Math.random() * alphabet.length)],
-  ).join('');
+  const octets = crypto.getRandomValues(new Uint8Array(10));
+  const random = Array.from(octets, (octet) => alphabet[octet % alphabet.length]).join('');
   return `Lafayette-${random}`;
 }
