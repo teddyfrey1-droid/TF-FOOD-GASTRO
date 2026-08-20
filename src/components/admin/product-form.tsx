@@ -261,7 +261,7 @@ export function ProductForm({
               id="count_step"
               name="count_step"
               inputMode="decimal"
-              defaultValue={value(product?.count_step) || '0.5'}
+              defaultValue={value(product?.count_step) || '1'}
             />
             <FieldError message={errors.count_step} />
           </div>

@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
 import { createClient } from '@/lib/supabase/server';
+import { isManagerRole } from '@/lib/roles';
 import type { UserRole } from '@/lib/supabase/database.types';
 
 export interface CurrentUser {
@@ -10,9 +11,14 @@ export interface CurrentUser {
   isActive: boolean;
 }
 
-export function isManagerRole(role: UserRole): boolean {
-  return role === 'manager' || role === 'owner';
-}
+// Les libellés et prédicats de statut vivent dans `@/lib/roles`, sans
+// dépendance serveur, pour rester importables depuis un composant client.
+export {
+  ROLE_LABELS,
+  ROLE_DESCRIPTIONS,
+  isManagerRole,
+  isStaffLeadRole,
+} from '@/lib/roles';
 
 /** Utilisateur connecté, ou null. Ne redirige pas. */
 export async function getCurrentUser(): Promise<CurrentUser | null> {

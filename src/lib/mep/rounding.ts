@@ -1,9 +1,10 @@
 /**
  * Arrondis « bac gastro ».
  *
- * Tout le métier se compte en gastros entiers ou demi-gastros. Les calculs
- * intermédiaires produisent des flottants (3200 / 1000 * 2.5 ...) qui doivent
- * être ramenés proprement sur un pas (0,5 par défaut) sans dérive binaire.
+ * Tout le métier se compte en gastros et en pièces ENTIÈRES : un demi-bao
+ * n'existe pas. Les calculs intermédiaires produisent des flottants
+ * (3200 / 1000 * 2.5 ...) qui doivent être ramenés proprement sur un pas
+ * sans dérive binaire.
  */
 
 /** Tolérance utilisée pour absorber la dérive des flottants IEEE-754. */
@@ -31,7 +32,7 @@ function assertStep(step: number): void {
  *
  *   ceilTo(9.2, 1)   -> 10     on ne produit jamais moins que nécessaire
  *   ceilTo(4.0, 1)   -> 4      une valeur déjà entière ne remonte pas
- *   ceilTo(0.25, 0.5) -> 0.5   le comptage, lui, accepte les demis
+ *   ceilTo(0.1, 1)   -> 1      un minimum non nul ne tombe jamais à zéro
  */
 export function ceilTo(value: number, step: number): number {
   assertStep(step);
@@ -41,8 +42,13 @@ export function ceilTo(value: number, step: number): number {
 /** Pas de production : tout ce qui est visé ou produit tombe sur un entier. */
 export const PRODUCTION_STEP = 1;
 
-/** Pas de comptage : l'employé constate un stock réel, donc au demi près. */
-export const COUNT_STEP = 0.5;
+/**
+ * Pas de comptage : l'entier, comme la production.
+ *
+ * On compte des bacs gastro et des pièces (baos, gyozas, desserts). Le demi
+ * n'a aucun sens sur le terrain et ralentissait la saisie.
+ */
+export const COUNT_STEP = 1;
 
 /** @deprecated Utiliser `ceilTo`. Conservé le temps de la migration des appels. */
 export const roundUpToStep = ceilTo;

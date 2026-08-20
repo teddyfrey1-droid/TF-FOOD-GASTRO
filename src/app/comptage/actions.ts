@@ -27,6 +27,8 @@ const lineSchema = z.object({
   qtyFridge: z.number().min(0).max(999),
   isNotApplicable: z.boolean(),
   notApplicableReason: z.string().trim().max(200).nullable(),
+  countedSaladbar: z.boolean(),
+  countedFridge: z.boolean(),
 });
 
 export type SaveLineInput = z.input<typeof lineSchema>;
@@ -48,6 +50,7 @@ export async function saveCountLine(input: SaveLineInput): Promise<{ error?: str
     return { error: 'Indiquez pourquoi le produit n’est pas applicable.' };
   }
 
+  const now = new Date().toISOString();
   const supabase = await createClient();
   const { data, error } = await supabase
     .from('count_lines')
@@ -57,7 +60,12 @@ export async function saveCountLine(input: SaveLineInput): Promise<{ error?: str
       qty_fridge: isNotApplicable ? 0 : parsed.data.qtyFridge,
       is_not_applicable: isNotApplicable,
       not_applicable_reason: isNotApplicable ? notApplicableReason : null,
-      counted_at: new Date().toISOString(),
+      counted_at: now,
+      // Un produit « absent » vaut pour les deux zones : il n'y a rien à
+      // relever nulle part.
+      counted_saladbar_at:
+        isNotApplicable || parsed.data.countedSaladbar ? now : null,
+      counted_fridge_at: isNotApplicable || parsed.data.countedFridge ? now : null,
     })
     .eq('session_id', sessionId)
     .eq('product_id', productId)

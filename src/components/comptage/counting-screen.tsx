@@ -9,8 +9,9 @@ import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { saveCountLine, saveCountLines, submitCount } from '@/app/comptage/actions';
 import { clearSession, dequeue, enqueue, listPending, pendingKey } from '@/lib/offline/queue';
-import { ProductRow, type CountState } from './product-row';
+import { ProductRow, isLineDone, type CountState } from './product-row';
 import { CategoryPills } from './category-pills';
+import { ZoneTabs, ZONE_LABELS, type CountZone } from './zone-tabs';
 
 export interface CountProduct {
   id: string;
@@ -43,6 +44,7 @@ export function CountingScreen({
   const [state, setState] = useState<Record<string, CountState>>(initial);
   const [search, setSearch] = useState('');
   const [activeCategory, setActiveCategory] = useState<string | null>(null);
+  const [zone, setZone] = useState<CountZone>('saladbar');
   const [online, setOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -67,6 +69,8 @@ export function CountingScreen({
         qtyFridge: entry.qtyFridge,
         isNotApplicable: entry.isNotApplicable,
         notApplicableReason: entry.notApplicableReason,
+        countedSaladbar: entry.countedSaladbar,
+        countedFridge: entry.countedFridge,
       })),
     );
 
@@ -126,6 +130,8 @@ export function CountingScreen({
         qtyFridge: next.qtyFridge,
         isNotApplicable: next.isNotApplicable,
         notApplicableReason: next.notApplicableReason,
+        countedSaladbar: next.countedSaladbar,
+        countedFridge: next.countedFridge,
         updatedAt,
       });
       await refreshPending();
@@ -144,6 +150,8 @@ export function CountingScreen({
             qtyFridge: next.qtyFridge,
             isNotApplicable: next.isNotApplicable,
             notApplicableReason: next.notApplicableReason,
+            countedSaladbar: next.countedSaladbar,
+            countedFridge: next.countedFridge,
           });
 
           if (result.error) {
@@ -163,10 +171,18 @@ export function CountingScreen({
   );
 
   const update = useCallback(
-    (productId: string, patch: Partial<CountState>) => {
+    (productId: string, patch: Partial<CountState>, touchedZone?: CountZone) => {
       setState((current) => {
         const previous = current[productId];
-        const next: CountState = { ...previous, ...patch, counted: true };
+        const next: CountState = {
+          ...previous,
+          ...patch,
+          // Seule la zone que l'employé vient de toucher est marquée relevée.
+          countedSaladbar:
+            previous.countedSaladbar || touchedZone === 'saladbar' || patch.isNotApplicable === true,
+          countedFridge:
+            previous.countedFridge || touchedZone === 'fridge' || patch.isNotApplicable === true,
+        };
         void persist(productId, next);
         return { ...current, [productId]: next };
       });
@@ -175,10 +191,21 @@ export function CountingScreen({
   );
 
   const countedTotal = useMemo(
-    () => Object.values(state).filter((line) => line.counted).length,
-    [state],
+    () => products.filter((product) => isLineDone(state[product.id] ?? null, product)).length,
+    [products, state],
   );
   const remaining = products.length - countedTotal;
+
+  /** Vrai si la ligne a été relevée DANS la zone en cours. */
+  const isCountedInZone = useCallback(
+    (productId: string) => {
+      const line = state[productId];
+      if (!line) return false;
+      if (line.isNotApplicable) return true;
+      return zone === 'saladbar' ? line.countedSaladbar : line.countedFridge;
+    },
+    [state, zone],
+  );
 
   const visible = useMemo(() => {
     const needle = search
@@ -187,6 +214,9 @@ export function CountingScreen({
       .normalize('NFD')
       .replace(/[̀-ͯ]/g, '');
     return products.filter((product) => {
+      // Un produit absent de la zone en cours n'a pas à s'y afficher.
+      if (zone === 'saladbar' && !product.inSaladbar) return false;
+      if (zone === 'fridge' && !product.inFridge) return false;
       if (activeCategory && product.categoryName !== activeCategory) return false;
       if (!needle) return true;
       return product.name
@@ -195,23 +225,48 @@ export function CountingScreen({
         .replace(/[̀-ͯ]/g, '')
         .includes(needle);
     });
-  }, [products, search, activeCategory]);
+  }, [products, search, activeCategory, zone]);
 
-  /** Avancement par catégorie, affiché dans les pills. */
+  /**
+   * Avancement de CHAQUE zone, séparément.
+   *
+   * Compter un produit au saladbar ne doit pas le marquer relevé au frigo :
+   * l'employé pourrait valider sans être jamais descendu.
+   */
+  const zoneProgress = useMemo(() => {
+    const build = (zoneKey: CountZone) => {
+      const list = products.filter((product) =>
+        zoneKey === 'saladbar' ? product.inSaladbar : product.inFridge,
+      );
+      const counted = list.filter((product) => {
+        const line = state[product.id];
+        if (!line) return false;
+        if (line.isNotApplicable) return true;
+        return zoneKey === 'saladbar' ? line.countedSaladbar : line.countedFridge;
+      }).length;
+      return { counted, total: list.length };
+    };
+    return { saladbar: build('saladbar'), fridge: build('fridge') };
+  }, [products, state]);
+
+  /** Avancement par catégorie DANS LA ZONE EN COURS, affiché dans les pills. */
   const categories = useMemo(() => {
+    const inZone = products.filter((product) =>
+      zone === 'saladbar' ? product.inSaladbar : product.inFridge,
+    );
     const byName = new Map<string, { name: string; counted: number; total: number }>();
-    for (const product of products) {
+    for (const product of inZone) {
       const entry = byName.get(product.categoryName) ?? {
         name: product.categoryName,
         counted: 0,
         total: 0,
       };
       entry.total += 1;
-      if (state[product.id]?.counted) entry.counted += 1;
+      if (isCountedInZone(product.id)) entry.counted += 1;
       byName.set(product.categoryName, entry);
     }
     return [...byName.values()];
-  }, [products, state]);
+  }, [products, zone, isCountedInZone]);
 
   const grouped = useMemo(() => {
     const byCategory = new Map<string, CountProduct[]>();
@@ -248,7 +303,7 @@ export function CountingScreen({
         <div className="px-5 pt-4 pb-3">
           <div className="flex items-baseline justify-between gap-3">
             <h1 className="text-2xl font-black tracking-tight">{title}</h1>
-            <span className="text-muted-foreground shrink-0 text-sm font-semibold tabular-nums">
+            <span className="text-muted-foreground shrink-0 text-sm font-bold tabular-nums">
               {countedTotal} / {products.length}
             </span>
           </div>
@@ -263,6 +318,10 @@ export function CountingScreen({
               autoCorrect="off"
               className="h-11 rounded-full pl-10 text-base"
             />
+          </div>
+
+          <div className="mt-3">
+            <ZoneTabs zone={zone} onChange={setZone} progress={zoneProgress} />
           </div>
 
           <div className="mt-3">
@@ -296,24 +355,41 @@ export function CountingScreen({
           </p>
         ) : null}
 
-        {grouped.map(([category, items]) => (
-          <section key={category} className="pt-6">
-            <h2 className="text-muted-foreground mb-2 text-xs font-bold tracking-wider uppercase">
-              {category}
-            </h2>
+        {grouped.map(([category, items]) => {
+          // « Protéines (7) ✓ » plutôt qu'un intertitre gris : on sait d'un
+          // coup d'œil combien de produits attendent dans le rayon.
+          const countedHere = items.filter((product) => isCountedInZone(product.id)).length;
+          const sectionDone = countedHere === items.length;
 
-            <div className="space-y-2.5">
-              {items.map((product) => (
-                <ProductRow
-                  key={product.id}
-                  product={product}
-                  state={state[product.id]}
-                  onChange={(patch) => update(product.id, patch)}
-                />
-              ))}
-            </div>
-          </section>
-        ))}
+          return (
+            <section key={category} className="pt-6">
+              <h2 className="mb-2.5 flex items-center gap-2 text-xl font-black tracking-tight">
+                {category}
+                <span className="text-muted-foreground">({items.length})</span>
+                <span
+                  className={cn(
+                    'rounded-full px-2 py-0.5 text-xs font-black tabular-nums',
+                    sectionDone ? 'bg-primary/15 text-primary' : 'bg-alert text-alert-foreground',
+                  )}
+                >
+                  {sectionDone ? '✓' : `${countedHere}/${items.length}`}
+                </span>
+              </h2>
+
+              <div className="space-y-2.5">
+                {items.map((product) => (
+                  <ProductRow
+                    key={product.id}
+                    product={product}
+                    state={state[product.id]}
+                    zone={zone}
+                    onChange={(patch) => update(product.id, patch, zone)}
+                  />
+                ))}
+              </div>
+            </section>
+          );
+        })}
       </div>
 
       <footer className="bg-background/95 fixed inset-x-0 bottom-0 z-20 border-t backdrop-blur">
@@ -324,22 +400,35 @@ export function CountingScreen({
             </p>
           ) : null}
 
-          <Button
-            onClick={handleSubmit}
-            disabled={remaining > 0 || submitting}
-            className="h-14 w-full rounded-2xl text-base font-bold"
-          >
-            {submitting ? (
-              'Validation…'
-            ) : remaining > 0 ? (
-              `Encore ${remaining} produit${remaining > 1 ? 's' : ''} à compter`
-            ) : (
-              <>
-                <Check className={cn('size-5')} />
-                Valider le comptage
-              </>
-            )}
-          </Button>
+          {zone === 'saladbar' &&
+          zoneProgress.saladbar.counted === zoneProgress.saladbar.total &&
+          zoneProgress.fridge.counted < zoneProgress.fridge.total ? (
+            // Le saladbar est fini : on envoie l'employé au frigo plutôt que
+            // de le laisser chercher pourquoi le bouton reste gris.
+            <Button
+              onClick={() => setZone('fridge')}
+              className="h-14 w-full rounded-2xl text-base font-bold"
+            >
+              Saladbar terminé — passer au {ZONE_LABELS.fridge.toLowerCase()}
+            </Button>
+          ) : (
+            <Button
+              onClick={handleSubmit}
+              disabled={remaining > 0 || submitting}
+              className="h-14 w-full rounded-2xl text-base font-bold"
+            >
+              {submitting ? (
+                'Validation…'
+              ) : remaining > 0 ? (
+                `Encore ${remaining} produit${remaining > 1 ? 's' : ''} à compter`
+              ) : (
+                <>
+                  <Check className={cn('size-5')} />
+                  Valider le comptage
+                </>
+              )}
+            </Button>
+          )}
         </div>
       </footer>
     </div>

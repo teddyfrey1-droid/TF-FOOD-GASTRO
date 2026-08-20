@@ -17,12 +17,15 @@ import { cn } from '@/lib/utils';
  */
 export function BacStepper({
   label,
+  hideLabel,
   value,
   step,
   disabled,
   onChange,
 }: {
   label: string;
+  /** Le libellé de zone est déjà porté par l'onglet : inutile de le répéter. */
+  hideLabel?: boolean;
   value: number;
   step: number;
   disabled?: boolean;
@@ -126,7 +129,9 @@ export function BacStepper({
         </button>
       </div>
 
-      <span className="text-muted-foreground text-[11px] font-medium tracking-wide">{label}</span>
+      {hideLabel ? null : (
+        <span className="text-muted-foreground text-[11px] font-medium tracking-wide">{label}</span>
+      )}
     </div>
   );
 }

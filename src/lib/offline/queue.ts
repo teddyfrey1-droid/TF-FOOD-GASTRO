@@ -21,6 +21,9 @@ export interface PendingCount {
   qtyFridge: number;
   isNotApplicable: boolean;
   notApplicableReason: string | null;
+  /** Zones réellement relevées : l'employé compte en deux passes. */
+  countedSaladbar: boolean;
+  countedFridge: boolean;
   /** Horodatage local, pour ignorer une saisie périmée à la synchronisation. */
   updatedAt: number;
 }

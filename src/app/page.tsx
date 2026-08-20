@@ -31,13 +31,28 @@ export default async function HomePage() {
     supabase.from('team_members').select('id, full_name'),
   ]);
 
+  // Ce qui reste à produire aujourd'hui. La RLS ne laisse passer que les
+  // tâches du jour : aucune cible ni minimum n'accompagne ce décompte.
+  const { data: tasks } = await supabase
+    .from('production_tasks')
+    .select('session_id, is_done')
+    .in('session_id', (sessions ?? []).map((session) => session.id));
+
   const nameById = new Map((team ?? []).map((member) => [member.id, member.full_name]));
 
   const bySession = new Map(
-    (sessions ?? []).map((s) => [
-      s.session as SessionKind,
-      { ...s, authorName: nameById.get(s.user_id) ?? null },
-    ]),
+    (sessions ?? []).map((s) => {
+      const own = (tasks ?? []).filter((task) => task.session_id === s.id);
+      return [
+        s.session as SessionKind,
+        {
+          ...s,
+          authorName: nameById.get(s.user_id) ?? null,
+          pendingTasks: own.filter((task) => !task.is_done).length,
+          doneTasks: own.filter((task) => task.is_done).length,
+        },
+      ];
+    }),
   );
 
   return (

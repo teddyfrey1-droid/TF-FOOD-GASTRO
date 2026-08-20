@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClipboardList, Home, Settings2 } from 'lucide-react';
+import { ClipboardList, Home, Settings2, UserRound } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -19,6 +19,12 @@ export function BottomTabs({ isManager }: { isManager: boolean }) {
       label: 'Comptage',
       icon: ClipboardList,
       match: (p: string) => p.startsWith('/comptage'),
+    },
+    {
+      href: '/compte',
+      label: 'Mon compte',
+      icon: UserRound,
+      match: (p: string) => p.startsWith('/compte'),
     },
     ...(isManager
       ? [

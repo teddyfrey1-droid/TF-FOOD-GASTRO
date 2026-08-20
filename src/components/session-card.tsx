@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { SessionKind, SessionStatus } from '@/lib/supabase/database.types';
@@ -10,6 +11,9 @@ interface SessionSummary {
   status: SessionStatus;
   submitted_at: string | null;
   authorName: string | null;
+  /** Relances encore à produire sur ce comptage. */
+  pendingTasks: number;
+  doneTasks: number;
 }
 
 /**
@@ -47,12 +51,19 @@ export function SessionCard({
           : 'Commencé'
         : null;
 
+  // Le comptage validé n'est pas la fin du travail : ce qui reste à produire
+  // est la vraie information de la journée.
+  const tasks = session
+    ? { pending: session.pendingTasks, done: session.doneTasks }
+    : { pending: 0, done: 0 };
+  const totalTasks = tasks.pending + tasks.done;
+
   return (
     <Link href={`/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}`} className="block">
       <Card
         className={cn(
           'bg-card flex min-h-36 flex-col justify-between gap-3 rounded-3xl p-6 transition-transform active:scale-[0.99]',
-          status === 'submitted' && 'opacity-70',
+          status === 'submitted' && tasks.pending === 0 && 'opacity-70',
         )}
       >
         <div className="flex items-start justify-between gap-3">
@@ -70,12 +81,29 @@ export function SessionCard({
             {label}
           </span>
         </div>
+
         <div>
           <p className="text-muted-foreground text-sm">{description}</p>
           {detail ? (
             <p className="text-muted-foreground mt-1 text-sm font-medium">{detail}</p>
           ) : null}
         </div>
+
+        {status === 'submitted' && totalTasks > 0 ? (
+          <div
+            className={cn(
+              'flex items-center justify-between gap-2 rounded-2xl px-4 py-3',
+              tasks.pending > 0 ? 'bg-alert text-alert-foreground' : 'bg-primary/10 text-primary',
+            )}
+          >
+            <span className="text-sm font-black">
+              {tasks.pending > 0
+                ? `${tasks.pending} relance${tasks.pending > 1 ? 's' : ''} à produire`
+                : `${tasks.done} relance${tasks.done > 1 ? 's' : ''} — tout est produit`}
+            </span>
+            <ChevronRight className="size-4 shrink-0" />
+          </div>
+        ) : null}
       </Card>
     </Link>
   );

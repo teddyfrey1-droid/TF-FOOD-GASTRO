@@ -10,7 +10,7 @@ function product(overrides: Partial<ProductCalcConfig> = {}): ProductCalcConfig 
     family: 'mise_en_place',
     unit: 'gastro',
     baseQty: 4.6,
-    countStep: 0.5,
+    countStep: 1,
     minMode: 'auto',
     minDivisor: DEFAULT_MIN_DIVISOR,
     minQtyManual: null,
@@ -79,15 +79,21 @@ describe('minimum de relance', () => {
   });
 
   it('mode auto : arrondi SUPÉRIEUR au pas de comptage', () => {
-    // Cible 1 -> 0,5 pile. Cible 3 -> 1,5 pile. Cible 5 -> 2,5 pile.
-    expect(computeMinimum(THON, 1, 2)).toBe(0.5);
-    expect(computeMinimum(SAUMON, 3, 2)).toBe(1.5);
-    // Cible 7 avec divisor 3 -> 2,333 -> 2,5 (et non 2)
-    expect(computeMinimum(product({ minDivisor: 3 }), 7, 2)).toBe(2.5);
+    // Le pas de comptage vaut 1 : on compte des gastros et des pièces entières.
+    // Cible 3 -> 1,5 -> 2. Cible 7 avec diviseur 3 -> 2,333 -> 3 (et non 2).
+    expect(computeMinimum(SAUMON, 3, 2)).toBe(2);
+    expect(computeMinimum(product({ minDivisor: 3 }), 7, 2)).toBe(3);
+  });
+
+  it('cible 1 : le minimum remonte à 1, donc à la cible', () => {
+    // 1 / 2 = 0,5, arrondi à 1 par le pas entier, puis borné par la cible.
+    // Conséquence assumée du comptage à l'unité : un produit de cible 1 se
+    // relance dès qu'il n'en reste plus un seul.
+    expect(computeMinimum(THON, 1, 2)).toBe(1);
   });
 
   it('un diviseur personnalisé change le minimum', () => {
-    expect(computeMinimum(product({ minDivisor: 4 }), 10, 2)).toBe(2.5);
+    expect(computeMinimum(product({ minDivisor: 4 }), 10, 2)).toBe(3); // 2,5 -> 3
     expect(computeMinimum(product({ minDivisor: 1 }), 10, 2)).toBe(10);
   });
 
@@ -124,8 +130,10 @@ describe('tableau de vérification (§1)', () => {
     { produit: 'Saumon', config: SAUMON, caRef: 4000, cible: 10, minimum: 5, stock: 5, attendu: 0 },
     { produit: 'Saumon', config: SAUMON, caRef: 4000, cible: 10, minimum: 5, stock: 0, attendu: 10 },
     { produit: 'Saumon', config: SAUMON, caRef: 4000, cible: 10, minimum: 5, stock: 3.5, attendu: 7 },
-    { produit: 'Thon', config: THON, caRef: 4000, cible: 1, minimum: 0.5, stock: 0, attendu: 1 },
-    { produit: 'Thon', config: THON, caRef: 4000, cible: 1, minimum: 0.5, stock: 0.5, attendu: 0 },
+    // Le tableau du cahier des charges donnait Thon minimum 0,5. Le comptage
+    // est passé à l'unité entière : 0,5 remonte à 1, borné par la cible.
+    { produit: 'Thon', config: THON, caRef: 4000, cible: 1, minimum: 1, stock: 0, attendu: 1 },
+    { produit: 'Thon', config: THON, caRef: 4000, cible: 1, minimum: 1, stock: 1, attendu: 0 },
     { produit: 'Gyoza Poulet', config: GYOZA, caRef: 5000, cible: 24, minimum: 12, stock: 10, attendu: 14 },
   ] as const;
 
@@ -167,13 +175,13 @@ describe('décision de relance', () => {
     expect(decision.needsReorder).toBe(false);
   });
 
-  it('un demi-gastro sous le minimum déclenche la relance', () => {
+  it('un stock hérité en demis reste correctement traité', () => {
     const decision = decideReorder(SAUMON, target, { qtySaladbar: 4.5, qtyFridge: 0 });
     expect(decision.needsReorder).toBe(true);
     expect(decision.qtyToProduce).toBe(6); // PLAFOND(10 − 4,5) = 6
   });
 
-  it('le besoin est toujours un entier, même sur un stock en demis', () => {
+  it('le besoin est toujours un entier, même sur un stock hérité en demis', () => {
     for (const stock of [0.5, 1.5, 2.5, 3.5, 4.5]) {
       const qty = decideReorder(SAUMON, target, { qtySaladbar: stock, qtyFridge: 0 })
         .qtyToProduce;

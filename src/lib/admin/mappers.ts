@@ -37,7 +37,7 @@ export function toProductCalcConfig(row: Tables<'products'>): ProductCalcConfig 
     family: row.family,
     unit: row.unit,
     baseQty: toNumber(row.base_qty, 0),
-    countStep: toNumber(row.count_step, 0.5),
+    countStep: toNumber(row.count_step, 1),
     minMode: row.min_mode,
     minDivisor: toNumber(row.min_divisor, 2),
     minQtyManual: toNullableNumber(row.min_qty_manual),

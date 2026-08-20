@@ -212,3 +212,73 @@ export async function getDailyCountStatus(date: string): Promise<DailyCountStatu
     };
   });
 }
+
+/** Décale une date ISO de N jours (calendrier, pas de fuseau). */
+function shiftDays(date: string, days: number): string {
+  const cursor = new Date(`${date}T12:00:00Z`);
+  cursor.setUTCDate(cursor.getUTCDate() + days);
+  return cursor.toISOString().slice(0, 10);
+}
+
+export interface GrowthWindowResult {
+  label: string;
+  days: number;
+  observation: GrowthObservation;
+}
+
+/**
+ * La croissance constatée sur trois fenêtres.
+ *
+ * Trois plutôt qu'une : sur douze mois l'enseigne affiche une croissance très
+ * forte, mais qui ralentit trimestre après trimestre. Montrer les trois
+ * fenêtres côte à côte laisse choisir en connaissance de cause.
+ */
+export async function getGrowthWindows(today: string): Promise<GrowthWindowResult[]> {
+  const windows = [
+    { label: '3 derniers mois', days: 90 },
+    { label: '6 derniers mois', days: 180 },
+    { label: '12 derniers mois', days: 365 },
+  ];
+
+  return Promise.all(
+    windows.map(async (window) => ({
+      ...window,
+      observation: await getObservedGrowth(shiftDays(today, -window.days), today),
+    })),
+  );
+}
+
+export interface RevenueCoverage {
+  days: number;
+  firstDate: string | null;
+  lastDate: string | null;
+  lastRevenue: number | null;
+}
+
+/**
+ * Ce que la base sait vraiment du chiffre d'affaires.
+ *
+ * Affiché tel quel sur le tableau de bord : sans cela, une prévision vide
+ * ressemble à une panne alors qu'il s'agit d'un historique manquant.
+ */
+export async function getRevenueCoverage(): Promise<RevenueCoverage> {
+  const supabase = await createClient();
+
+  const [{ count }, first, last] = await Promise.all([
+    supabase.from('revenue_actuals').select('date', { count: 'exact', head: true }),
+    supabase.from('revenue_actuals').select('date').order('date').limit(1).maybeSingle(),
+    supabase
+      .from('revenue_actuals')
+      .select('date, revenue_ht')
+      .order('date', { ascending: false })
+      .limit(1)
+      .maybeSingle(),
+  ]);
+
+  return {
+    days: count ?? 0,
+    firstDate: first.data?.date ?? null,
+    lastDate: last.data?.date ?? null,
+    lastRevenue: last.data ? toNumber(last.data.revenue_ht, 0) : null,
+  };
+}

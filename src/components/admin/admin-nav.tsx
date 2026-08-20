@@ -10,6 +10,8 @@ const LINKS = [
   { href: '/admin/simulateur', label: 'Simulateur' },
   { href: '/admin/chiffre-affaires', label: "Chiffre d'affaires" },
   { href: '/admin/historique', label: 'Historique' },
+  { href: '/admin/utilisateurs', label: 'Équipe' },
+  { href: '/compte', label: 'Mon compte' },
 ];
 
 export function AdminNav() {

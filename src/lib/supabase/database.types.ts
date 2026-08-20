@@ -11,7 +11,7 @@
 
 export type Json = string | number | boolean | null | { [key: string]: Json } | Json[];
 
-export type UserRole = 'employee' | 'manager' | 'owner';
+export type UserRole = 'employee' | 'assistant_manager' | 'manager' | 'owner';
 export type SessionKind = 'morning' | 'afternoon';
 export type SessionStatus = 'draft' | 'submitted';
 export type ProductFamily = 'mise_en_place' | 'les_plus';
@@ -154,6 +154,8 @@ type CountLineRow = {
   is_not_applicable: boolean;
   not_applicable_reason: string | null;
   counted_at: string | null;
+  counted_saladbar_at: string | null;
+  counted_fridge_at: string | null;
   updated_at: string;
 };
 
@@ -271,6 +273,8 @@ export type Database = {
         | 'is_not_applicable'
         | 'not_applicable_reason'
         | 'counted_at'
+        | 'counted_saladbar_at'
+        | 'counted_fridge_at'
       >;
       production_tasks: Table<
         ProductionTaskRow,

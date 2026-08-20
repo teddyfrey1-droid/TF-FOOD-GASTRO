@@ -199,10 +199,12 @@ select pg_temp.check_equal(
   1::numeric
 );
 
+-- Le tableau du cahier des charges donnait 0,5. Le comptage se fait
+-- désormais à l'unité entière : 0,5 remonte à 1, puis se borne à la cible.
 select pg_temp.check_equal(
-  'Thon -> minimum 0,5',
+  'Thon -> minimum 1 (0,5 remonté au pas entier, borné par la cible)',
   (select minimum from public.mep_product_targets(current_date, 'morning') where product_name = 'Thon'),
-  0.5::numeric
+  1::numeric
 );
 
 -- Contrôle du §1 à 5 000 € : Saumon 11,5 -> 12, Gyoza Poulet 24 pile.
@@ -318,9 +320,9 @@ begin
       v_qty, v_case.attendu);
   end loop;
 
-  -- Thon : cible 1, minimum 0,5.
+  -- Thon : cible 1, minimum 1 (voir plus haut).
   for v_case in
-    select * from (values (0::numeric, 1::numeric), (0.5, 0)) as t(stock, attendu)
+    select * from (values (0::numeric, 1::numeric), (1, 0)) as t(stock, attendu)
   loop
     update public.count_lines set qty_saladbar = v_case.stock, qty_fridge = 0
       where session_id = v_session and product_id = v_thon;
@@ -330,7 +332,7 @@ begin
     from public.count_lines where session_id = v_session and product_id = v_thon;
 
     perform pg_temp.check_equal(
-      format('Thon cible 1 minimum 0,5, stock %s -> %s', v_case.stock, v_case.attendu),
+      format('Thon cible 1 minimum 1, stock %s -> %s', v_case.stock, v_case.attendu),
       v_qty, v_case.attendu);
   end loop;
 

@@ -61,7 +61,7 @@ export default async function CountPage({ params }: { params: Promise<{ session:
       categoryId: row.category_id,
       categoryName: categoryById.get(row.category_id)?.name ?? 'Autres',
       unit: row.unit,
-      countStep: toNumber(row.count_step, 0.5),
+      countStep: toNumber(row.count_step, 1),
       inSaladbar: row.in_saladbar,
       inFridge: row.in_fridge,
       notes: row.notes,
@@ -80,7 +80,8 @@ export default async function CountPage({ params }: { params: Promise<{ session:
       qtyFridge: toNumber(line?.qty_fridge, 0),
       isNotApplicable: line?.is_not_applicable ?? false,
       notApplicableReason: line?.not_applicable_reason ?? null,
-      counted: Boolean(line?.counted_at),
+      countedSaladbar: Boolean(line?.counted_saladbar_at),
+      countedFridge: Boolean(line?.counted_fridge_at),
     };
   }
 

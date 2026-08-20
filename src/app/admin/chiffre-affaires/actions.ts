@@ -133,3 +133,29 @@ export async function saveActualRevenue(input: z.input<typeof actualSchema>): Pr
   revalidatePath('/admin/chiffre-affaires');
   return {};
 }
+
+/**
+ * Change le seul taux de croissance, sans repasser par tout le formulaire.
+ * Accessible au directeur comme au propriétaire — la RLS de `revenue_settings`
+ * s'en charge, `is_manager()` couvrant les deux.
+ */
+export async function setGrowthRate(rate: number): Promise<{ error?: string }> {
+  if (!Number.isFinite(rate) || rate <= -1 || rate > 10) {
+    return { error: 'Le taux doit être compris entre -100 % et +1000 %.' };
+  }
+
+  const supabase = await createClient();
+  const { error, count } = await supabase
+    .from('revenue_settings')
+    .update({ growth_rate: rate }, { count: 'exact' })
+    .eq('id', true);
+
+  if (error) return { error: error.message };
+  if (count === 0) {
+    return { error: 'Seul un directeur ou le propriétaire peut modifier ce réglage.' };
+  }
+
+  revalidatePath('/admin');
+  revalidatePath('/admin/chiffre-affaires');
+  return {};
+}

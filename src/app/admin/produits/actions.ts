@@ -128,7 +128,7 @@ export async function saveProduct(
   const payload = {
     ...values,
     base_qty: values.base_qty ?? 0,
-    count_step: values.count_step ?? 0.5,
+    count_step: values.count_step ?? 1,
     min_divisor: values.min_divisor ?? 2,
     // Le mode non retenu est vidé : pas de minimum manuel fantôme derrière un
     // produit repassé en automatique.

@@ -42,7 +42,7 @@ insert into public.products (
 )
 select
   d.name, c.id, d.family::public.product_family, d.unit::public.product_unit, d.base_qty,
-  0.5, 'auto', 2, 3,
+  1, 'auto', 2, 3,
   nullif(d.shelf_life, ''), true, true, d.sort_order
 from (values
   -- ---- Mise en place · Protéines (référence 4 000 €, multiplicateur 2) ----
