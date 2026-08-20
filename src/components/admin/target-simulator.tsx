@@ -1,12 +1,13 @@
 'use client';
 
-import { useState, useTransition } from 'react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import { useCallback, useEffect, useMemo, useState, useTransition } from 'react';
+import { Info, Search } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { formatEuro, formatQty } from '@/lib/format';
+import { ceilTo } from '@/lib/mep';
+import { PastilleEtat } from '@/components/rangee-menu';
+import { cn } from '@/lib/utils';
 import { runSimulation, type SimulationResult } from '@/app/admin/simulateur/simulate';
 
 export interface FamilyInfo {
@@ -16,137 +17,289 @@ export interface FamilyInfo {
   targetMultiplier: number;
 }
 
+/** Des paliers qu'on atteint d'un pouce, sans clavier. */
+const PALIERS = [3000, 4000, 5000, 6000, 7000];
+
 function parseNumber(raw: string): number {
   return Number(raw.trim().replace(',', '.'));
 }
 
+/**
+ * Le simulateur, pensé pour un téléphone tenu d'une main.
+ *
+ * Deux partis pris expliquent la forme :
+ *
+ * 1. **Une carte par produit, jamais un tableau.** Six colonnes sur un
+ *    iPhone obligent à faire glisser l'écran de côté pour lire la relance,
+ *    donc à perdre de vue le nom du produit. Ici chaque produit tient dans
+ *    un bloc qu'on lit d'un coup d'œil.
+ * 2. **Le stock se calcule sur le téléphone, pas sur le serveur.** Seul le
+ *    chiffre d'affaires demande un aller-retour ; comparer un stock à un
+ *    minimum est une soustraction. Taper un stock donne donc un résultat
+ *    instantané, même sur un réseau capricieux.
+ */
 export function TargetSimulator({ families }: { families: FamilyInfo[] }) {
   const [revenue, setRevenue] = useState('4000');
   const [stocks, setStocks] = useState<Record<string, string>>({});
   const [result, setResult] = useState<SimulationResult | null>(null);
+  const [recherche, setRecherche] = useState('');
+  const [detailsOuverts, setDetailsOuverts] = useState(false);
   const [pending, startTransition] = useTransition();
 
-  function simulate(nextStocks: Record<string, string> = stocks) {
-    const parsedStocks: Record<string, number> = {};
-    for (const [productId, raw] of Object.entries(nextStocks)) {
-      if (raw.trim() === '') continue;
-      const value = parseNumber(raw);
-      if (Number.isFinite(value) && value >= 0) parsedStocks[productId] = value;
-    }
-
+  const lancer = useCallback((ca: number) => {
     startTransition(async () => {
-      setResult(await runSimulation({ caRef: parseNumber(revenue), stocks: parsedStocks }));
+      setResult(await runSimulation({ caRef: ca }));
     });
-  }
+  }, []);
+
+  // Le chiffre d'affaires se recalcule tout seul, après une pause de frappe :
+  // un bouton « Simuler » de plus à viser n'apporte rien.
+  useEffect(() => {
+    const valeur = parseNumber(revenue);
+    if (!Number.isFinite(valeur) || valeur < 0) return;
+    const minuteur = setTimeout(() => lancer(valeur), 450);
+    return () => clearTimeout(minuteur);
+  }, [revenue, lancer]);
+
+  const lignes = useMemo(() => {
+    const filtre = recherche.trim().toLowerCase();
+
+    return (result?.lines ?? [])
+      .filter(
+        (ligne) =>
+          filtre === '' ||
+          ligne.productName.toLowerCase().includes(filtre) ||
+          ligne.categoryName.toLowerCase().includes(filtre),
+      )
+      .map((ligne) => {
+        const brut = stocks[ligne.productId];
+        const saisi = brut !== undefined && brut.trim() !== '' ? parseNumber(brut) : null;
+        const stock = saisi !== null && Number.isFinite(saisi) && saisi >= 0 ? saisi : null;
+        const relance = stock !== null && stock < ligne.minimum;
+
+        return {
+          ...ligne,
+          stock,
+          relance,
+          aProduire: relance ? Math.max(ceilTo(ligne.target - stock, 1), 0) : 0,
+        };
+      });
+  }, [result, stocks, recherche]);
+
+  const aRelancer = lignes.filter((ligne) => ligne.relance);
+  const renseignes = lignes.filter((ligne) => ligne.stock !== null).length;
 
   return (
     <div className="space-y-5">
-      <Card className="p-6">
-        <div className="flex flex-wrap items-end gap-4">
-          <div className="space-y-2">
-            <Label htmlFor="simulated-revenue">Chiffre d&apos;affaires</Label>
-            <div className="flex items-center gap-2">
-              <Input
-                id="simulated-revenue"
-                value={revenue}
-                inputMode="decimal"
-                onChange={(event) => setRevenue(event.target.value)}
-                className="h-11 w-32 text-lg font-bold tabular-nums"
-              />
-              <span className="text-muted-foreground text-sm">€ HT</span>
-            </div>
-          </div>
+      {/* ---------------------------------------------------------------
+          Le chiffre d'affaires commande tout le reste : il occupe le haut
+          de l'écran, en gros, avec ses paliers à portée de pouce.
+         --------------------------------------------------------------- */}
+      <Card className="rounded-3xl p-5">
+        <label htmlFor="simulated-revenue" className="text-muted-foreground text-sm font-bold">
+          Chiffre d&apos;affaires simulé
+        </label>
 
-          <Button onClick={() => simulate()} disabled={pending} className="h-11">
-            {pending ? 'Calcul…' : 'Simuler'}
-          </Button>
+        <div className="mt-2 flex items-center gap-3">
+          <Input
+            id="simulated-revenue"
+            value={revenue}
+            inputMode="decimal"
+            onChange={(event) => setRevenue(event.target.value)}
+            onFocus={(event) => event.target.select()}
+            className="h-16 flex-1 rounded-2xl text-4xl! font-black tabular-nums"
+          />
+          <span className="text-muted-foreground text-xl font-black">€ HT</span>
         </div>
 
-        <dl className="text-muted-foreground mt-5 grid gap-2 text-xs sm:grid-cols-2">
-          {families.map((family) => (
-            <div key={family.family}>
-              <dt className="font-medium">{family.label}</dt>
-              <dd>
-                base exprimée pour {formatEuro(family.referenceRevenue)}, multipliée par{' '}
-                {formatQty(family.targetMultiplier)}
-              </dd>
-            </div>
-          ))}
-        </dl>
+        <div className="mt-3 flex flex-wrap gap-2">
+          {PALIERS.map((palier) => {
+            const actif = parseNumber(revenue) === palier;
+            return (
+              <button
+                key={palier}
+                type="button"
+                onClick={() => setRevenue(String(palier))}
+                aria-pressed={actif}
+                className={cn(
+                  'h-11 rounded-full px-4 text-sm font-black tabular-nums transition-colors',
+                  actif
+                    ? 'bg-foreground text-background'
+                    : 'bg-muted text-muted-foreground active:bg-muted/70',
+                )}
+              >
+                {palier.toLocaleString('fr-FR')}
+              </button>
+            );
+          })}
+        </div>
 
         {result?.error ? (
-          <p role="alert" className="text-destructive mt-4 text-sm font-medium">
+          <p role="alert" className="text-destructive mt-3 text-sm font-bold">
             {result.error}
           </p>
         ) : null}
       </Card>
 
-      {result && !result.error ? (
-        <Card className="overflow-x-auto p-0">
-          <table className="w-full min-w-3xl border-collapse text-sm">
-            <thead>
-              <tr className="bg-muted/50 border-b">
-                <th scope="col" className="px-4 py-3 text-left font-semibold">Produit</th>
-                <th scope="col" className="px-3 py-3 text-right font-semibold">Base</th>
-                <th scope="col" className="px-3 py-3 text-right font-semibold">Cible</th>
-                <th scope="col" className="px-3 py-3 text-right font-semibold">Minimum</th>
-                <th scope="col" className="px-3 py-3 text-center font-semibold">Stock fictif</th>
-                <th scope="col" className="px-4 py-3 text-right font-semibold">Relance</th>
-              </tr>
-            </thead>
+      {/* ---------------------------------------------------------------
+          Le verdict, avant la liste. C'est la seule ligne qu'on lit quand
+          on teste un réglage : « à ce CA, combien de relances ? »
+         --------------------------------------------------------------- */}
+      <Card
+        className={cn(
+          'rounded-3xl p-5',
+          aRelancer.length > 0 && 'bg-alert text-alert-foreground border-transparent',
+        )}
+      >
+        {pending && result === null ? (
+          <p className="text-2xl font-black">Calcul…</p>
+        ) : renseignes === 0 ? (
+          <>
+            <p className="text-2xl leading-tight font-black">
+              {lignes.length} produit{lignes.length > 1 ? 's' : ''} calculé
+              {lignes.length > 1 ? 's' : ''}
+            </p>
+            <p className="text-muted-foreground mt-1 text-sm font-semibold">
+              Saisissez un stock sous un produit pour voir la relance qui en découlerait.
+            </p>
+          </>
+        ) : (
+          <>
+            <p className="text-2xl leading-tight font-black">
+              {aRelancer.length === 0
+                ? 'Aucune relance'
+                : `${aRelancer.length} produit${aRelancer.length > 1 ? 's' : ''} à relancer`}
+            </p>
+            <p className="mt-1 text-sm font-semibold opacity-80">
+              sur {renseignes} stock{renseignes > 1 ? 's' : ''} saisi{renseignes > 1 ? 's' : ''}
+              {aRelancer.length > 0
+                ? ` · ${formatQty(aRelancer.reduce((total, ligne) => total + ligne.aProduire, 0))} à produire en tout`
+                : ''}
+            </p>
+          </>
+        )}
+      </Card>
 
-            <tbody>
-              {result.lines.map((line) => (
-                <tr key={line.productId} className="hover:bg-muted/30 border-b last:border-0">
-                  <th scope="row" className="px-4 py-2 text-left font-medium">
-                    {line.productName}
-                    <span className="text-muted-foreground block text-xs font-normal">
-                      {line.categoryName} · {line.unit === 'piece' ? 'pièce' : 'gastro'} · P
-                      {line.priority}
-                    </span>
-                  </th>
-                  <td className="text-muted-foreground px-3 py-2 text-right tabular-nums">
-                    {formatQty(line.baseQty)}
-                  </td>
-                  <td className="px-3 py-2 text-right font-bold tabular-nums">
-                    {formatQty(line.target)}
-                  </td>
-                  <td className="text-muted-foreground px-3 py-2 text-right tabular-nums">
-                    {formatQty(line.minimum)}
-                  </td>
-                  <td className="px-3 py-2 text-center">
-                    <Input
-                      value={stocks[line.productId] ?? ''}
-                      inputMode="decimal"
-                      placeholder="—"
-                      aria-label={`Stock fictif de ${line.productName}`}
-                      onChange={(event) =>
-                        setStocks((current) => ({
-                          ...current,
-                          [line.productId]: event.target.value,
-                        }))
-                      }
-                      onBlur={() => simulate()}
-                      className="h-9 w-20 text-center tabular-nums"
-                    />
-                  </td>
-                  <td className="px-4 py-2 text-right">
-                    {line.stock === null ? (
-                      <span className="text-muted-foreground text-xs">—</span>
-                    ) : line.needsReorder ? (
-                      <Badge className="tabular-nums">
-                        relancer {formatQty(line.qtyToProduce)}
-                      </Badge>
-                    ) : (
-                      <span className="text-muted-foreground text-xs">rien à faire</span>
-                    )}
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </Card>
+      {/* Trente-sept produits ne se parcourent pas au pouce : on cherche. */}
+      <div className="relative">
+        <Search className="text-muted-foreground absolute top-1/2 left-4 size-5 -translate-y-1/2" />
+        <Input
+          value={recherche}
+          onChange={(event) => setRecherche(event.target.value)}
+          placeholder="Chercher un produit"
+          aria-label="Chercher un produit"
+          className="h-13 rounded-2xl pl-12 text-base font-semibold"
+        />
+      </div>
+
+      <ul className="space-y-2.5">
+        {lignes.map((ligne) => (
+          <li key={ligne.productId}>
+            <Card
+              className={cn(
+                'rounded-3xl p-4',
+                ligne.relance && 'border-alert-foreground/25 bg-alert/40',
+              )}
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <p className="text-[17px] leading-tight font-black">{ligne.productName}</p>
+                  <p className="text-muted-foreground mt-0.5 truncate text-xs font-semibold">
+                    {ligne.categoryName} · {ligne.unit === 'piece' ? 'pièce' : 'gastro'} · priorité{' '}
+                    {ligne.priority}
+                  </p>
+                </div>
+
+                {ligne.stock === null ? null : ligne.relance ? (
+                  <PastilleEtat
+                    texte={`Relancer ${formatQty(ligne.aProduire)}`}
+                    ton="alerte"
+                    taille="lg"
+                  />
+                ) : (
+                  <PastilleEtat texte="Rien à faire" ton="fait" taille="lg" />
+                )}
+              </div>
+
+              <div className="mt-4 grid grid-cols-3 items-end gap-3">
+                <div>
+                  <p className="text-muted-foreground text-[11px] font-bold tracking-wide uppercase">
+                    Cible
+                  </p>
+                  <p className="text-3xl leading-none font-black tabular-nums">
+                    {formatQty(ligne.target)}
+                  </p>
+                </div>
+
+                <div>
+                  <p className="text-muted-foreground text-[11px] font-bold tracking-wide uppercase">
+                    Minimum
+                  </p>
+                  <p className="text-muted-foreground text-3xl leading-none font-black tabular-nums">
+                    {formatQty(ligne.minimum)}
+                  </p>
+                </div>
+
+                <div>
+                  <label
+                    htmlFor={`stock-${ligne.productId}`}
+                    className="text-muted-foreground text-[11px] font-bold tracking-wide uppercase"
+                  >
+                    Stock
+                  </label>
+                  <Input
+                    id={`stock-${ligne.productId}`}
+                    value={stocks[ligne.productId] ?? ''}
+                    inputMode="decimal"
+                    placeholder="—"
+                    onFocus={(event) => event.target.select()}
+                    onChange={(event) =>
+                      setStocks((actuel) => ({
+                        ...actuel,
+                        [ligne.productId]: event.target.value,
+                      }))
+                    }
+                    className="mt-1 h-12 rounded-xl text-center text-2xl! font-black tabular-nums"
+                  />
+                </div>
+              </div>
+            </Card>
+          </li>
+        ))}
+      </ul>
+
+      {lignes.length === 0 && result !== null && !result.error ? (
+        <p className="text-muted-foreground rounded-3xl border border-dashed p-6 text-center text-sm font-semibold">
+          Aucun produit ne correspond à « {recherche} ».
+        </p>
       ) : null}
+
+      {/* Le détail des bases n'intéresse qu'au moment de comprendre un
+          chiffre qui surprend : replié par défaut. */}
+      <div className="pt-2">
+        <button
+          type="button"
+          onClick={() => setDetailsOuverts((ouvert) => !ouvert)}
+          className="text-muted-foreground flex items-center gap-2 text-sm font-bold"
+        >
+          <Info className="size-4" strokeWidth={2.5} />
+          {detailsOuverts ? 'Masquer' : "D'où viennent ces chiffres ?"}
+        </button>
+
+        {detailsOuverts ? (
+          <dl className="text-muted-foreground mt-3 space-y-2 text-sm">
+            {families.map((family) => (
+              <div key={family.family}>
+                <dt className="text-foreground font-bold">{family.label}</dt>
+                <dd>
+                  base exprimée pour {formatEuro(family.referenceRevenue)}, multipliée par{' '}
+                  {formatQty(family.targetMultiplier)}
+                </dd>
+              </div>
+            ))}
+          </dl>
+        ) : null}
+      </div>
     </div>
   );
 }

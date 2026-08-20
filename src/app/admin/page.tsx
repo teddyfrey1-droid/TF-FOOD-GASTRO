@@ -1,5 +1,19 @@
 import { requireManager } from '@/lib/auth';
-import { CalendarCheck2, Check } from 'lucide-react';
+import {
+  BarChart3,
+  CalendarCheck2,
+  Check,
+  Euro,
+  History,
+  Image as ImageIcon,
+  LayoutGrid,
+  Salad,
+  Smartphone,
+  Sunrise,
+  Sunset,
+  TriangleAlert,
+  Users,
+} from 'lucide-react';
 import {
   getDailyCountStatus,
   getForecastRevenue,
@@ -13,7 +27,7 @@ import { createClient } from '@/lib/supabase/server';
 import { formatDateLong, formatEuro, todayInParis } from '@/lib/format';
 import { Card } from '@/components/ui/card';
 import { GrowthCard } from '@/components/admin/growth-card';
-import { SectionGestion, TuileGestion } from '@/components/admin/tuile-gestion';
+import { GroupeMenu, RangeeMenu } from '@/components/rangee-menu';
 import { referenceDateLastYear } from '@/lib/mep';
 
 export const dynamic = 'force-dynamic';
@@ -140,9 +154,13 @@ export default async function DashboardPage() {
             <div className="flex items-center gap-3">
               <span
                 aria-hidden
-                className="bg-primary/10 flex size-12 shrink-0 items-center justify-center rounded-2xl text-2xl"
+                className="bg-muted text-foreground/70 flex size-12 shrink-0 items-center justify-center rounded-2xl"
               >
-                {status.session === 'morning' ? '🌅' : '🌆'}
+                {status.session === 'morning' ? (
+                  <Sunrise className="size-6" strokeWidth={2.2} />
+                ) : (
+                  <Sunset className="size-6" strokeWidth={2.2} />
+                )}
               </span>
               <div className="min-w-0 flex-1">
                 <p className="font-black">
@@ -180,77 +198,82 @@ export default async function DashboardPage() {
         </p>
       ) : null}
 
-      <SectionGestion titre="La carte">
-        <TuileGestion
+      <GroupeMenu titre="La carte">
+        <RangeeMenu
           href="/admin/produits"
-          emoji="🥗"
+          icone={<Salad className="size-5" strokeWidth={2.2} />}
           titre="Produits"
-          description="Noms, bases, seuils, priorités, zones"
-          badge={`${products.length}`}
-          alerte={sansBase > 0 || tousEnPrioriteParDefaut}
+          detail="Bases, seuils, priorités"
+          badge={{
+            texte: `${products.length}`,
+            ton: sansBase > 0 || tousEnPrioriteParDefaut ? 'alerte' : 'neutre',
+          }}
         />
-        <TuileGestion
+        <RangeeMenu
           href="/admin/categories"
-          emoji="🗂️"
+          icone={<LayoutGrid className="size-5" strokeWidth={2.2} />}
           titre="Catégories"
-          description="L'ordre des rayons pendant le comptage"
-          badge={`${categories ?? 0}`}
+          detail="L'ordre des rayons"
+          badge={{ texte: `${categories ?? 0}`, ton: 'neutre' }}
         />
-        <TuileGestion
+        <RangeeMenu
           href="/admin/photos"
-          emoji="📸"
+          icone={<ImageIcon className="size-5" strokeWidth={2.2} />}
           titre="Photos"
-          description="Reconnaître un produit d'un coup d'œil"
-          badge={sansPhoto > 0 ? `${sansPhoto} sans` : 'complet'}
-          alerte={sansPhoto > 0}
+          detail="Reconnaître un produit d'un coup d'œil"
+          badge={
+            sansPhoto > 0
+              ? { texte: `${sansPhoto} sans`, ton: 'alerte' }
+              : { texte: 'complet', ton: 'fait' }
+          }
         />
-      </SectionGestion>
+      </GroupeMenu>
 
-      <SectionGestion titre="Piloter">
-        <TuileGestion
+      <GroupeMenu titre="Piloter">
+        <RangeeMenu
           href="/admin/chiffre-affaires"
-          emoji="💶"
+          icone={<Euro className="size-5" strokeWidth={2.2} />}
           titre="Chiffre d'affaires"
-          description="Prévisions du mois, croissance, réalisé"
+          detail="Prévisions, croissance, réalisé"
         />
-        <TuileGestion
+        <RangeeMenu
           href="/admin/ruptures"
-          emoji="🚨"
+          icone={<TriangleAlert className="size-5" strokeWidth={2.2} />}
           titre="Ruptures"
-          description="Ce qui manque trop souvent, et pourquoi"
+          detail="Ce qui manque trop souvent"
         />
-        <TuileGestion
+        <RangeeMenu
           href="/admin/historique"
-          emoji="📋"
+          icone={<History className="size-5" strokeWidth={2.2} />}
           titre="Historique"
-          description="Qui a compté quoi, et ce qui a été consommé"
+          detail="Qui a compté quoi"
         />
-        <TuileGestion
+        <RangeeMenu
           href="/admin/simulateur"
-          emoji="🎚️"
+          icone={<BarChart3 className="size-5" strokeWidth={2.2} />}
           titre="Simulateur"
-          description="Essayer un CA et voir toutes les cibles"
+          detail="Essayer un CA et voir les cibles"
         />
-      </SectionGestion>
+      </GroupeMenu>
 
-      <SectionGestion titre="L'équipe">
-        <TuileGestion
+      <GroupeMenu titre="L'équipe">
+        <RangeeMenu
           href="/admin/utilisateurs"
-          emoji="👥"
+          icone={<Users className="size-5" strokeWidth={2.2} />}
           titre="Équipe"
-          description="Comptes, statuts, mots de passe"
-          badge={`${equipe ?? 0}`}
+          detail="Comptes et statuts"
+          badge={{ texte: `${equipe ?? 0}`, ton: 'neutre' }}
         />
-        <TuileGestion
+        <RangeeMenu
           href="/installer"
-          emoji="📲"
+          icone={<Smartphone className="size-5" strokeWidth={2.2} />}
           titre="Installer l'application"
-          description="La mettre sur l'écran d'accueil des téléphones"
+          detail="Sur l'écran d'accueil des téléphones"
         />
-      </SectionGestion>
+      </GroupeMenu>
 
       {sansBase > 0 || tousEnPrioriteParDefaut ? (
-        <Card className="rounded-3xl border-amber-500/40 bg-amber-500/[0.06] p-5">
+        <Card className="rounded-3xl p-5">
           <h2 className="font-black">À finir de régler</h2>
           <ul className="text-muted-foreground mt-2 list-disc space-y-1 pl-5 text-sm">
             {sansBase > 0 ? (

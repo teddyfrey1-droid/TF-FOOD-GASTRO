@@ -137,6 +137,76 @@ begin
 end
 $$;
 
+-- ---------------------------------------------------------------------
+-- L'ordre EXACT que l'écran de comptage envoie
+--
+-- Ce test ne vérifie pas une règle métier : il rejoue mot pour mot les
+-- colonnes que `saveCountLine` écrit. Une colonne ajoutée au schéma sans
+-- son GRANT passait inaperçue ici — les tests écrivaient un sous-ensemble
+-- plus étroit que l'application — et l'écran renvoyait alors « permission
+-- denied for table count_lines » à chaque saisie. Toute nouvelle colonne
+-- écrite par le téléphone doit être ajoutée à cet ordre.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  v_session uuid;
+  v_produit uuid;
+  v_touchees int;
+begin
+  select id into v_session from public.count_sessions
+  where date = current_date and session = 'morning';
+  select id into v_produit from public.products_for_count where name = 'Saumon';
+
+  update public.count_lines
+  set qty_saladbar          = 2,
+      qty_fridge            = 1,
+      is_not_applicable     = false,
+      not_applicable_reason = null,
+      counted_at            = now(),
+      counted_saladbar_at   = now(),
+      counted_fridge_at     = now(),
+      deferred_at           = null,
+      deferred_reason       = null
+  where session_id = v_session and product_id = v_produit;
+
+  get diagnostics v_touchees = row_count;
+
+  perform pg_temp.check_equal(
+    'La saisie de l''écran passe en entier, colonne pour colonne',
+    v_touchees, 1);
+end
+$$;
+
+-- Reporter un produit s'écrit depuis le téléphone, motif compris.
+do $$
+declare
+  v_session uuid;
+  v_produit uuid;
+begin
+  select id into v_session from public.count_sessions
+  where date = current_date and session = 'morning';
+  select id into v_produit from public.products_for_count where name = 'Avocat';
+
+  update public.count_lines
+  set qty_saladbar = 0, qty_fridge = 0, counted_at = now(),
+      counted_saladbar_at = now(), counted_fridge_at = now(),
+      deferred_at = now(), deferred_reason = 'Livraison en retard'
+  where session_id = v_session and product_id = v_produit;
+
+  perform pg_temp.check_equal(
+    'Le motif du report est bien enregistré',
+    (select deferred_reason from public.count_lines
+     where session_id = v_session and product_id = v_produit),
+    'Livraison en retard');
+
+  -- On repart d'une ligne non reportée : la suite du fichier compte les
+  -- lignes renseignées et un report fausserait ses totaux.
+  update public.count_lines
+  set deferred_at = null, deferred_reason = null
+  where session_id = v_session and product_id = v_produit;
+end
+$$;
+
 select pg_temp.check_denied('Écrire soi-même le total est refusé',
   'update public.count_lines set qty_total = 99
    where session_id = (select id from public.count_sessions where date = current_date and session = ''morning'')');
