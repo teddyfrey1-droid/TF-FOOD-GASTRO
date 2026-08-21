@@ -4,7 +4,7 @@ import { createClient } from '@/lib/supabase/server';
 import { todayInParis } from '@/lib/format';
 import { BottomTabs } from '@/components/bottom-tabs';
 import { AvatarCompte } from '@/components/avatar-compte';
-import { ListeStocks, type LigneStock } from '@/components/stocks/liste-stocks';
+import { ListeStocks, ResumeStocks, type LigneStock } from '@/components/stocks/liste-stocks';
 import { LienRetour } from '@/components/lien-retour';
 
 export const dynamic = 'force-dynamic';
@@ -84,7 +84,10 @@ export default async function StocksPage() {
         </header>
 
         {derniere ? (
-          <ListeStocks lignes={lignes} />
+          <>
+            <ResumeStocks lignes={lignes} />
+            <ListeStocks lignes={lignes} />
+          </>
         ) : (
           <p className="text-muted-foreground rounded-3xl border border-dashed p-8 text-center text-sm font-semibold">
             Les quantités s’affichent ici dès qu’un comptage est validé. En attendant, il n’y a

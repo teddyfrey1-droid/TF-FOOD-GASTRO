@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '3.0.0';
+export const VERSION = '3.1.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,15 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '3.1.0',
+    date: '2026-08-24',
+    points: [
+      'L’onglet Stocks se range par urgence : en rupture, juste, en trop, puis le reste.',
+      'Les groupes urgents s’ouvrent seuls ; « Ce qui va bien » reste replié.',
+      'Deux nombres en tête répondent d’un coup d’œil : combien manquent, combien sont en trop.',
+    ],
+  },
   {
     version: '3.0.0',
     date: '2026-08-24',

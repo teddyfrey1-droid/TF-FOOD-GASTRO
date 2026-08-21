@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import { Search, TriangleAlert } from 'lucide-react';
+import { ChevronDown, Search, TriangleAlert } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { formatQty } from '@/lib/format';
@@ -22,6 +22,63 @@ export interface LigneStock {
   surplus: number;
 }
 
+/**
+ * Les groupes, du plus urgent au moins urgent.
+ *
+ * L'ordre EST l'information : ce qui manque d'abord, ce qui déborde
+ * ensuite, le reste après. Les deux premiers s'ouvrent tout seuls, le
+ * gros du stock reste replié — trente-six lignes d'un coup ne se
+ * trient pas d'un coup d'œil, et 90 % d'entre elles n'appellent aucune
+ * décision.
+ */
+const GROUPES = [
+  {
+    cle: 'rupture' as const,
+    titre: 'En rupture',
+    detail: 'à zéro ou presque — à produire en premier',
+    etats: ['rupture'],
+    ouvertParDefaut: true,
+    pastille: 'bg-destructive',
+    surface: 'border-destructive/30 bg-destructive/[0.05]',
+  },
+  {
+    cle: 'juste' as const,
+    titre: 'Juste',
+    detail: 'sous le minimum de relance',
+    etats: ['juste'],
+    ouvertParDefaut: true,
+    pastille: 'bg-alert-foreground/70',
+    surface: 'border-alert-border bg-alert/40',
+  },
+  {
+    cle: 'trop' as const,
+    titre: 'En trop',
+    detail: 'au-dessus de la cible — à surveiller',
+    etats: ['surplus_fort', 'surplus'],
+    ouvertParDefaut: true,
+    pastille: 'bg-alert-foreground/70',
+    surface: 'border-alert-border bg-alert/40',
+  },
+  {
+    cle: 'ok' as const,
+    titre: 'Ce qui va bien',
+    detail: 'rien à faire',
+    etats: ['ok'],
+    ouvertParDefaut: false,
+    pastille: 'bg-primary',
+    surface: '',
+  },
+  {
+    cle: 'hors' as const,
+    titre: 'Absents ou reportés',
+    detail: 'non relevés ce jour-là',
+    etats: ['absent', 'reporte'],
+    ouvertParDefaut: false,
+    pastille: 'bg-muted-foreground/40',
+    surface: '',
+  },
+];
+
 const normalise = (texte: string) =>
   texte
     .toLowerCase()
@@ -29,18 +86,15 @@ const normalise = (texte: string) =>
     .replace(/[̀-ͯ]/g, '');
 
 /**
- * Ce qu'il y a réellement dans les frigos, produit par produit.
+ * Ce qu'il y a dans les frigos, rangé par urgence.
  *
- * L'application ne montrait que ce qu'il reste à FAIRE. Or la question du
- * passe est souvent l'autre : « il y a combien de saumon, au juste ? ».
- * Sans réponse, on redescend vérifier — ou on produit dans le doute.
- *
- * Ces chiffres sont ceux que l'équipe a saisis elle-même : ils lui
- * reviennent. Aucune cible, aucun seuil n'apparaît ici ; l'état est
- * calculé en base et n'arrive que sous forme de mot.
+ * Une seule liste de trente-six produits obligeait à tout lire pour
+ * trouver les trois qui manquent. Les groupes font le tri à la place de
+ * l'œil ; la recherche, elle, traverse tout et ouvre ce qu'il faut.
  */
 export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
   const [recherche, setRecherche] = useState('');
+  const [replies, setReplies] = useState<Record<string, boolean>>({});
 
   const filtrees = useMemo(() => {
     const aiguille = normalise(recherche.trim());
@@ -52,80 +106,22 @@ export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
     );
   }, [lignes, recherche]);
 
-  const aSurveiller = lignes.filter(
-    (ligne) => ligne.etat === 'surplus' || ligne.etat === 'surplus_fort',
-  );
-  const beaucoupTrop = lignes.filter((ligne) => ligne.etat === 'surplus_fort');
-  const manquants = lignes.filter((ligne) => ligne.etat === 'rupture' || ligne.etat === 'juste');
+  const groupes = GROUPES.map((groupe) => ({
+    ...groupe,
+    // Le surplus le plus fort en tête de son groupe, le reste par nom.
+    items: filtrees
+      .filter((ligne) => groupe.etats.includes(ligne.etat))
+      .sort(
+        (a, b) =>
+          Number(b.surplus) - Number(a.surplus) ||
+          a.productName.localeCompare(b.productName, 'fr'),
+      ),
+  })).filter((groupe) => groupe.items.length > 0);
+
+  const enRecherche = recherche.trim() !== '';
 
   return (
-    <div className="space-y-4">
-      {/* Ce qui mérite un œil, avant la liste complète. Le surplus est la
-          nouveauté : jusqu'ici rien ne signalait qu'on avait trop produit,
-          et le bac partait à la poubelle deux jours plus tard. */}
-      <div className="grid grid-cols-2 gap-2.5">
-        <Card
-          className={cn(
-            'rounded-2xl p-3.5',
-            manquants.length > 0 && 'border-destructive/30 bg-destructive/[0.06]',
-          )}
-        >
-          <p className="text-muted-foreground text-[10px] font-black tracking-wide uppercase">
-            Sous le seuil
-          </p>
-          <p
-            className={cn(
-              'mt-0.5 text-2xl leading-none font-black tabular-nums',
-              manquants.length > 0 && 'text-destructive',
-            )}
-          >
-            {manquants.length}
-          </p>
-          <p className="text-muted-foreground mt-1 text-[11px] font-medium">
-            {manquants.length === 0 ? 'rien ne manque' : 'à produire en priorité'}
-          </p>
-        </Card>
-
-        <Card
-          className={cn(
-            'rounded-2xl p-3.5',
-            aSurveiller.length > 0 && 'border-alert-border bg-alert',
-          )}
-        >
-          <p
-            className={cn(
-              'text-[10px] font-black tracking-wide uppercase',
-              aSurveiller.length > 0 ? 'text-alert-foreground/70' : 'text-muted-foreground',
-            )}
-          >
-            À surveiller
-          </p>
-          <p
-            className={cn(
-              'mt-0.5 flex items-center gap-1.5 text-2xl leading-none font-black tabular-nums',
-              aSurveiller.length > 0 && 'text-alert-foreground',
-            )}
-          >
-            {aSurveiller.length > 0 ? (
-              <TriangleAlert className="size-5" strokeWidth={2.8} />
-            ) : null}
-            {aSurveiller.length}
-          </p>
-          <p
-            className={cn(
-              'mt-1 text-[11px] font-medium',
-              aSurveiller.length > 0 ? 'text-alert-foreground/80' : 'text-muted-foreground',
-            )}
-          >
-            {aSurveiller.length === 0
-              ? 'aucun surplus'
-              : beaucoupTrop.length > 0
-                ? `dont ${beaucoupTrop.length} en trop grande quantité`
-                : 'plus que nécessaire'}
-          </p>
-        </Card>
-      </div>
-
+    <div className="space-y-3">
       <div className="relative">
         <Search className="text-muted-foreground pointer-events-none absolute top-1/2 left-4 size-5 -translate-y-1/2" />
         <Input
@@ -138,57 +134,102 @@ export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
         />
       </div>
 
-      {filtrees.length === 0 ? (
+      {groupes.length === 0 ? (
         <p className="text-muted-foreground rounded-2xl border border-dashed p-8 text-center text-sm font-semibold">
-          Aucun produit « {recherche} ».
+          {enRecherche ? `Aucun produit « ${recherche} ».` : 'Aucun produit relevé.'}
         </p>
-      ) : (
-        <Card className="overflow-hidden rounded-3xl p-0">
-          <div className="bg-muted/60 text-muted-foreground sticky top-0 z-10 flex items-center gap-2 border-b px-3 py-2 text-[10px] font-black tracking-wide uppercase backdrop-blur">
-            <span className="min-w-0 flex-1">Produit</span>
-            <span className="w-10 text-right">Salad.</span>
-            <span className="w-10 text-right">Bas</span>
-            <span className="w-10 text-right">Des.</span>
-            <span className="w-11 text-right">Total</span>
-            <span className="w-20 text-right">État</span>
-          </div>
+      ) : null}
 
-          <ul className="divide-y">
-            {filtrees.map((ligne) => (
-              <li
-                key={ligne.productId}
-                className={cn(
-                  'flex items-center gap-2 px-3 py-2',
-                  ligne.etat === 'surplus' && 'bg-alert/50',
-                  ligne.etat === 'surplus_fort' && 'bg-alert ring-alert-border ring-1 ring-inset',
-                  ligne.etat === 'rupture' && 'bg-destructive/[0.06]',
-                )}
-              >
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13px] leading-tight font-bold">
-                    {ligne.productName}
-                  </span>
-                  <span className="text-muted-foreground block truncate text-[10px] font-semibold">
-                    {ligne.categoryName}
-                  </span>
+      {groupes.map((groupe) => {
+        // Une recherche ouvre tout : masquer un résultat derrière un
+        // groupe replié reviendrait à ne pas l'avoir trouvé.
+        const ouvert = enRecherche || (replies[groupe.cle] ?? groupe.ouvertParDefaut);
+
+        return (
+          <Card key={groupe.cle} className={cn('overflow-hidden rounded-3xl p-0', groupe.surface)}>
+            <button
+              type="button"
+              disabled={enRecherche}
+              onClick={() =>
+                setReplies((actuel) => ({
+                  ...actuel,
+                  [groupe.cle]: !(actuel[groupe.cle] ?? groupe.ouvertParDefaut),
+                }))
+              }
+              aria-expanded={ouvert}
+              className="flex w-full items-center gap-2.5 px-4 py-3 text-left"
+            >
+              <span aria-hidden className={cn('size-2.5 shrink-0 rounded-full', groupe.pastille)} />
+
+              <span className="min-w-0 flex-1">
+                <span className="block text-[15px] leading-tight font-black">
+                  {groupe.titre}{' '}
+                  <span className="tabular-nums">({groupe.items.length})</span>
                 </span>
-
-                <Quantite valeur={ligne.qtySaladbar} presente={ligne.inSaladbar} />
-                <Quantite valeur={ligne.qtyFridge} presente={ligne.inFridge} />
-                <Quantite valeur={ligne.qtyDesserts} presente={ligne.inDesserts} />
-
-                <span className="w-11 text-right text-[15px] font-black tabular-nums">
-                  {formatQty(ligne.qtyTotal)}
+                <span className="text-muted-foreground mt-0.5 block text-[11px] font-semibold">
+                  {groupe.detail}
                 </span>
+              </span>
 
-                <span className="w-20 text-right">
-                  <EtiquetteEtat etat={ligne.etat} surplus={ligne.surplus} />
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Card>
-      )}
+              {enRecherche ? null : (
+                <ChevronDown
+                  className={cn(
+                    'text-muted-foreground/60 size-4 shrink-0 transition-transform',
+                    ouvert && 'rotate-180',
+                  )}
+                  strokeWidth={2.5}
+                />
+              )}
+            </button>
+
+            {ouvert ? (
+              <>
+                <div className="text-muted-foreground bg-background/60 flex items-center gap-2 border-y px-3 py-1.5 text-[10px] font-black tracking-wide uppercase">
+                  <span className="min-w-0 flex-1">Produit</span>
+                  <span className="w-10 text-right">Salad.</span>
+                  <span className="w-10 text-right">Bas</span>
+                  <span className="w-10 text-right">Des.</span>
+                  <span className="w-11 text-right">Total</span>
+                </div>
+
+                <ul className="divide-y">
+                  {groupe.items.map((ligne) => (
+                    <li key={ligne.productId} className="flex items-center gap-2 px-3 py-2">
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[13px] leading-tight font-bold">
+                          {ligne.productName}
+                        </span>
+                        <span className="text-muted-foreground block truncate text-[10px] font-semibold">
+                          {ligne.categoryName}
+                          {ligne.etat === 'surplus' || ligne.etat === 'surplus_fort'
+                            ? ` · ${formatQty(ligne.surplus)} de trop`
+                            : ''}
+                        </span>
+                      </span>
+
+                      <Quantite valeur={ligne.qtySaladbar} presente={ligne.inSaladbar} />
+                      <Quantite valeur={ligne.qtyFridge} presente={ligne.inFridge} />
+                      <Quantite valeur={ligne.qtyDesserts} presente={ligne.inDesserts} />
+
+                      <span
+                        className={cn(
+                          'w-11 text-right text-[15px] font-black tabular-nums',
+                          ligne.etat === 'rupture' && 'text-destructive',
+                          ligne.etat === 'surplus_fort' && 'text-destructive',
+                        )}
+                      >
+                        {ligne.etat === 'absent' || ligne.etat === 'reporte'
+                          ? '—'
+                          : formatQty(ligne.qtyTotal)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </>
+            ) : null}
+          </Card>
+        );
+      })}
     </div>
   );
 }
@@ -207,38 +248,82 @@ function Quantite({ valeur, presente }: { valeur: number; presente: boolean }) {
   );
 }
 
-const ETATS = {
-  rupture: { texte: 'Rupture', classe: 'bg-destructive/15 text-destructive' },
-  juste: { texte: 'Juste', classe: 'bg-alert text-alert-foreground' },
-  ok: { texte: 'OK', classe: 'text-primary' },
-  absent: { texte: 'Absent', classe: 'text-muted-foreground/60' },
-  reporte: { texte: 'Reporté', classe: 'text-muted-foreground/60' },
-} as const;
+/**
+ * Le bandeau d'en-tête : deux nombres, et rien d'autre.
+ *
+ * Il répond à la seule question qu'on se pose en ouvrant l'écran —
+ * est-ce qu'il manque quelque chose, est-ce qu'il y a du gâchis — et
+ * laisse le détail aux groupes en dessous.
+ */
+export function ResumeStocks({ lignes }: { lignes: LigneStock[] }) {
+  const manquants = lignes.filter(
+    (ligne) => ligne.etat === 'rupture' || ligne.etat === 'juste',
+  ).length;
+  const enTrop = lignes.filter(
+    (ligne) => ligne.etat === 'surplus' || ligne.etat === 'surplus_fort',
+  ).length;
 
-function EtiquetteEtat({ etat, surplus }: { etat: LigneStock['etat']; surplus: number }) {
-  // Deux saumons de trop se rattrapent au service du soir ; le double de
-  // la cible, non — c'est un bac entier qui finira à la poubelle. D'où
-  // deux niveaux : l'un se remarque, l'autre se voit de loin.
-  if (etat === 'surplus' || etat === 'surplus_fort') {
-    const fort = etat === 'surplus_fort';
+  if (manquants === 0 && enTrop === 0) {
     return (
-      <span
-        className={cn(
-          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-black tabular-nums',
-          fort
-            ? 'bg-destructive text-destructive-foreground'
-            : 'bg-alert-foreground/15 text-alert-foreground',
-        )}
-      >
-        <TriangleAlert className="size-3" strokeWidth={3} />+{formatQty(surplus)}
-      </span>
+      <div className="border-primary/25 bg-primary/10 text-primary mb-3 flex items-center gap-2.5 rounded-2xl border px-4 py-3">
+        <span aria-hidden className="bg-primary size-2.5 rounded-full" />
+        <p className="text-[15px] font-black">Tout est dans les clous.</p>
+      </div>
     );
   }
 
-  const style = ETATS[etat];
   return (
-    <span className={cn('inline-block rounded-full px-2 py-0.5 text-[12px] font-black', style.classe)}>
-      {style.texte}
-    </span>
+    <div className="mb-3 grid grid-cols-2 gap-2.5">
+      <Chiffre
+        valeur={manquants}
+        libelle="sous le seuil"
+        alerte={manquants > 0}
+        rouge
+      />
+      <Chiffre valeur={enTrop} libelle="en trop" alerte={enTrop > 0} />
+    </div>
+  );
+}
+
+function Chiffre({
+  valeur,
+  libelle,
+  alerte,
+  rouge,
+}: {
+  valeur: number;
+  libelle: string;
+  alerte: boolean;
+  rouge?: boolean;
+}) {
+  return (
+    <Card
+      className={cn(
+        'flex items-center gap-3 rounded-2xl p-3.5',
+        alerte && rouge && 'border-destructive/30 bg-destructive/[0.06]',
+        alerte && !rouge && 'border-alert-border bg-alert',
+      )}
+    >
+      {alerte && !rouge ? (
+        <TriangleAlert className="text-alert-foreground size-5 shrink-0" strokeWidth={2.8} />
+      ) : null}
+      <p
+        className={cn(
+          'text-2xl leading-none font-black tabular-nums',
+          alerte && rouge && 'text-destructive',
+          alerte && !rouge && 'text-alert-foreground',
+        )}
+      >
+        {valeur}
+      </p>
+      <p
+        className={cn(
+          'text-[11px] leading-tight font-bold',
+          alerte && !rouge ? 'text-alert-foreground/80' : 'text-muted-foreground',
+        )}
+      >
+        {libelle}
+      </p>
+    </Card>
   );
 }
