@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { ChevronRight } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
-import { isStaffLeadRole } from '@/lib/roles';
+import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { todayInParis } from '@/lib/format';
 import { BottomTabs } from '@/components/bottom-tabs';
@@ -180,7 +180,7 @@ export default async function PageComptages() {
         )}
       </main>
 
-      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} />
+      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={isManagerRole(user.role)} />
     </>
   );
 }

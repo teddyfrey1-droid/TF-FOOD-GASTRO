@@ -1,7 +1,8 @@
 import { requireStaffLead } from '@/lib/auth';
-import { ROLE_LABELS } from '@/lib/roles';
+import { isManagerRole, isStaffLeadRole, ROLE_LABELS } from '@/lib/roles';
 import { AvatarCompte } from '@/components/avatar-compte';
 import { AdminNav } from '@/components/admin/admin-nav';
+import { BottomTabs } from '@/components/bottom-tabs';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,7 +29,14 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <AdminNav role={user.role} />
       </header>
 
-      <main className="mx-auto w-full max-w-6xl px-5 py-8">{children}</main>
+      {/* La marge basse dégage la barre d'onglets : sans elle, le dernier
+          bloc de chaque écran passe dessous. */}
+      <main className="mx-auto w-full max-w-6xl px-5 pt-8 pb-28">{children}</main>
+
+      {/* Un onglet du bas doit rester visible une fois arrivé, sinon c'est
+          une porte à sens unique : on entre dans Gestion et la barre
+          disparaît. */}
+      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={isManagerRole(user.role)} />
     </div>
   );
 }

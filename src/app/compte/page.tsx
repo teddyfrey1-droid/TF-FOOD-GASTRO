@@ -109,7 +109,7 @@ export default async function AccountPage() {
         </div>
       </main>
 
-      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} />
+      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={isManagerRole(user.role)} />
     </>
   );
 }

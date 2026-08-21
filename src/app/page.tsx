@@ -1,7 +1,7 @@
 import { requireUser } from '@/lib/auth';
 import { Check, CircleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { isStaffLeadRole } from '@/lib/roles';
+import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { NotificationToggle } from '@/components/pwa/notification-toggle';
 import { SessionCard } from '@/components/session-card';
@@ -145,7 +145,7 @@ export default async function HomePage() {
         </div>
       </main>
 
-      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} />
+      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={isManagerRole(user.role)} />
     </>
   );
 }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClipboardList, Home, Settings2 } from 'lucide-react';
+import { ClipboardList, Home, Settings2, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -10,10 +10,20 @@ import { cn } from '@/lib/utils';
  * atteint le bas de l'écran, pas le coin haut-gauche.
  *
  * « Mon compte » n'y figure plus : il vit dans l'avatar en haut à droite,
- * comme partout ailleurs. Moins d'onglets, donc des cibles plus larges pour
- * les deux qui servent vraiment.
+ * comme partout ailleurs.
+ *
+ * Chacun ne voit que ce qu'il peut ouvrir. Le simulateur affiche les
+ * cibles de production, que la base réserve au directeur et au
+ * propriétaire : le proposer à un assistant manager n'ouvrirait qu'un
+ * refus. Un onglet qui échoue vaut moins qu'un onglet absent.
  */
-export function BottomTabs({ isStaffLead }: { isStaffLead: boolean }) {
+export function BottomTabs({
+  isStaffLead,
+  isManager = false,
+}: {
+  isStaffLead: boolean;
+  isManager?: boolean;
+}) {
   const pathname = usePathname();
 
   const tabs = [
@@ -24,13 +34,25 @@ export function BottomTabs({ isStaffLead }: { isStaffLead: boolean }) {
       icon: ClipboardList,
       match: (p: string) => p.startsWith('/comptage'),
     },
+    ...(isManager
+      ? [
+          {
+            href: '/admin/simulateur',
+            label: 'Simulateur',
+            icon: SlidersHorizontal,
+            match: (p: string) => p.startsWith('/admin/simulateur'),
+          },
+        ]
+      : []),
     ...(isStaffLead
       ? [
           {
             href: '/admin',
             label: 'Gestion',
             icon: Settings2,
-            match: (p: string) => p.startsWith('/admin'),
+            // Le simulateur vit sous `/admin` : sans cette exclusion, les
+            // deux onglets s'allumeraient en même temps.
+            match: (p: string) => p.startsWith('/admin') && !p.startsWith('/admin/simulateur'),
           },
         ]
       : []),
@@ -49,7 +71,7 @@ export function BottomTabs({ isStaffLead }: { isStaffLead: boolean }) {
                 href={tab.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'no-select flex h-16 flex-col items-center justify-center gap-1 text-xs font-bold transition-colors',
+                  'no-select flex h-16 flex-col items-center justify-center gap-1 px-0.5 text-[11px] font-bold transition-colors',
                   active ? 'text-primary' : 'text-muted-foreground',
                 )}
               >

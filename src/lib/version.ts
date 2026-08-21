@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '1.2.0';
+export const VERSION = '1.3.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,14 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '1.3.0',
+    date: '2026-08-22',
+    points: [
+      'Le simulateur a son onglet en bas, pour le directeur et le propriétaire.',
+      'La barre d’onglets reste visible dans Gestion : on n’y entre plus sans pouvoir en sortir.',
+    ],
+  },
   {
     version: '1.2.0',
     date: '2026-08-22',
