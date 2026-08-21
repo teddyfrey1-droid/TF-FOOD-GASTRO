@@ -95,23 +95,29 @@ export function TargetSimulator({ families }: { families: FamilyInfo[] }) {
           de l'écran, en gros, avec ses paliers à portée de pouce.
          --------------------------------------------------------------- */}
       <Card className="rounded-3xl p-5">
-        <label htmlFor="simulated-revenue" className="text-muted-foreground text-sm font-bold">
+        <label
+          htmlFor="simulated-revenue"
+          className="text-foreground block text-center text-[15px] font-black"
+        >
           Chiffre d&apos;affaires simulé
         </label>
 
-        <div className="mt-2 flex items-center gap-3">
+        {/* Centré : c'est la seule saisie de l'écran, et tout le reste en
+            découle. Décalée à gauche, elle se lisait comme un champ de
+            formulaire parmi d'autres. */}
+        <div className="mt-2.5 flex items-center justify-center gap-2">
           <Input
             id="simulated-revenue"
             value={revenue}
             inputMode="decimal"
             onChange={(event) => setRevenue(event.target.value)}
             onFocus={(event) => event.target.select()}
-            className="h-16 flex-1 rounded-2xl text-4xl! font-black tabular-nums"
+            className="h-14 w-44 rounded-2xl text-center text-2xl! font-black tabular-nums"
           />
-          <span className="text-muted-foreground text-xl font-black">€ HT</span>
+          <span className="text-muted-foreground text-base font-black">€ HT</span>
         </div>
 
-        <div className="mt-3 flex flex-wrap gap-2">
+        <div className="mt-3 flex flex-wrap justify-center gap-1.5">
           {PALIERS.map((palier) => {
             const actif = parseNumber(revenue) === palier;
             return (
@@ -121,7 +127,7 @@ export function TargetSimulator({ families }: { families: FamilyInfo[] }) {
                 onClick={() => setRevenue(String(palier))}
                 aria-pressed={actif}
                 className={cn(
-                  'h-11 rounded-full px-4 text-sm font-black tabular-nums transition-colors',
+                  'h-9 rounded-full px-3 text-[13px] font-black tabular-nums transition-colors',
                   actif
                     ? 'bg-foreground text-background'
                     : 'bg-muted text-muted-foreground active:bg-muted/70',

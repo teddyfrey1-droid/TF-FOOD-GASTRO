@@ -16,7 +16,7 @@ export interface LigneStock {
   qtyTotal: number;
   inSaladbar: boolean;
   inFridge: boolean;
-  etat: 'rupture' | 'juste' | 'ok' | 'surplus' | 'absent' | 'reporte';
+  etat: 'rupture' | 'juste' | 'ok' | 'surplus' | 'surplus_fort' | 'absent' | 'reporte';
   surplus: number;
 }
 
@@ -50,7 +50,10 @@ export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
     );
   }, [lignes, recherche]);
 
-  const aSurveiller = lignes.filter((ligne) => ligne.etat === 'surplus');
+  const aSurveiller = lignes.filter(
+    (ligne) => ligne.etat === 'surplus' || ligne.etat === 'surplus_fort',
+  );
+  const beaucoupTrop = lignes.filter((ligne) => ligne.etat === 'surplus_fort');
   const manquants = lignes.filter((ligne) => ligne.etat === 'rupture' || ligne.etat === 'juste');
 
   return (
@@ -112,7 +115,11 @@ export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
               aSurveiller.length > 0 ? 'text-alert-foreground/80' : 'text-muted-foreground',
             )}
           >
-            {aSurveiller.length === 0 ? 'aucun surplus' : 'plus que nécessaire'}
+            {aSurveiller.length === 0
+              ? 'aucun surplus'
+              : beaucoupTrop.length > 0
+                ? `dont ${beaucoupTrop.length} en trop grande quantité`
+                : 'plus que nécessaire'}
           </p>
         </Card>
       </div>
@@ -150,6 +157,7 @@ export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
                 className={cn(
                   'flex items-center gap-2 px-3 py-2',
                   ligne.etat === 'surplus' && 'bg-alert/50',
+                  ligne.etat === 'surplus_fort' && 'bg-alert ring-alert-border ring-1 ring-inset',
                   ligne.etat === 'rupture' && 'bg-destructive/[0.06]',
                 )}
               >
@@ -204,9 +212,20 @@ const ETATS = {
 } as const;
 
 function EtiquetteEtat({ etat, surplus }: { etat: LigneStock['etat']; surplus: number }) {
-  if (etat === 'surplus') {
+  // Deux saumons de trop se rattrapent au service du soir ; le double de
+  // la cible, non — c'est un bac entier qui finira à la poubelle. D'où
+  // deux niveaux : l'un se remarque, l'autre se voit de loin.
+  if (etat === 'surplus' || etat === 'surplus_fort') {
+    const fort = etat === 'surplus_fort';
     return (
-      <span className="bg-alert-foreground/15 text-alert-foreground inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-black tabular-nums">
+      <span
+        className={cn(
+          'inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[12px] font-black tabular-nums',
+          fort
+            ? 'bg-destructive text-destructive-foreground'
+            : 'bg-alert-foreground/15 text-alert-foreground',
+        )}
+      >
         <TriangleAlert className="size-3" strokeWidth={3} />+{formatQty(surplus)}
       </span>
     );

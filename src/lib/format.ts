@@ -63,3 +63,29 @@ export function todayInParis(): string {
     day: '2-digit',
   }).format(new Date());
 }
+
+/**
+ * L'heure d'ouverture d'un comptage, si elle n'est pas encore passée.
+ *
+ * Renvoie « 15h00 » tant qu'il est trop tôt, et `null` dès que l'heure
+ * est atteinte — l'appelant n'a donc qu'un booléen implicite à lire.
+ * Tout se compare en heure de Paris : le serveur, lui, tourne en UTC.
+ */
+export function ouvertureAVenir(heure: string | null | undefined): string | null {
+  if (!heure) return null;
+
+  const [h, m] = heure.split(':').map(Number);
+  if (Number.isNaN(h) || Number.isNaN(m)) return null;
+
+  const maintenant = new Intl.DateTimeFormat('fr-FR', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+    timeZone: 'Europe/Paris',
+  }).format(new Date());
+
+  const [hNow, mNow] = maintenant.split(':').map(Number);
+  const passee = hNow * 60 + mNow >= h * 60 + m;
+
+  return passee ? null : `${String(h).padStart(2, '0')}h${String(m).padStart(2, '0')}`;
+}

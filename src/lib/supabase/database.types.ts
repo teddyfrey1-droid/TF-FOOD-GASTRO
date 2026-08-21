@@ -390,6 +390,16 @@ export type Database = {
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /** Heures d'ouverture des comptages. Lisibles par toute l'équipe. */
+      mep_heures_comptage: {
+        Args: Record<string, never>;
+        Returns: { morning: string; afternoon: string }[];
+      };
+      /** Les régler. Directeur uniquement. */
+      mep_regler_heures_comptage: {
+        Args: { p_morning: string; p_afternoon: string };
+        Returns: undefined;
+      };
       /**
        * Quantités relevées par produit, avec un état en toutes lettres.
        *
@@ -410,7 +420,7 @@ export type Database = {
           qty_total: number;
           in_saladbar: boolean;
           in_fridge: boolean;
-          etat: 'rupture' | 'juste' | 'ok' | 'surplus' | 'absent' | 'reporte';
+          etat: 'rupture' | 'juste' | 'ok' | 'surplus' | 'surplus_fort' | 'absent' | 'reporte';
           surplus: number;
         }[];
       };

@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '1.7.0';
+export const VERSION = '1.8.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,16 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '1.8.0',
+    date: '2026-08-22',
+    points: [
+      'Un produit très au-dessus de sa cible passe en rouge : « trop » et « beaucoup trop » ne se valent pas.',
+      'Chaque comptage a son heure d’ouverture, réglable dans Gestion. Avant l’heure, la carte est grisée.',
+      'Dans les jours passés, chaque comptage se déplie : ce qu’il y avait à produire, et ce qu’il y avait dans les frigos.',
+      'Simulateur : le chiffre d’affaires est centré et les paliers allégés.',
+    ],
+  },
   {
     version: '1.7.0',
     date: '2026-08-22',

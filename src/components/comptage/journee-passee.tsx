@@ -1,10 +1,15 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useTransition } from 'react';
 import Link from 'next/link';
-import { ChevronDown } from 'lucide-react';
+import { Check, ChevronDown, Loader2, TriangleAlert } from 'lucide-react';
 import { PastilleEtat } from '@/components/rangee-menu';
+import { formatQty } from '@/lib/format';
 import { cn } from '@/lib/utils';
+import {
+  chargerDetailComptage,
+  type DetailComptagePasse,
+} from '@/app/comptage/detail-passe';
 
 const HEURE = new Intl.DateTimeFormat('fr-FR', {
   hour: '2-digit',
@@ -79,25 +84,160 @@ export function JourneePassee({
       </button>
 
       {ouvert ? (
-        <div className="border-t px-2 py-1.5">
+        <div className="space-y-1.5 border-t px-2 py-2">
           {comptages.map((comptage) => (
-            <Link
-              key={comptage.id}
-              href={comptage.href}
-              className="hover:bg-muted/60 flex items-center gap-2 rounded-xl px-2 py-2 transition-colors"
-            >
-              <span className="w-24 shrink-0 text-[13px] font-bold">
-                {comptage.session === 'morning' ? 'Matin' : 'Après-midi'}
-              </span>
-              <span className="text-muted-foreground min-w-0 flex-1 truncate text-[13px] font-semibold">
-                {comptage.submittedAt
-                  ? `${HEURE.format(new Date(comptage.submittedAt))} · ${comptage.auteur ?? '—'}`
-                  : 'non validé'}
-              </span>
-            </Link>
+            <ComptageDeplie key={comptage.id} comptage={comptage} />
           ))}
         </div>
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Un comptage d'une journée passée, dépliable à son tour.
+ *
+ * Deux questions se posent en remontant l'historique : « qu'est-ce qu'on
+ * avait à faire ce jour-là ? » et « qu'est-ce qu'il y avait dans les
+ * frigos ? ». Les deux réponses vivent ici, chargées seulement quand on
+ * ouvre — sinon trente journées feraient plusieurs milliers de lignes au
+ * chargement de l'écran.
+ */
+function ComptageDeplie({ comptage }: { comptage: ComptagePasse }) {
+  const [ouvert, setOuvert] = useState(false);
+  const [detail, setDetail] = useState<DetailComptagePasse | null>(null);
+  const [chargement, demarrer] = useTransition();
+
+  function basculer() {
+    const prochain = !ouvert;
+    setOuvert(prochain);
+    if (prochain && detail === null) {
+      demarrer(async () => setDetail(await chargerDetailComptage(comptage.id)));
+    }
+  }
+
+  return (
+    <div className="bg-muted/40 overflow-hidden rounded-xl">
+      <button
+        type="button"
+        onClick={basculer}
+        aria-expanded={ouvert}
+        className="hover:bg-muted/70 flex w-full items-center gap-2 px-3 py-2 text-left transition-colors"
+      >
+        <span className="w-24 shrink-0 text-[13px] font-black">
+          {comptage.session === 'morning' ? 'Matin' : 'Après-midi'}
+        </span>
+        <span className="text-muted-foreground min-w-0 flex-1 truncate text-[12px] font-semibold">
+          {comptage.submittedAt
+            ? `${HEURE.format(new Date(comptage.submittedAt))} · ${comptage.auteur ?? '—'}`
+            : 'non validé'}
+        </span>
+        {chargement ? <Loader2 className="size-3.5 shrink-0 animate-spin" /> : null}
+        <ChevronDown
+          className={cn(
+            'text-muted-foreground/60 size-3.5 shrink-0 transition-transform',
+            ouvert && 'rotate-180',
+          )}
+          strokeWidth={2.5}
+        />
+      </button>
+
+      {ouvert && detail ? (
+        <div className="space-y-3 px-3 pt-1 pb-3">
+          {detail.error ? (
+            <p className="text-destructive text-[12px] font-semibold">{detail.error}</p>
+          ) : null}
+
+          <Section titre={`À produire (${detail.relances.length})`}>
+            {detail.relances.length === 0 ? (
+              <p className="text-muted-foreground text-[12px] font-semibold">
+                Rien n&apos;était à relancer ce jour-là.
+              </p>
+            ) : (
+              <ul className="space-y-0.5">
+                {detail.relances.map((relance) => (
+                  <li key={relance.productId} className="flex items-center gap-2 text-[12px]">
+                    <span
+                      className={cn(
+                        'flex size-4 shrink-0 items-center justify-center rounded-full',
+                        relance.isDone
+                          ? 'bg-primary text-primary-foreground'
+                          : 'bg-muted-foreground/20',
+                      )}
+                    >
+                      {relance.isDone ? <Check className="size-2.5" strokeWidth={4} /> : null}
+                    </span>
+                    <span
+                      className={cn(
+                        'min-w-0 flex-1 truncate font-bold',
+                        !relance.isDone && 'text-muted-foreground',
+                      )}
+                    >
+                      {relance.productName}
+                    </span>
+                    {relance.isCritical ? (
+                      <span className="text-destructive shrink-0 text-[10px] font-black">
+                        CRITIQUE
+                      </span>
+                    ) : null}
+                    <span className="w-10 shrink-0 text-right font-black tabular-nums">
+                      {formatQty(relance.qty)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Section>
+
+          <Section titre="Dans les frigos">
+            <ul className="space-y-0.5">
+              {detail.stocks.map((ligne) => (
+                <li key={ligne.productId} className="flex items-center gap-2 text-[12px]">
+                  <span className="min-w-0 flex-1 truncate font-bold">{ligne.productName}</span>
+                  <span className="text-muted-foreground w-9 shrink-0 text-right tabular-nums">
+                    {ligne.inSaladbar ? formatQty(ligne.qtySaladbar) : '·'}
+                  </span>
+                  <span className="text-muted-foreground w-9 shrink-0 text-right tabular-nums">
+                    {ligne.inFridge ? formatQty(ligne.qtyFridge) : '·'}
+                  </span>
+                  <span className="w-9 shrink-0 text-right font-black tabular-nums">
+                    {formatQty(ligne.qtyTotal)}
+                  </span>
+                  <span className="w-8 shrink-0 text-right">
+                    {ligne.etat === 'surplus' || ligne.etat === 'surplus_fort' ? (
+                      <TriangleAlert
+                        className={cn(
+                          'ml-auto size-3',
+                          ligne.etat === 'surplus_fort' ? 'text-destructive' : 'text-alert-foreground',
+                        )}
+                        strokeWidth={3}
+                      />
+                    ) : null}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Section>
+
+          <Link
+            href={comptage.href}
+            className="text-primary block pt-1 text-[12px] font-black underline underline-offset-2"
+          >
+            Ouvrir le rapport complet
+          </Link>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function Section({ titre, children }: { titre: string; children: React.ReactNode }) {
+  return (
+    <section>
+      <h4 className="text-muted-foreground mb-1 text-[10px] font-black tracking-wide uppercase">
+        {titre}
+      </h4>
+      {children}
+    </section>
   );
 }

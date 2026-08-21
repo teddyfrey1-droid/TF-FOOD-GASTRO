@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { Check, ChevronRight } from 'lucide-react';
+import { Check, ChevronRight, Clock } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { SessionKind, SessionStatus } from '@/lib/supabase/database.types';
@@ -24,11 +24,23 @@ export function SessionCard({
   kind,
   title,
   session,
+  ouvreA,
+  contournable = false,
 }: {
   kind: SessionKind;
   title: string;
   session: SessionSummary | null;
+  /** Heure d'ouverture « HH:MM », si elle n'est pas encore passée. */
+  ouvreA?: string | null;
+  /** L'encadrement peut ouvrir avant l'heure : un service peut déborder. */
+  contournable?: boolean;
 }) {
+  // Un comptage lancé trop tôt décrit des frigos qui n'ont pas encore
+  // vécu la journée. On grise donc avant l'heure — mais on n'enferme
+  // personne : un chef de service passe outre, parce que la réalité du
+  // terrain prime sur un réglage.
+  const enAttente = Boolean(ouvreA) && session === null;
+  const verrouille = enAttente && !contournable;
   const status = session?.status ?? null;
 
   const label = status === 'submitted' ? 'Fait' : status === 'draft' ? 'En cours' : 'À faire';
@@ -52,13 +64,13 @@ export function SessionCard({
     : { pending: 0, done: 0 };
   const totalTasks = tasks.pending + tasks.done;
 
-  return (
-    <Link href={`/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}`} className="block">
-      {/* Les deux cartes portent la journée : une ombre franche et un
-          liseré les détachent du fond crème, où elles se confondaient. */}
+  // Les deux cartes portent la journée : une ombre franche et un liseré
+  // les détachent du fond crème, où elles se confondaient.
+  const carte = (
       <Card
         className={cn(
-          'bg-card flex flex-col justify-between gap-3.5 rounded-3xl border p-5 shadow-md transition-all active:scale-[0.99] active:shadow-sm',
+          'bg-card flex flex-col justify-between gap-3.5 rounded-3xl border p-5 shadow-md transition-all',
+          verrouille ? 'opacity-55 shadow-sm' : 'active:scale-[0.99] active:shadow-sm',
           status === 'submitted' && tasks.pending === 0
             ? 'border-primary/25 shadow-primary/5'
             : 'border-border/80',
@@ -72,6 +84,12 @@ export function SessionCard({
               rend lisible de loin sans avoir à l'agrandir davantage — et
               elle reste lisible pour qui distingue mal les couleurs, le mot
               disant déjà tout. */}
+          {enAttente ? (
+            <span className="bg-muted text-muted-foreground ring-border flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-black ring-1">
+              <Clock className="size-3.5" strokeWidth={2.8} />
+              {ouvreA}
+            </span>
+          ) : (
           <span
             className={cn(
               'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-black',
@@ -95,6 +113,7 @@ export function SessionCard({
             )}
             {label}
           </span>
+          )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
@@ -143,6 +162,19 @@ export function SessionCard({
           </div>
         ) : null}
       </Card>
+  );
+
+  if (verrouille) {
+    return (
+      <div aria-disabled className="block cursor-not-allowed">
+        {carte}
+      </div>
+    );
+  }
+
+  return (
+    <Link href={`/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}`} className="block">
+      {carte}
     </Link>
   );
 }

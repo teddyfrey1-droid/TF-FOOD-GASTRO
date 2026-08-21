@@ -1104,6 +1104,82 @@ select pg_temp.check_equal('Aucun repère ne sort avec les quantités',
 reset role;
 reset "request.jwt.claim.sub";
 
+-- Trop, et beaucoup trop : au-delà de la moitié de la cible en plus, ce
+-- n'est plus un ajustement de fin de service mais une production à revoir.
+do $$
+begin
+  update public.count_lines
+  set qty_saladbar = 8, qty_fridge = 2   -- 10 pour une cible de 5
+  where session_id = current_setting('mep.session_stock')::uuid
+    and product_id = current_setting('mep.produit_stock')::uuid;
+end;
+$$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_equal('10 pour une cible de 5 : beaucoup trop',
+  (select etat from public.mep_etat_stock(current_setting('mep.session_stock')::uuid)
+   where product_id = current_setting('mep.produit_stock')::uuid),
+  'surplus_fort');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Pile à la limite haute du surplus simple : 7 sur une cible de 5 reste
+-- « surplus », 7,5 bascule. Le seuil doit être franc, pas approximatif.
+do $$
+begin
+  update public.count_lines
+  set qty_saladbar = 7, qty_fridge = 0
+  where session_id = current_setting('mep.session_stock')::uuid
+    and product_id = current_setting('mep.produit_stock')::uuid;
+end;
+$$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_equal('7 sur 5 reste un surplus simple',
+  (select etat from public.mep_etat_stock(current_setting('mep.session_stock')::uuid)
+   where product_id = current_setting('mep.produit_stock')::uuid),
+  'surplus');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
+\echo '--- 18. LES HORAIRES DE COMPTAGE ---'
+
+-- L'équipe doit savoir à quelle heure son travail commence ; elle n'a pas
+-- à pouvoir le décider.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_equal('L''employé lit les heures de comptage',
+  (select morning is not null and afternoon is not null from public.mep_heures_comptage()),
+  true);
+select pg_temp.check_denied('...mais ne peut pas les changer',
+  'select public.mep_regler_heures_comptage(''06:00''::time, ''14:00''::time)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_denied('...ni l''assistant manager',
+  'select public.mep_regler_heures_comptage(''06:00''::time, ''14:00''::time)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select public.mep_regler_heures_comptage('08:00'::time, '15:30'::time);
+select pg_temp.check_equal('Le directeur les règle',
+  (select morning::text || '/' || afternoon::text from public.mep_heures_comptage()),
+  '08:00:00/15:30:00');
+
+-- Un après-midi avant le matin n'a aucun sens : la base le refuse plutôt
+-- que d'accepter un réglage qui grisera les deux cartes pour toujours.
+select pg_temp.check_denied('L''après-midi ne peut pas précéder le matin',
+  'select public.mep_regler_heures_comptage(''15:00''::time, ''07:00''::time)');
+reset role;
+reset "request.jwt.claim.sub";
+
 -- Un comptage d'une autre journée reste hors de portée de l'équipe.
 do $$
 declare v_vieux uuid;

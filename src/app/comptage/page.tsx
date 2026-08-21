@@ -1,7 +1,8 @@
 import { requireUser } from '@/lib/auth';
 import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
-import { todayInParis } from '@/lib/format';
+import { ouvertureAVenir, todayInParis } from '@/lib/format';
+import { getCountHours } from '@/lib/admin/queries';
 import { BottomTabs } from '@/components/bottom-tabs';
 import { AvatarCompte } from '@/components/avatar-compte';
 import { SessionCard } from '@/components/session-card';
@@ -35,7 +36,7 @@ export default async function PageComptages() {
   // La RLS ne laisse un employé voir que le comptage DU JOUR. L'encadrement
   // voit l'historique complet : la même page sert donc les deux, et montre
   // simplement ce que la base accepte de renvoyer.
-  const [{ data: sessions }, { data: equipe }] = await Promise.all([
+  const [{ data: sessions }, { data: equipe }, heures] = await Promise.all([
     supabase
       .from('count_sessions')
       .select('id, date, session, status, submitted_at, user_id')
@@ -43,6 +44,7 @@ export default async function PageComptages() {
       .order('date', { ascending: false })
       .order('session', { ascending: true }),
     supabase.from('team_members').select('id, full_name'),
+    getCountHours(),
   ]);
 
   const { data: taches } = await supabase
@@ -92,11 +94,15 @@ export default async function PageComptages() {
           <SessionCard
             kind="morning"
             title="Comptage du matin"
+            ouvreA={ouvertureAVenir(heures?.morning)}
+            contournable={isStaffLeadRole(user.role)}
             session={carte('morning')}
           />
           <SessionCard
             kind="afternoon"
             title="Comptage de l'après-midi"
+            ouvreA={ouvertureAVenir(heures?.afternoon)}
+            contournable={isStaffLeadRole(user.role)}
             session={carte('afternoon')}
           />
         </div>

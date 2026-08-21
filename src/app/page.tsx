@@ -8,6 +8,7 @@ import {
   getGrowthWindows,
   getLastYearRevenue,
   getRevenueCoverage,
+  getCountHours,
   getRevenueSettings,
 } from '@/lib/admin/queries';
 import { BlocChiffreAffaires } from '@/components/admin/bloc-chiffre-affaires';
@@ -18,7 +19,7 @@ import { SessionCard } from '@/components/session-card';
 import { BottomTabs } from '@/components/bottom-tabs';
 import { AvatarCompte } from '@/components/avatar-compte';
 import { PastilleEtat } from '@/components/rangee-menu';
-import { todayInParis } from '@/lib/format';
+import { ouvertureAVenir, todayInParis } from '@/lib/format';
 import type { SessionKind } from '@/lib/supabase/database.types';
 
 export const dynamic = 'force-dynamic';
@@ -42,12 +43,13 @@ export default async function HomePage() {
   const isoToday = todayInParis();
   const today = new Date(`${isoToday}T12:00:00Z`);
 
-  const [{ data: sessions }, { data: team }] = await Promise.all([
+  const [{ data: sessions }, { data: team }, heures] = await Promise.all([
     supabase
       .from('count_sessions')
       .select('id, session, status, submitted_at, user_id')
       .eq('date', isoToday),
     supabase.from('team_members').select('id, full_name'),
+    getCountHours(),
   ]);
 
   // Ce qui reste à produire aujourd'hui. La RLS ne laisse passer que les
@@ -187,11 +189,15 @@ export default async function HomePage() {
           <SessionCard
             kind="morning"
             title="Comptage du matin"
+            ouvreA={ouvertureAVenir(heures?.morning)}
+            contournable={isStaffLeadRole(user.role)}
             session={bySession.get('morning') ?? null}
           />
           <SessionCard
             kind="afternoon"
             title="Comptage de l'après-midi"
+            ouvreA={ouvertureAVenir(heures?.afternoon)}
+            contournable={isStaffLeadRole(user.role)}
             session={bySession.get('afternoon') ?? null}
           />
         </div>

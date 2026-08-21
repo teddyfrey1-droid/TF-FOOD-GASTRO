@@ -13,12 +13,14 @@ import {
 } from 'lucide-react';
 import {
   getDailyCountStatus,
+  getCountHours,
   getProducts,
 } from '@/lib/admin/queries';
 import { createClient } from '@/lib/supabase/server';
 import { formatDateLong, todayInParis } from '@/lib/format';
 import { Card } from '@/components/ui/card';
 import { GroupeMenu, RangeeMenu } from '@/components/rangee-menu';
+import { HorairesComptage } from '@/components/admin/horaires-comptage';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,9 +29,10 @@ export default async function DashboardPage() {
   const today = todayInParis();
   const supabase = await createClient();
 
-  const [statuses, products, { count: equipe }] = await Promise.all([
+  const [statuses, products, heures, { count: equipe }] = await Promise.all([
     getDailyCountStatus(today),
     getProducts(false),
+    getCountHours(),
     supabase.from('profiles').select('id', { count: 'exact', head: true }),
   ]);
 
@@ -78,6 +81,10 @@ export default async function DashboardPage() {
           {relancesEnAttente} relance{relancesEnAttente > 1 ? 's' : ''} encore à produire
           aujourd&apos;hui.
         </p>
+      ) : null}
+
+      {heures ? (
+        <HorairesComptage morning={heures.morning} afternoon={heures.afternoon} />
       ) : null}
 
       <GroupeMenu titre="La carte">

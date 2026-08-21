@@ -308,3 +308,16 @@ export async function getLastYearRevenue(
   const ligne = data?.[0];
   return ligne ? { jour: ligne.jour, revenueHt: Number(ligne.revenue_ht) } : null;
 }
+
+/**
+ * Les heures d'ouverture des deux comptages.
+ *
+ * Elles vivent dans `revenue_settings`, que la RLS réserve au directeur :
+ * sans cette fonction, l'équipe ne pourrait pas savoir à quelle heure son
+ * propre travail commence. Un horaire de service n'a rien de confidentiel.
+ */
+export async function getCountHours(): Promise<{ morning: string; afternoon: string } | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc('mep_heures_comptage');
+  return data?.[0] ?? null;
+}
