@@ -146,6 +146,8 @@ type CountSessionRow = {
   status: SessionStatus;
   forecast_revenue_snapshot: number | null;
   device_info: Json | null;
+  /** Mot laissé par la personne qui a compté. */
+  note: string | null;
   created_at: string;
   updated_at: string;
 };
@@ -274,6 +276,7 @@ export type Database = {
         CountSessionRow,
         | Generated
         | 'date'
+        | 'note'
         | 'started_at'
         | 'submitted_at'
         | 'status'
@@ -413,6 +416,10 @@ export type Database = {
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /** Supprime un produit jamais compté. Refuse sinon. */
+      mep_supprimer_produit: { Args: { p_product_id: string }; Returns: undefined };
+      /** Remet un comptage validé du jour en cours de saisie. */
+      mep_rouvrir_comptage: { Args: { p_session_id: string }; Returns: undefined };
       /** Vrai si l'appelant a ce droit. Directeur et propriétaire : toujours vrai. */
       mep_a_le_droit: { Args: { p_permission: string }; Returns: boolean };
       /** Ouvre ou ferme un droit pour un statut. Directeur uniquement. */

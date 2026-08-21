@@ -327,3 +327,20 @@ export async function reorderProducts(orderedIds: string[]): Promise<void> {
   );
   revalidatePath('/admin/produits');
 }
+
+/**
+ * Supprime un produit — si la base l'accepte.
+ *
+ * Elle refuse dès que le produit figure dans un comptage : l'historique
+ * perdrait son libellé. Le message qu'elle renvoie explique lequel des
+ * deux gestes s'applique, on le montre tel quel.
+ */
+export async function supprimerProduit(id: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('mep_supprimer_produit', { p_product_id: id });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/admin/produits');
+  return {};
+}

@@ -193,3 +193,27 @@ export async function toggleProductionTask(
   revalidatePath('/comptage', 'layout');
   return {};
 }
+
+/**
+ * Enregistre le mot laissé sur un comptage.
+ *
+ * Séparé de la validation : la note se tape pendant qu'on compte, et
+ * doit survivre à un aller-retour vers un produit oublié. La RLS
+ * n'autorise l'écriture que sur un comptage du jour encore ouvert —
+ * inutile de le revérifier ici.
+ */
+export async function enregistrerNote(
+  sessionId: string,
+  note: string,
+): Promise<{ error?: string }> {
+  const texte = note.trim().slice(0, 500);
+
+  const supabase = await createClient();
+  const { error } = await supabase
+    .from('count_sessions')
+    .update({ note: texte === '' ? null : texte })
+    .eq('id', sessionId);
+
+  if (error) return { error: error.message };
+  return {};
+}

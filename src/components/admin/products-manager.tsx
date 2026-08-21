@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
+import { Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -10,6 +11,7 @@ import { formatQty } from '@/lib/format';
 import { cn } from '@/lib/utils';
 import {
   setCategoryZones,
+  supprimerProduit,
   toggleProductActive,
   updateProductInline,
 } from '@/app/admin/produits/actions';
@@ -68,6 +70,9 @@ export function ProductsManager({
 }) {
   const [search, setSearch] = useState('');
   const [showInactive, setShowInactive] = useState(false);
+  // Un seul filtre de zone à la fois : on veut répondre à « qu'est-ce
+  // qu'on compte en haut ? », pas composer une requête.
+  const [filtreZone, setFiltreZone] = useState<'saladbar' | 'fridge' | 'aucune' | null>(null);
   const [editing, setEditing] = useState<ProductWithCategory | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -75,13 +80,16 @@ export function ProductsManager({
     const needle = search.trim().toLowerCase();
     return products.filter((product) => {
       if (!showInactive && !product.is_active) return false;
+      if (filtreZone === 'saladbar' && !product.in_saladbar) return false;
+      if (filtreZone === 'fridge' && !product.in_fridge) return false;
+      if (filtreZone === 'aucune' && (product.in_saladbar || product.in_fridge)) return false;
       if (!needle) return true;
       return (
         product.name.toLowerCase().includes(needle) ||
         (product.category?.name ?? '').toLowerCase().includes(needle)
       );
     });
-  }, [products, search, showInactive]);
+  }, [products, search, showInactive, filtreZone]);
 
   const grouped = useMemo(() => {
     const byCategory = new Map<string, ProductWithCategory[]>();
@@ -105,8 +113,78 @@ export function ProductsManager({
     );
   }
 
+  // Combien de produits chaque zone compte réellement. C'est la question
+  // qu'on se pose devant les frigos, et elle n'avait pas de réponse.
+  const actifs = products.filter((product) => product.is_active);
+  const compteurs = {
+    saladbar: actifs.filter((product) => product.in_saladbar).length,
+    fridge: actifs.filter((product) => product.in_fridge).length,
+    aucune: actifs.filter((product) => !product.in_saladbar && !product.in_fridge).length,
+  };
+
   return (
     <div className="space-y-5">
+      {/* Le tableau de bord des zones : chaque tuile est aussi un filtre.
+          Un produit rangé nulle part n'apparaît dans aucun comptage — il
+          est invisible sans ce compteur, et c'est le genre d'oubli qui se
+          paie un dimanche midi. */}
+      <div className="grid grid-cols-3 gap-2.5">
+        {[
+          { cle: 'saladbar' as const, emoji: '🥗', titre: 'Saladbar', n: compteurs.saladbar },
+          { cle: 'fridge' as const, emoji: '❄️', titre: 'Frigo du bas', n: compteurs.fridge },
+          { cle: 'aucune' as const, emoji: '⚠️', titre: 'Nulle part', n: compteurs.aucune },
+        ].map((tuile) => {
+          const actif = filtreZone === tuile.cle;
+          const alerte = tuile.cle === 'aucune' && tuile.n > 0;
+
+          return (
+            <button
+              key={tuile.cle}
+              type="button"
+              aria-pressed={actif}
+              onClick={() => setFiltreZone(actif ? null : tuile.cle)}
+              className={cn(
+                'rounded-2xl border p-3 text-left transition-colors',
+                actif
+                  ? 'border-foreground bg-muted'
+                  : alerte
+                    ? 'border-alert-border bg-alert hover:bg-alert/80'
+                    : 'bg-card hover:bg-muted/50',
+              )}
+            >
+              <span aria-hidden className="text-lg leading-none">
+                {tuile.emoji}
+              </span>
+              <span className="mt-1 block text-2xl leading-none font-black tabular-nums">
+                {tuile.n}
+              </span>
+              <span
+                className={cn(
+                  'mt-1 block text-[11px] leading-tight font-bold',
+                  alerte && !actif ? 'text-alert-foreground' : 'text-muted-foreground',
+                )}
+              >
+                {tuile.titre}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {filtreZone ? (
+        <p className="text-muted-foreground text-[13px] font-semibold">
+          {visible.length} produit{visible.length > 1 ? 's' : ''} affiché
+          {visible.length > 1 ? 's' : ''}.{' '}
+          <button
+            type="button"
+            onClick={() => setFiltreZone(null)}
+            className="text-primary font-black underline underline-offset-2"
+          >
+            Tout revoir
+          </button>
+        </p>
+      ) : null}
+
       <div className="flex flex-wrap items-center gap-3">
         <Input
           value={search}
@@ -206,11 +284,15 @@ export function ProductsManager({
                   <Button variant="outline" size="sm" onClick={() => setEditing(product)}>
                     Modifier
                   </Button>
+                  {/* L'interrupteur retire le produit des comptages sans
+                      toucher au passé ; la corbeille l'efface pour de bon,
+                      et la base refuse dès qu'il a servi une fois. */}
                   <Switch
                     checked={product.is_active}
                     aria-label={product.is_active ? 'Désactiver' : 'Réactiver'}
                     onCheckedChange={(checked) => toggleProductActive(product.id, checked)}
                   />
+                  <BoutonSupprimer product={product} />
                 </div>
               </div>
             ))}
@@ -452,5 +534,74 @@ function InlineCritical({ product }: { product: ProductWithCategory }) {
         />
       ) : null}
     </div>
+  );
+}
+
+/**
+ * Supprimer un produit, ou apprendre pourquoi c'est impossible.
+ *
+ * Désactiver reste le bon geste dans la plupart des cas : un produit
+ * retiré de la carte doit rester lisible dans les comptages passés. Mais
+ * un produit créé par erreur, jamais compté, n'a aucune raison
+ * d'encombrer la liste pour toujours.
+ *
+ * C'est la base qui tranche, et son message explique lequel des deux
+ * gestes s'applique — on l'affiche tel quel plutôt que de deviner ici.
+ */
+function BoutonSupprimer({ product }: { product: ProductWithCategory }) {
+  const [confirme, setConfirme] = useState(false);
+  const [pending, demarrer] = useTransition();
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  if (erreur) {
+    return (
+      <span className="flex items-center gap-1.5">
+        <span className="text-destructive max-w-56 text-[11px] leading-snug font-semibold">
+          {erreur}
+        </span>
+        <Button variant="ghost" size="sm" className="h-8" onClick={() => setErreur(null)}>
+          OK
+        </Button>
+      </span>
+    );
+  }
+
+  if (confirme) {
+    return (
+      <span className="flex items-center gap-1">
+        <Button
+          variant="destructive"
+          size="sm"
+          disabled={pending}
+          className="h-8"
+          onClick={() =>
+            demarrer(async () => {
+              const resultat = await supprimerProduit(product.id);
+              if (resultat.error) {
+                setErreur(resultat.error);
+                setConfirme(false);
+              }
+            })
+          }
+        >
+          Supprimer
+        </Button>
+        <Button variant="ghost" size="sm" className="h-8" onClick={() => setConfirme(false)}>
+          Non
+        </Button>
+      </span>
+    );
+  }
+
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive h-8"
+      title={`Supprimer ${product.name}`}
+      onClick={() => setConfirme(true)}
+    >
+      <Trash2 className="size-4" />
+    </Button>
   );
 }

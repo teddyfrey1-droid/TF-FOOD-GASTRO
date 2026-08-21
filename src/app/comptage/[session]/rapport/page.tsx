@@ -1,4 +1,5 @@
 import Link from 'next/link';
+import { BoutonRouvrir } from '@/components/comptage/bouton-rouvrir';
 import { notFound, redirect } from 'next/navigation';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
@@ -35,12 +36,12 @@ export default async function ReportPage({ params }: { params: Promise<{ session
     redirect(`/comptage/${session}`);
   }
 
-  const [{ data: tasks }, { data: lines }] = await Promise.all([
+  const [{ data: tasks }, { data: stocks }] = await Promise.all([
     supabase.rpc('mep_reorder_report', { p_session_id: countSession.id }),
-    supabase
-      .from('count_lines')
-      .select('product_id, qty_total, is_not_applicable')
-      .eq('session_id', countSession.id),
+    // Photos et quantités relevées : le bloc « stock suffisant » montrait
+    // une phrase, alors que c'est là qu'on vérifie « il en reste
+    // combien ? » sans redescendre au frigo.
+    supabase.rpc('mep_etat_stock', { p_session_id: countSession.id }),
   ]);
 
   // Les identifiants de tâche ne sortent pas de la fonction : on les relit ici
@@ -66,9 +67,23 @@ export default async function ReportPage({ params }: { params: Promise<{ session
   }));
 
   const reorderedIds = new Set((tasks ?? []).map((row) => row.product_id));
-  const sufficientCount = (lines ?? []).filter(
-    (line) => !reorderedIds.has(line.product_id) && !line.is_not_applicable,
-  ).length;
+
+  const suffisants = (stocks ?? [])
+    .filter(
+      (ligne) =>
+        !reorderedIds.has(ligne.product_id) &&
+        ligne.etat !== 'absent' &&
+        ligne.etat !== 'reporte',
+    )
+    // Les surplus d'abord : ce sont eux qu'il faut regarder.
+    .sort((a, b) => Number(b.surplus) - Number(a.surplus) || a.product_name.localeCompare(b.product_name))
+    .map((ligne) => ({
+      productId: ligne.product_id,
+      productName: ligne.product_name,
+      imageUrl: ligne.image_url,
+      qtyTotal: Number(ligne.qty_total),
+      etat: ligne.etat,
+    }));
 
   return (
     <main className="mx-auto w-full max-w-md px-5 pt-4 pb-6">
@@ -77,15 +92,20 @@ export default async function ReportPage({ params }: { params: Promise<{ session
       <ReorderReport
         title={config.title}
         tasks={reorderTasks}
-        sufficientCount={sufficientCount}
+        suffisants={suffisants}
       />
+
+      {/* Un comptage validé se corrige : on s'aperçoit d'une erreur en
+          rangeant, ou un bac réapparaît. Rouvrir doit tenir en un appui,
+          pas en un appel au directeur. */}
+      <BoutonRouvrir sessionId={countSession.id} href={`/comptage/${session}`} />
 
       {/* Juste après la validation : c'est là qu'on se demande « et le
           reste, il y en a assez ? ». Le rapport ne dit que ce qu'il faut
           produire ; les quantités sont à un appui. */}
       <Link
         href="/stocks"
-        className={buttonVariants({ variant: 'outline', className: 'mt-8 h-12 w-full font-bold' })}
+        className={buttonVariants({ variant: 'outline', className: 'mt-2 h-12 w-full font-bold' })}
       >
         Voir toutes les quantités
       </Link>

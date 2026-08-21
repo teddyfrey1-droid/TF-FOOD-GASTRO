@@ -87,7 +87,7 @@ export default async function CountPage({ params }: { params: Promise<{ session:
 
   const { data: countSession } = await supabase
     .from('count_sessions')
-    .select('id, status')
+    .select('id, status, note')
     .eq('id', opened.sessionId)
     .maybeSingle();
 
@@ -158,7 +158,8 @@ export default async function CountPage({ params }: { params: Promise<{ session:
         title={config.title}
         products={products}
         initial={initial}
-        reportHref={`/comptage/${session}/rapport`}
+        noteInitiale={countSession?.note ?? null}
+      reportHref={`/comptage/${session}/rapport`}
       />
     </main>
   );

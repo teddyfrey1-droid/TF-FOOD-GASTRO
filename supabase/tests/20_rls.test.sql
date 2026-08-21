@@ -1509,4 +1509,126 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 23. ROUVRIR UN COMPTAGE VALIDÉ ---'
+
+do $$
+declare v_hier uuid; v_jour uuid;
+begin
+  delete from public.count_sessions where date in (current_date, current_date - 2);
+
+  insert into public.count_sessions (date, session, user_id, status, submitted_at)
+  values (current_date, 'morning', 'a0000000-0000-0000-0000-00000000000e', 'submitted', now())
+  returning id into v_jour;
+
+  insert into public.count_sessions (date, session, user_id, status, submitted_at)
+  values (current_date - 2, 'morning', 'a0000000-0000-0000-0000-00000000000e',
+          'submitted', now() - interval '2 days')
+  returning id into v_hier;
+
+  perform set_config('mep.rouvrir_jour', v_jour::text, false);
+  perform set_config('mep.rouvrir_hier', v_hier::text, false);
+end;
+$$;
+
+-- Une journée passée ne se rouvre pas : des décisions ont été prises
+-- dessus, et le rapport de production a déjà servi.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('Une journée passée ne se rouvre pas, même pour le directeur',
+  'select public.mep_rouvrir_comptage(current_setting(''mep.rouvrir_hier'')::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Un collègue qui n'a pas validé ce comptage n'a pas à le rouvrir.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000c2';
+select pg_temp.check_denied('Un autre salarié ne rouvre pas le comptage',
+  'select public.mep_rouvrir_comptage(current_setting(''mep.rouvrir_jour'')::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Son auteur, oui.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select public.mep_rouvrir_comptage(current_setting('mep.rouvrir_jour')::uuid);
+reset role;
+reset "request.jwt.claim.sub";
+
+select pg_temp.check_equal('Le comptage est repassé en cours',
+  (select status::text from public.count_sessions
+   where id = current_setting('mep.rouvrir_jour')::uuid),
+  'draft');
+
+select pg_temp.check_equal('...et son horodatage de validation est effacé',
+  (select submitted_at is null from public.count_sessions
+   where id = current_setting('mep.rouvrir_jour')::uuid),
+  true);
+
+-- Rouvrir deux fois n'a pas de sens : le second appel doit le dire.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Un comptage déjà en cours ne se rouvre pas',
+  'select public.mep_rouvrir_comptage(current_setting(''mep.rouvrir_jour'')::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
+\echo '--- 24. SUPPRIMER UN PRODUIT ---'
+
+do $$
+declare v_cat uuid; v_neuf uuid; v_compte uuid; v_sess uuid;
+begin
+  select id into v_cat from public.product_categories order by sort_order limit 1;
+
+  insert into public.products (name, category_id, unit, base_qty, priority, is_active)
+  values ('Erreur de saisie', v_cat, 'piece', 10, 3, true)
+  returning id into v_neuf;
+
+  insert into public.products (name, category_id, unit, base_qty, priority, is_active)
+  values ('Produit déjà compté', v_cat, 'piece', 10, 3, true)
+  returning id into v_compte;
+
+  insert into public.count_sessions (date, session, user_id, status)
+  values (current_date, 'afternoon', 'a0000000-0000-0000-0000-00000000000e', 'draft')
+  returning id into v_sess;
+
+  insert into public.count_lines (session_id, product_id, qty_saladbar, qty_fridge)
+  values (v_sess, v_compte, 2, 0);
+
+  perform set_config('mep.produit_neuf', v_neuf::text, false);
+  perform set_config('mep.produit_compte', v_compte::text, false);
+end;
+$$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Un salarié ne supprime aucun produit',
+  'select public.mep_supprimer_produit(current_setting(''mep.produit_neuf'')::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+
+-- Le cœur de la règle : un produit qui a servi ne se supprime pas, sinon
+-- les comptages passés perdent leur libellé.
+select pg_temp.check_denied('Un produit déjà compté ne se supprime pas',
+  'select public.mep_supprimer_produit(current_setting(''mep.produit_compte'')::uuid)');
+
+select public.mep_supprimer_produit(current_setting('mep.produit_neuf')::uuid);
+
+reset role;
+reset "request.jwt.claim.sub";
+
+select pg_temp.check_equal('Un produit jamais compté disparaît vraiment',
+  (select count(*)::int from public.products
+   where id = current_setting('mep.produit_neuf')::uuid),
+  0);
+
+select pg_temp.check_equal('...et celui qui avait servi est toujours là',
+  (select count(*)::int from public.products
+   where id = current_setting('mep.produit_compte')::uuid),
+  1);
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

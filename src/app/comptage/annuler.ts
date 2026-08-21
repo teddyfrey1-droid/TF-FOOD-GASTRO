@@ -20,3 +20,21 @@ export async function annulerComptage(sessionId: string): Promise<{ error?: stri
   revalidatePath('/comptage');
   return {};
 }
+
+/**
+ * Remet un comptage validé du jour en cours de saisie.
+ *
+ * La validation suivante recalculera entièrement la liste de relance :
+ * `mep_submit_count` efface et reconstruit les tâches. Aucun relevé
+ * n'est perdu, seul l'état change.
+ */
+export async function rouvrirComptage(sessionId: string): Promise<{ error?: string }> {
+  const supabase = await createClient();
+  const { error } = await supabase.rpc('mep_rouvrir_comptage', { p_session_id: sessionId });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/');
+  revalidatePath('/comptage');
+  return {};
+}

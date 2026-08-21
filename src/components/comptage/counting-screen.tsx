@@ -2,12 +2,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, Check, CloudOff, LayoutGrid, List, Loader2, Search } from 'lucide-react';
+import {
+  ArrowDown,
+  Check,
+  CloudOff,
+  LayoutGrid,
+  List,
+  Loader2,
+  MessageSquarePlus,
+  Search,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
-import { saveCountLine, saveCountLines, submitCount } from '@/app/comptage/actions';
+import { enregistrerNote, saveCountLine, saveCountLines, submitCount } from '@/app/comptage/actions';
 import { clearSession, dequeue, enqueue, listPending, pendingKey } from '@/lib/offline/queue';
 import {
   ProductRow,
@@ -51,12 +60,15 @@ export function CountingScreen({
   products,
   initial,
   reportHref,
+  noteInitiale,
 }: {
   sessionId: string;
   title: string;
   products: CountProduct[];
   initial: Record<string, CountState>;
   reportHref: string;
+  /** Note déjà saisie sur ce comptage, s'il en existe une. */
+  noteInitiale?: string | null;
 }) {
   const router = useRouter();
   const [state, setState] = useState<Record<string, CountState>>(initial);
@@ -70,9 +82,30 @@ export function CountingScreen({
   const [pendingCount, setPendingCount] = useState(0);
   const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [note, setNote] = useState(noteInitiale ?? '');
+  const [noteOuverte, setNoteOuverte] = useState(Boolean(noteInitiale));
   const [error, setError] = useState<string | null>(null);
 
   const timers = useRef(new Map<string, ReturnType<typeof setTimeout>>());
+  const minuterieNote = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  /**
+   * La note part avec un délai, comme les quantités.
+   *
+   * Sauver à chaque frappe ferait un aller-retour par lettre ; ne sauver
+   * qu'à la validation perdrait le texte si l'employé retourne corriger
+   * un produit avant de valider.
+   */
+  const enregistrerLaNote = useCallback(
+    (texte: string) => {
+      setNote(texte);
+      if (minuterieNote.current) clearTimeout(minuterieNote.current);
+      minuterieNote.current = setTimeout(() => {
+        void enregistrerNote(sessionId, texte);
+      }, 800);
+    },
+    [sessionId],
+  );
 
   const refreshPending = useCallback(async () => {
     setPendingCount((await listPending(sessionId)).length);
@@ -452,6 +485,11 @@ export function CountingScreen({
       return;
     }
 
+    // La minuterie de la note peut encore courir : on l'écrit d'abord,
+    // sinon les derniers mots tapés ne partiraient jamais.
+    if (minuterieNote.current) clearTimeout(minuterieNote.current);
+    await enregistrerNote(sessionId, note);
+
     const result = await submitCount(sessionId);
     if (result.error) {
       setError(result.error);
@@ -630,7 +668,7 @@ export function CountingScreen({
 
               <div
                 className={
-                  layout === 'grille' ? 'grid grid-cols-2 gap-2.5' : 'space-y-2.5'
+                  layout === 'grille' ? 'grid grid-cols-2 gap-2' : 'space-y-2'
                 }
               >
                 {items.map((product) => (
@@ -656,6 +694,40 @@ export function CountingScreen({
               {error}
             </p>
           ) : null}
+
+          {/* Un mot sur la journée : livraison en retard, frigo en panne,
+              bac oublié au passe. Sans endroit où l'écrire, l'information
+              part avec la personne qui l'a vue. Replié tant qu'on n'en a
+              pas besoin — la barre du bas doit rester une barre. */}
+          {noteOuverte ? (
+            <div className="relative">
+              <textarea
+                value={note}
+                onChange={(evenement) => enregistrerLaNote(evenement.target.value)}
+                maxLength={500}
+                rows={2}
+                autoFocus
+                placeholder="Un mot sur ce comptage ? (livraison, panne, bac au passe…)"
+                className="border-input bg-background focus-visible:ring-ring w-full resize-none rounded-2xl border px-4 py-3 text-sm font-medium focus-visible:ring-2 focus-visible:outline-none"
+              />
+              <button
+                type="button"
+                onClick={() => setNoteOuverte(false)}
+                className="text-muted-foreground hover:text-foreground absolute top-2 right-2 rounded-lg px-2 py-1 text-xs font-bold"
+              >
+                Replier
+              </button>
+            </div>
+          ) : (
+            <button
+              type="button"
+              onClick={() => setNoteOuverte(true)}
+              className="text-muted-foreground hover:text-foreground flex w-full items-center justify-center gap-1.5 rounded-xl py-1.5 text-xs font-bold transition-colors"
+            >
+              <MessageSquarePlus className="size-3.5" strokeWidth={2.5} />
+              {note ? 'Note ajoutée — modifier' : 'Ajouter une note'}
+            </button>
+          )}
 
           {zone === 'saladbar' &&
           zoneProgress.saladbar.counted === zoneProgress.saladbar.total &&

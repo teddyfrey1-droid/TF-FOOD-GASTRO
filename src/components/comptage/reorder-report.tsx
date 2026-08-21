@@ -1,12 +1,13 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { Check, Printer } from 'lucide-react';
+import { Check, ChevronDown, Printer } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { unitLabel, type ProductUnit } from '@/lib/mep';
+import { formatQty } from '@/lib/format';
 import { VignetteProduit } from '@/components/produits/vignette-produit';
 import { toggleProductionTask } from '@/app/comptage/actions';
 
@@ -43,14 +44,23 @@ function prioriteDe(niveau: number) {
   return PRIORITE[niveau] ?? PRIORITE[5];
 }
 
+export interface ProduitSuffisant {
+  productId: string;
+  productName: string;
+  imageUrl: string | null;
+  qtyTotal: number;
+  /** « surplus » ou « surplus_fort » : il y en a plus que nécessaire. */
+  etat: string;
+}
+
 export function ReorderReport({
   title,
   tasks,
-  sufficientCount,
+  suffisants,
 }: {
   title: string;
   tasks: ReportTask[];
-  sufficientCount: number;
+  suffisants: ProduitSuffisant[];
 }) {
   const [done, setDone] = useState<Record<string, boolean>>(() =>
     Object.fromEntries(tasks.map((task) => [task.taskId, task.isDone])),
@@ -101,7 +111,7 @@ export function ReorderReport({
         <h1 className="mt-5 text-3xl font-black tracking-tight">Tout est au niveau.</h1>
         <p className="text-muted-foreground mt-2 font-medium">Rien à relancer.</p>
         <p className="text-muted-foreground mt-6 text-sm">
-          {title} validé — {sufficientCount} produit{sufficientCount > 1 ? 's' : ''} au-dessus de
+          {title} validé — {suffisants.length} produit{suffisants.length > 1 ? 's' : ''} au-dessus de
           leur minimum.
         </p>
       </div>
@@ -249,22 +259,58 @@ export function ReorderReport({
         </section>
       ))}
 
-      {sufficientCount > 0 ? (
+      {suffisants.length > 0 ? (
         <div className="print:hidden">
           <button
             type="button"
             onClick={() => setShowSufficient((current) => !current)}
-            className="text-muted-foreground hover:text-foreground w-full py-3 text-left text-sm font-semibold"
+            aria-expanded={showSufficient}
+            className="text-muted-foreground hover:text-foreground flex w-full items-center gap-1.5 py-3 text-left text-sm font-semibold"
           >
-            {showSufficient ? '▾' : '▸'} Stock suffisant ({sufficientCount} produit
-            {sufficientCount > 1 ? 's' : ''})
+            <ChevronDown
+              className={cn('size-4 transition-transform', showSufficient && 'rotate-180')}
+              strokeWidth={2.6}
+            />
+            Stock suffisant ({suffisants.length} produit{suffisants.length > 1 ? 's' : ''})
           </button>
 
+          {/* On montrait une phrase, pas les produits. Or c'est
+              justement là qu'on vérifie « il en reste combien ? » sans
+              redescendre au frigo. Photo, nom, quantité relevée. */}
           {showSufficient ? (
-            <p className="bg-muted/60 text-muted-foreground rounded-2xl p-4 text-sm">
-              Ces produits sont au-dessus de leur minimum de relance : il n&apos;y a rien à
-              produire.
-            </p>
+            <ul className="grid grid-cols-2 gap-2">
+              {suffisants.map((produit) => (
+                <li
+                  key={produit.productId}
+                  className={cn(
+                    'bg-card flex items-center gap-2.5 rounded-2xl border p-2.5',
+                    produit.etat === 'surplus_fort' && 'border-destructive/30 bg-destructive/[0.05]',
+                    produit.etat === 'surplus' && 'border-alert-border bg-alert/40',
+                  )}
+                >
+                  <VignetteProduit
+                    name={produit.productName}
+                    imageUrl={produit.imageUrl}
+                    taille="sm"
+                    className="shrink-0"
+                  />
+
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate text-[13px] leading-tight font-bold">
+                      {produit.productName}
+                    </span>
+                    <span className="text-muted-foreground mt-0.5 block text-[11px] font-black tabular-nums">
+                      {formatQty(produit.qtyTotal)} en stock
+                      {produit.etat === 'surplus_fort'
+                        ? ' · beaucoup trop'
+                        : produit.etat === 'surplus'
+                          ? ' · surplus'
+                          : ''}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
           ) : null}
         </div>
       ) : null}

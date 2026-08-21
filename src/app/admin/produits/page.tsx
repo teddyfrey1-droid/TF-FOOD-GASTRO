@@ -15,9 +15,10 @@ export default async function ProductsPage() {
           Produits <span className="text-muted-foreground">({products.filter((p) => p.is_active).length})</span>
         </h1>
         <p className="text-muted-foreground mt-1.5 text-sm">
-          Touchez un nom pour le corriger, l&apos;icône image pour mettre une photo, et
-          « Haut / Bas » pour dire où le produit est rangé. Désactiver un produit ne le supprime
-          jamais : l&apos;historique doit rester lisible.
+          Touchez une tuile pour ne voir qu&apos;une zone, un nom pour le corriger, «&nbsp;Haut /
+          Bas&nbsp;» pour dire où le produit est rangé. L&apos;interrupteur le retire des
+          comptages sans toucher au passé ; la corbeille ne s&apos;ouvre que sur un produit
+          jamais compté.
         </p>
       </header>
 

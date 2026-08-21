@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '2.2.0';
+export const VERSION = '2.3.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,17 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '2.3.0',
+    date: '2026-08-24',
+    points: [
+      '« Stock suffisant » montre enfin les produits, avec photo et quantité relevée.',
+      'Une note peut être laissée sur le comptage, et un comptage validé se rouvre d’un appui.',
+      'Page Produits : trois tuiles disent combien de produits sont comptés en haut, en bas, ou nulle part — et filtrent la liste.',
+      'Un produit jamais compté peut être supprimé pour de bon.',
+      'Les vignettes du comptage sont plus compactes : plus de produits par écran.',
+    ],
+  },
   {
     version: '2.2.0',
     date: '2026-08-23',

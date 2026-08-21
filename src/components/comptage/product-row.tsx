@@ -110,7 +110,7 @@ function ProductRowImpl({
         name={product.name}
         categoryName={product.categoryName}
         imageUrl={product.imageUrl}
-        className={cn(grille && 'aspect-square size-full rounded-2xl text-4xl')}
+        className={cn(grille && 'aspect-square size-full rounded-xl text-3xl')}
       />
       {done ? (
         <span className="bg-primary text-primary-foreground absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full">
@@ -130,12 +130,12 @@ function ProductRowImpl({
       <p
         className={cn(
           'font-black',
-          grille ? 'line-clamp-2 text-sm leading-tight' : 'text-[17px] leading-tight',
+          grille ? 'line-clamp-2 text-[13px] leading-tight' : 'text-[15px] leading-tight',
         )}
       >
         {product.name}
       </p>
-      <p className="text-muted-foreground mt-0.5 text-xs font-semibold">
+      <p className="text-muted-foreground mt-0.5 text-[11px] font-semibold">
         {!zoneCounted && !misDeCote ? 'Touchez la photo pour +1 · ' : ''}
         {product.unit === 'piece' ? 'pièces' : 'gastros'}
         {inBothZones && !grille ? ` · ${otherLabel} : ${otherValue}` : ''}
@@ -150,14 +150,14 @@ function ProductRowImpl({
       // `scroll-mt` réserve la place de l'en-tête collant : sans elle, le
       // saut vers un produit manquant l'amènerait sous la barre de recherche.
       className={cn(
-        'scroll-mt-56 rounded-3xl border p-3 transition-colors',
+        'scroll-mt-52 rounded-2xl border p-2.5 transition-colors',
         misDeCote && 'bg-card opacity-60',
         !misDeCote && done && 'border-primary/50 bg-primary/[0.05]',
         !misDeCote && !done && 'bg-card',
       )}
     >
       {grille ? (
-        <div className="space-y-2">
+        <div className="space-y-1.5">
           {misDeCote ? (
             vignette
           ) : (
@@ -173,7 +173,7 @@ function ProductRowImpl({
           <div className="min-w-0">{titre}</div>
         </div>
       ) : (
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
           {misDeCote ? (
             <span className="shrink-0">{vignette}</span>
           ) : (
@@ -244,7 +244,7 @@ function ProductRowImpl({
             placeholder={
               demande === 'report' ? 'Pourquoi plus tard ?' : 'Pourquoi ? (non reçu, hors carte…)'
             }
-            className="h-11 rounded-xl text-base"
+            className="h-10 rounded-xl text-sm"
           />
           <div className="flex gap-2">
             <Button
