@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { Check, Trash2 } from 'lucide-react';
+import { Check, CircleOff, Salad, Snowflake, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -130,9 +130,9 @@ export function ProductsManager({
           paie un dimanche midi. */}
       <div className="grid grid-cols-3 gap-2.5">
         {[
-          { cle: 'saladbar' as const, emoji: '🥗', titre: 'Saladbar', n: compteurs.saladbar },
-          { cle: 'fridge' as const, emoji: '❄️', titre: 'Frigo du bas', n: compteurs.fridge },
-          { cle: 'aucune' as const, emoji: '⚠️', titre: 'Nulle part', n: compteurs.aucune },
+          { cle: 'saladbar' as const, Icone: Salad, titre: 'Saladbar', n: compteurs.saladbar },
+          { cle: 'fridge' as const, Icone: Snowflake, titre: 'Frigo du bas', n: compteurs.fridge },
+          { cle: 'aucune' as const, Icone: CircleOff, titre: 'Nulle part', n: compteurs.aucune },
         ].map((tuile) => {
           const actif = filtreZone === tuile.cle;
           const alerte = tuile.cle === 'aucune' && tuile.n > 0;
@@ -152,8 +152,19 @@ export function ProductsManager({
                     : 'bg-card hover:bg-muted/50',
               )}
             >
-              <span aria-hidden className="text-lg leading-none">
-                {tuile.emoji}
+              {/* Icône de trait, pas emoji : trois pastilles de couleurs
+                  différentes se lisaient comme un décor, et l'œil
+                  s'arrêtait dessus au lieu du nombre. */}
+              <span
+                aria-hidden
+                className={cn(
+                  'flex size-7 items-center justify-center rounded-lg',
+                  alerte && !actif
+                    ? 'bg-alert-foreground/15 text-alert-foreground'
+                    : 'bg-muted text-foreground/70',
+                )}
+              >
+                <tuile.Icone className="size-4" strokeWidth={2.2} />
               </span>
               <span className="mt-1 block text-2xl leading-none font-black tabular-nums">
                 {tuile.n}

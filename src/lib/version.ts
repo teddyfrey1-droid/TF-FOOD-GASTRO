@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '2.4.0';
+export const VERSION = '2.4.1';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,13 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '2.4.1',
+    date: '2026-08-24',
+    points: [
+      'Les tuiles de zone de la page Produits passent en icônes grises, sans emojis colorés.',
+    ],
+  },
   {
     version: '2.4.0',
     date: '2026-08-24',
