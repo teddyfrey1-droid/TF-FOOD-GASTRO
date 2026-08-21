@@ -6,7 +6,6 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatEuro, formatQty } from '@/lib/format';
 import { ceilTo } from '@/lib/mep';
-import { PastilleEtat } from '@/components/rangee-menu';
 import { cn } from '@/lib/utils';
 import { runSimulation, type SimulationResult } from '@/app/admin/simulateur/simulate';
 
@@ -192,81 +191,80 @@ export function TargetSimulator({ families }: { families: FamilyInfo[] }) {
         />
       </div>
 
-      <ul className="space-y-2.5">
-        {lignes.map((ligne) => (
-          <li key={ligne.productId}>
-            <Card
-              className={cn(
-                'rounded-3xl p-4',
-                ligne.relance && 'border-alert-foreground/25 bg-alert/40',
-              )}
-            >
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <p className="text-[17px] leading-tight font-black">{ligne.productName}</p>
-                  <p className="text-muted-foreground mt-0.5 truncate text-xs font-semibold">
-                    {ligne.categoryName} · {ligne.unit === 'piece' ? 'pièce' : 'gastro'} · priorité{' '}
-                    {ligne.priority}
-                  </p>
-                </div>
+      {/* Une ligne par produit, sous un en-tête de colonnes.
 
-                {ligne.stock === null ? null : ligne.relance ? (
-                  <PastilleEtat
-                    texte={`Relancer ${formatQty(ligne.aProduire)}`}
-                    ton="alerte"
-                    taille="lg"
-                  />
-                ) : (
-                  <PastilleEtat texte="Rien à faire" ton="fait" taille="lg" />
+          Chaque produit occupait une carte de 140 px avec ses intitulés
+          répétés — il fallait dérouler trente écrans pour voir la carte
+          entière. Les intitulés montent une fois en tête de liste, les
+          lignes tombent à 44 px : on embrasse tout d'un coup d'œil, ce
+          qui est précisément l'usage du simulateur. */}
+      {lignes.length > 0 ? (
+        <Card className="overflow-hidden rounded-3xl p-0">
+          <div className="bg-muted/60 text-muted-foreground sticky top-0 z-10 flex items-center gap-2 border-b px-3 py-2 text-[10px] font-black tracking-wide uppercase backdrop-blur">
+            <span className="min-w-0 flex-1">Produit</span>
+            <span className="w-11 text-right">Cible</span>
+            <span className="w-11 text-right">Min</span>
+            <span className="w-16 text-center">Stock</span>
+            <span className="w-20 text-right">Relance</span>
+          </div>
+
+          <ul className="divide-y">
+            {lignes.map((ligne) => (
+              <li
+                key={ligne.productId}
+                className={cn(
+                  'flex items-center gap-2 px-3 py-1.5',
+                  ligne.relance && 'bg-alert/40',
                 )}
-              </div>
+              >
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-[13px] leading-tight font-bold">
+                    {ligne.productName}
+                  </span>
+                  <span className="text-muted-foreground block truncate text-[10px] font-semibold">
+                    {ligne.categoryName} · {ligne.unit === 'piece' ? 'pièce' : 'gastro'} · P
+                    {ligne.priority}
+                  </span>
+                </span>
 
-              <div className="mt-4 grid grid-cols-3 items-end gap-3">
-                <div>
-                  <p className="text-muted-foreground text-[11px] font-bold tracking-wide uppercase">
-                    Cible
-                  </p>
-                  <p className="text-3xl leading-none font-black tabular-nums">
-                    {formatQty(ligne.target)}
-                  </p>
-                </div>
+                <span className="w-11 text-right text-[15px] font-black tabular-nums">
+                  {formatQty(ligne.target)}
+                </span>
+                <span className="text-muted-foreground w-11 text-right text-[15px] font-bold tabular-nums">
+                  {formatQty(ligne.minimum)}
+                </span>
 
-                <div>
-                  <p className="text-muted-foreground text-[11px] font-bold tracking-wide uppercase">
-                    Minimum
-                  </p>
-                  <p className="text-muted-foreground text-3xl leading-none font-black tabular-nums">
-                    {formatQty(ligne.minimum)}
-                  </p>
-                </div>
+                <Input
+                  aria-label={`Stock de ${ligne.productName}`}
+                  value={stocks[ligne.productId] ?? ''}
+                  inputMode="decimal"
+                  placeholder="—"
+                  onFocus={(event) => event.target.select()}
+                  onChange={(event) =>
+                    setStocks((actuel) => ({
+                      ...actuel,
+                      [ligne.productId]: event.target.value,
+                    }))
+                  }
+                  className="h-9 w-16 rounded-lg px-1 text-center text-[15px]! font-black tabular-nums"
+                />
 
-                <div>
-                  <label
-                    htmlFor={`stock-${ligne.productId}`}
-                    className="text-muted-foreground text-[11px] font-bold tracking-wide uppercase"
-                  >
-                    Stock
-                  </label>
-                  <Input
-                    id={`stock-${ligne.productId}`}
-                    value={stocks[ligne.productId] ?? ''}
-                    inputMode="decimal"
-                    placeholder="—"
-                    onFocus={(event) => event.target.select()}
-                    onChange={(event) =>
-                      setStocks((actuel) => ({
-                        ...actuel,
-                        [ligne.productId]: event.target.value,
-                      }))
-                    }
-                    className="mt-1 h-12 rounded-xl text-center text-2xl! font-black tabular-nums"
-                  />
-                </div>
-              </div>
-            </Card>
-          </li>
-        ))}
-      </ul>
+                <span className="w-20 text-right">
+                  {ligne.stock === null ? (
+                    <span className="text-muted-foreground/50 text-[13px] font-bold">—</span>
+                  ) : ligne.relance ? (
+                    <span className="bg-alert-foreground/15 text-alert-foreground inline-block rounded-full px-2 py-0.5 text-[13px] font-black tabular-nums">
+                      +{formatQty(ligne.aProduire)}
+                    </span>
+                  ) : (
+                    <span className="text-primary text-[13px] font-black">OK</span>
+                  )}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
 
       {lignes.length === 0 && result !== null && !result.error ? (
         <p className="text-muted-foreground rounded-3xl border border-dashed p-6 text-center text-sm font-semibold">

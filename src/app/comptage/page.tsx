@@ -1,13 +1,11 @@
-import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
 import { requireUser } from '@/lib/auth';
 import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { todayInParis } from '@/lib/format';
 import { BottomTabs } from '@/components/bottom-tabs';
 import { AvatarCompte } from '@/components/avatar-compte';
-import { PastilleEtat } from '@/components/rangee-menu';
 import { SessionCard } from '@/components/session-card';
+import { JourneePassee } from '@/components/comptage/journee-passee';
 import { slugForKind } from './slugs';
 import type { SessionKind } from '@/lib/supabase/database.types';
 
@@ -19,12 +17,6 @@ const JOUR = new Intl.DateTimeFormat('fr-FR', {
   weekday: 'long',
   day: 'numeric',
   month: 'long',
-  timeZone: 'Europe/Paris',
-});
-
-const HEURE = new Intl.DateTimeFormat('fr-FR', {
-  hour: '2-digit',
-  minute: '2-digit',
   timeZone: 'Europe/Paris',
 });
 
@@ -123,57 +115,27 @@ export default async function PageComptages() {
               : 'L’historique des journées passées est réservé à l’encadrement. Les comptages du jour restent visibles ci-dessus.'}
           </p>
         ) : (
-          <ul className="space-y-2.5">
-            {[...parJour.entries()].map(([date, duJourLa]) => {
-              const validees = duJourLa.filter((s) => s.status === 'submitted').length;
-              const restant = duJourLa.reduce(
-                (total, s) => total + tachesDe(s.id).filter((t) => !t.is_done).length,
-                0,
-              );
-
-              return (
-                <li key={date}>
-                  <div className="bg-card rounded-3xl border p-4">
-                    <div className="flex items-center justify-between gap-3">
-                      <p className="text-[17px] font-black capitalize">
-                        {JOUR.format(new Date(`${date}T12:00:00Z`))}
-                      </p>
-                      <PastilleEtat
-                        texte={validees === 2 ? '✓ Complet' : `${validees}/2`}
-                        ton={validees === 2 ? 'fait' : 'alerte'}
-                      />
-                    </div>
-
-                    <div className="mt-3 space-y-1">
-                      {duJourLa.map((s) => (
-                        <Link
-                          key={s.id}
-                          href={`/comptage/${slugForKind(s.session)}/rapport?jour=${date}`}
-                          className="hover:bg-muted/60 -mx-2 flex items-center gap-2 rounded-xl px-2 py-2 transition-colors"
-                        >
-                          <span className="min-w-0 flex-1 text-sm font-bold">
-                            {s.session === 'morning' ? 'Matin' : 'Après-midi'}
-                            <span className="text-muted-foreground ml-2 font-semibold">
-                              {s.submitted_at
-                                ? `${HEURE.format(new Date(s.submitted_at))} · ${nomPar.get(s.user_id) ?? '—'}`
-                                : 'non validé'}
-                            </span>
-                          </span>
-                          <ChevronRight className="text-muted-foreground/60 size-4 shrink-0" />
-                        </Link>
-                      ))}
-                    </div>
-
-                    {restant > 0 ? (
-                      <p className="text-muted-foreground mt-2 text-xs font-bold">
-                        {restant} relance{restant > 1 ? 's' : ''} jamais cochée
-                        {restant > 1 ? 's' : ''}
-                      </p>
-                    ) : null}
-                  </div>
-                </li>
-              );
-            })}
+          <ul className="space-y-2">
+            {[...parJour.entries()].map(([date, duJourLa]) => (
+              <li key={date}>
+                <JourneePassee
+                  dateLisible={JOUR.format(new Date(`${date}T12:00:00Z`))}
+                  validees={duJourLa.filter((s) => s.status === 'submitted').length}
+                  relancesEnAttente={duJourLa.reduce(
+                    (total, s) => total + tachesDe(s.id).filter((t) => !t.is_done).length,
+                    0,
+                  )}
+                  comptages={duJourLa.map((s) => ({
+                    id: s.id,
+                    session: s.session as 'morning' | 'afternoon',
+                    status: s.status,
+                    submittedAt: s.submitted_at,
+                    auteur: nomPar.get(s.user_id) ?? null,
+                    href: `/comptage/${slugForKind(s.session)}/rapport?jour=${date}`,
+                  }))}
+                />
+              </li>
+            ))}
           </ul>
         )}
       </main>

@@ -289,25 +289,55 @@ export function CountingScreen({
     [state, zone],
   );
 
-  const visible = useMemo(() => {
-    const needle = search
-      .trim()
-      .toLowerCase()
-      .normalize('NFD')
-      .replace(/[̀-ͯ]/g, '');
-    return products.filter((product) => {
-      // Un produit absent de la zone en cours n'a pas à s'y afficher.
-      if (zone === 'saladbar' && !product.inSaladbar) return false;
-      if (zone === 'fridge' && !product.inFridge) return false;
-      if (activeCategory && product.categoryName !== activeCategory) return false;
-      if (!needle) return true;
-      return product.name
+  const needle = useMemo(
+    () =>
+      search
+        .trim()
+        .toLowerCase()
+        .normalize('NFD')
+        .replace(/[̀-ͯ]/g, ''),
+    [search],
+  );
+
+  const correspond = useCallback(
+    (product: CountProduct) =>
+      product.name
         .toLowerCase()
         .normalize('NFD')
         .replace(/[̀-ͯ]/g, '')
-        .includes(needle);
-    });
-  }, [products, search, activeCategory, zone]);
+        .includes(needle),
+    [needle],
+  );
+
+  const visible = useMemo(
+    () =>
+      products.filter((product) => {
+        // Un produit absent de la zone en cours n'a pas à s'y afficher.
+        if (zone === 'saladbar' && !product.inSaladbar) return false;
+        if (zone === 'fridge' && !product.inFridge) return false;
+        if (activeCategory && product.categoryName !== activeCategory) return false;
+        return needle ? correspond(product) : true;
+      }),
+    [products, needle, correspond, activeCategory, zone],
+  );
+
+  /**
+   * Ce que la recherche trouve DANS L'AUTRE ZONE.
+   *
+   * Chercher « edamame » depuis le saladbar alors que le produit ne vit
+   * qu'au frigo répondait « aucun produit ne correspond » — l'employé en
+   * concluait qu'il n'existait pas. On compte donc aussi les résultats
+   * d'en face, pour proposer d'y aller au lieu de nier.
+   */
+  const ailleurs = useMemo(() => {
+    if (!needle) return 0;
+    return products.filter(
+      (product) =>
+        correspond(product) && (zone === 'saladbar' ? product.inFridge : product.inSaladbar),
+    ).length;
+  }, [products, needle, correspond, zone]);
+
+  const autreZone: CountZone = zone === 'saladbar' ? 'fridge' : 'saladbar';
 
   /**
    * Avancement de CHAQUE zone, séparément.
@@ -549,9 +579,32 @@ export function CountingScreen({
 
       <div className="px-5">
         {grouped.length === 0 ? (
-          <p className="text-muted-foreground py-12 text-center text-sm">
-            Aucun produit ne correspond à « {search} ».
-          </p>
+          <div className="py-10 text-center">
+            <p className="text-muted-foreground text-sm font-semibold">
+              Aucun produit « {search} » au {ZONE_LABELS[zone].toLowerCase()}.
+            </p>
+            {ailleurs > 0 ? (
+              <button
+                type="button"
+                onClick={() => setZone(autreZone)}
+                className="bg-primary text-primary-foreground mt-3 inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-black"
+              >
+                {ailleurs} résultat{ailleurs > 1 ? 's' : ''} au {ZONE_LABELS[autreZone].toLowerCase()}
+              </button>
+            ) : null}
+          </div>
+        ) : ailleurs > 0 ? (
+          /* Des résultats existent aussi en face : on le dit sans imposer
+             le changement de zone, l'employé compte peut-être encore ici. */
+          <button
+            type="button"
+            onClick={() => setZone(autreZone)}
+            className="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition-colors"
+          >
+            <Search className="size-3.5" />
+            {ailleurs} autre{ailleurs > 1 ? 's' : ''} résultat{ailleurs > 1 ? 's' : ''} au{' '}
+            {ZONE_LABELS[autreZone].toLowerCase()}
+          </button>
         ) : null}
 
         {grouped.map(([category, items]) => {
