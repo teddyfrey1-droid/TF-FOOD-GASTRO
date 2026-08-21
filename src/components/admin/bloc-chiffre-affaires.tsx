@@ -29,56 +29,57 @@ export function BlocChiffreAffaires({
 
   return (
     <section className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-      {/* Vert franc mais posé : le CA reste le chiffre le plus important de
-          l'écran sans en occuper la moitié. */}
-      {/* Serré : mêmes corps de texte, moins d'air entre eux. La carte
-          tient dans moins de hauteur sans rien perdre en lisibilité. */}
-      <Card className="bg-primary/10 border-primary/25 rounded-3xl px-5 py-3.5">
+      {/* Vert franc mais posé : le CA reste le chiffre le plus important
+          de l'écran sans en occuper la moitié.
+
+          Serré : deux filets et cinq espacements différents découpaient la
+          carte en tranches et la faisaient paraître vide. Un seul filet,
+          des marges régulières — les corps de texte ne bougent pas, c'est
+          l'air entre eux qui se resserre. */}
+      <Card className="bg-primary/10 border-primary/25 rounded-3xl px-5 py-3">
         <p className="text-primary text-sm font-black tracking-wide uppercase">
           CA prévisionnel du jour
         </p>
+
         {/* Une respiration très lente plutôt qu'un clignotement : le
             chiffre attire l'œil au premier coup d'œil sans devenir
             fatigant, et l'animation se coupe d'elle-même pour qui a
             demandé moins de mouvement dans son système. */}
-        <p className="text-primary animation-respire mt-1 text-[3.1rem] leading-none font-black tracking-tight tabular-nums">
+        <p className="text-primary animation-respire text-[3.1rem] leading-[1.05] font-black tracking-tight tabular-nums">
           {formatEuro(forecast)}
         </p>
 
         {forecast === null ? (
-          <p className="text-muted-foreground mt-2.5 text-[13px] leading-snug">
+          <p className="text-muted-foreground mt-1.5 text-[13px] leading-snug">
             Aucun CA de référence pour l&apos;an dernier à cette date : la production ne peut pas
             être calculée aujourd&apos;hui.
           </p>
         ) : (
-          /* D'où vient le chiffre, en gras et détaché : c'est ce qui permet
-             de juger si la prévision est crédible avant de lancer la
-             production. Le montant est le CA RÉELLEMENT ENCAISSÉ l'an
-             dernier, avant majoration — sans lui, le taux de croissance ne
-             se contrôle pas. */
-          <div className="border-primary/20 mt-2.5 border-t pt-2.5">
-            {/* Surligné : c'est le point de comparaison, et il doit se
-                repérer sans être cherché. */}
-            <p className="bg-foreground/10 text-foreground inline-block rounded-md px-2 py-0.5 text-[13px] font-black tracking-wide uppercase">
-              L&apos;an dernier, avant majoration
-            </p>
-            {/* Dans une pastille, plus gros que l'intitulé : le nombre
-                prime sur son étiquette. */}
-            <p className="mt-1">
-              <span className="bg-background ring-border inline-block rounded-full px-3.5 py-1 text-[19px] leading-snug font-black ring-1">
-                {anDernier ? formatEuro(anDernier.revenueHt) : '—'}
-                <span className="text-muted-foreground ml-1.5 text-[16px] font-bold">
-                  {anDernier
-                    ? `le ${formatDateLong(anDernier.jour).replace(/ \d{4}$/, '')}`
-                    : 'aucune journée comparable'}
-                </span>
-              </span>
-            </p>
+          /* D'où vient le chiffre : c'est ce qui permet de juger si la
+             prévision est crédible avant de lancer la production. Le
+             montant est le CA RÉELLEMENT ENCAISSÉ l'an dernier, avant
+             majoration — sans lui, le taux de croissance ne se contrôle
+             pas.
+
+             Intitulé et montant sur la même ligne : empilés, ils
+             ajoutaient une rupture là où il n'y a qu'une seule idée. */
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="bg-foreground/10 text-foreground rounded-md px-2 py-0.5 text-[12px] font-black tracking-wide uppercase">
+              L&apos;an dernier
+            </span>
+            <span className="bg-background ring-border rounded-full px-3 py-0.5 text-[18px] leading-snug font-black ring-1">
+              {anDernier ? formatEuro(anDernier.revenueHt) : '—'}
+            </span>
+            <span className="text-muted-foreground text-[13px] font-bold">
+              {anDernier
+                ? formatDateLong(anDernier.jour).replace(/ \d{4}$/, '')
+                : 'aucune journée comparable'}
+            </span>
           </div>
         )}
 
-        <div className="text-muted-foreground border-primary/20 mt-2.5 flex items-center gap-2 border-t pt-2 text-[11px] font-medium">
-          <CalendarCheck2 className="size-4 shrink-0" />
+        <div className="text-muted-foreground border-primary/20 mt-2 flex items-center gap-1.5 border-t pt-1.5 text-[11px] font-medium">
+          <CalendarCheck2 className="size-3.5 shrink-0" />
           {coverage.days > 0 ? (
             <span>
               {coverage.days.toLocaleString('fr-FR')} journées de CA en base, jusqu&apos;au{' '}
