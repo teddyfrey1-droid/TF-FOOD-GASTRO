@@ -1,7 +1,6 @@
 import { requireManager } from '@/lib/auth';
 import {
   BarChart3,
-  CalendarCheck2,
   Check,
   Euro,
   History,
@@ -14,19 +13,12 @@ import {
 } from 'lucide-react';
 import {
   getDailyCountStatus,
-  getForecastRevenue,
-  getGrowthWindows,
   getProducts,
-  getReferenceRevenue,
-  getRevenueCoverage,
-  getRevenueSettings,
 } from '@/lib/admin/queries';
 import { createClient } from '@/lib/supabase/server';
-import { formatDateLong, formatEuro, todayInParis } from '@/lib/format';
+import { formatDateLong, todayInParis } from '@/lib/format';
 import { Card } from '@/components/ui/card';
-import { GrowthCard } from '@/components/admin/growth-card';
 import { GroupeMenu, RangeeMenu } from '@/components/rangee-menu';
-import { referenceDateLastYear } from '@/lib/mep';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,17 +27,11 @@ export default async function DashboardPage() {
   const today = todayInParis();
   const supabase = await createClient();
 
-  const [forecast, reference, statuses, products, settings, windows, coverage, { count: equipe }] =
-    await Promise.all([
-      getForecastRevenue(today),
-      getReferenceRevenue(today, 'morning'),
-      getDailyCountStatus(today),
-      getProducts(false),
-      getRevenueSettings(),
-      getGrowthWindows(today),
-      getRevenueCoverage(),
-      supabase.from('profiles').select('id', { count: 'exact', head: true }),
-    ]);
+  const [statuses, products, { count: equipe }] = await Promise.all([
+    getDailyCountStatus(today),
+    getProducts(false),
+    supabase.from('profiles').select('id', { count: 'exact', head: true }),
+  ]);
 
   const { count: categories } = await supabase
     .from('product_categories')
@@ -86,65 +72,6 @@ export default async function DashboardPage() {
           )}
         </span>
       </header>
-
-      {/* ------------------------------------------------------------------
-          Le CA prévisionnel décide de toute la production du jour : il se
-          lit d'un coup d'œil, avec sa provenance juste en dessous.
-         ------------------------------------------------------------------ */}
-      <section className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.1fr)]">
-        {/* Vert franc mais posé : le CA reste le chiffre le plus important
-            de l'écran sans en occuper la moitié. */}
-        <Card className="bg-primary/10 border-primary/25 rounded-3xl p-5">
-          <p className="text-primary text-xs font-black tracking-wide uppercase">
-            CA prévisionnel du jour
-          </p>
-          <p className="text-primary mt-1.5 text-4xl font-black tracking-tight tabular-nums">
-            {formatEuro(forecast)}
-          </p>
-
-          {forecast === null ? (
-            <p className="text-muted-foreground mt-2.5 text-[13px] leading-snug">
-              Aucun CA de référence pour l&apos;an dernier à cette date : la production ne peut
-              pas être calculée aujourd&apos;hui.
-            </p>
-          ) : (
-            <p className="text-muted-foreground mt-2.5 text-[13px] leading-snug">
-              {formatEuro(reference)} le{' '}
-              {formatDateLong(referenceDateLastYear(today)).replace(/ \d{4}$/, '')} de
-              l&apos;an dernier, majoré du taux de croissance.
-            </p>
-          )}
-
-          <div className="text-muted-foreground border-primary/20 mt-4 flex items-center gap-2 border-t pt-3.5 text-[11px] font-medium">
-            <CalendarCheck2 className="size-4" />
-            {coverage.days > 0 ? (
-              <span>
-                {coverage.days.toLocaleString('fr-FR')} journées de CA en base, jusqu&apos;au{' '}
-                {formatDateLong(coverage.lastDate!).replace(/^\w+ /, '')}
-              </span>
-            ) : (
-              <span>Aucun chiffre d&apos;affaires chargé.</span>
-            )}
-          </div>
-        </Card>
-
-        <GrowthCard
-          currentRate={settings.growthRate}
-          windows={windows.map((window) => ({
-            label: window.label,
-            days: window.days,
-            rate: window.observation.observedRate,
-          }))}
-          totals={
-            windows[0].observation.sampleDays > 0
-              ? {
-                  actual: windows[0].observation.totalActual,
-                  reference: windows[0].observation.totalReference,
-                }
-              : null
-          }
-        />
-      </section>
 
       {relancesEnAttente > 0 ? (
         <p className="bg-alert text-alert-foreground rounded-2xl px-4 py-3 text-sm font-black">

@@ -2,6 +2,14 @@ import { requireUser } from '@/lib/auth';
 import { Check, CircleAlert } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
+import {
+  getForecastRevenue,
+  getGrowthWindows,
+  getReferenceRevenue,
+  getRevenueCoverage,
+  getRevenueSettings,
+} from '@/lib/admin/queries';
+import { BlocChiffreAffaires } from '@/components/admin/bloc-chiffre-affaires';
 import { createClient } from '@/lib/supabase/server';
 import { NotificationToggle } from '@/components/pwa/notification-toggle';
 import { SessionCard } from '@/components/session-card';
@@ -72,9 +80,36 @@ export default async function HomePage() {
   const prenom = user.fullName.trim().split(/\s+/)[0] || user.fullName;
   const tousFaits = done === 2 && pendingTasks === 0;
 
+  // Le chiffre d'affaires n'est pas une donnée d'équipe : il ne se charge
+  // que si l'appelant est directeur ou propriétaire. La base refuserait de
+  // toute façon de le servir, mais on ne le DEMANDE même pas — un employé
+  // ne doit pas voir passer une requête qui échoue sur du CA.
+  const directeur = isManagerRole(user.role);
+
+  const ca = directeur
+    ? await (async () => {
+        const [forecast, reference, settings, windows, coverage] = await Promise.all([
+          getForecastRevenue(isoToday),
+          getReferenceRevenue(isoToday, 'morning'),
+          getRevenueSettings(),
+          getGrowthWindows(isoToday),
+          getRevenueCoverage(),
+        ]);
+        return { forecast, reference, settings, windows, coverage };
+      })()
+    : null;
+
   return (
     <>
-      <main className="pt-safe-header mx-auto flex min-h-dvh w-full max-w-md flex-col px-5 pt-4 pb-28">
+      {/* Le directeur reçoit le bloc du chiffre d'affaires : sur grand
+          écran, la colonne s'élargit pour qu'il tienne en deux cartes
+          côte à côte. Sur un téléphone, les deux largeurs se valent. */}
+      <main
+        className={cn(
+          'pt-safe-header mx-auto flex min-h-dvh w-full flex-col px-5 pt-4 pb-28',
+          ca ? 'max-w-3xl' : 'max-w-md',
+        )}
+      >
         <header className="mb-6 flex items-center justify-between gap-3">
           <div className="min-w-0">
             <p className="text-muted-foreground text-sm font-bold capitalize">
@@ -119,6 +154,34 @@ export default async function HomePage() {
                   : 'Les deux comptages sont à faire.'}
           </p>
         </div>
+
+        {/* Ce qui est annoncé pour aujourd'hui, avant les comptages : le
+            directeur juge la cohérence de la prévision en ouvrant
+            l'application, sans passer par Gestion. */}
+        {ca ? (
+          <div className="mb-7">
+            <BlocChiffreAffaires
+              today={isoToday}
+              forecast={ca.forecast}
+              reference={ca.reference}
+              growthRate={ca.settings.growthRate}
+              windows={ca.windows.map((window) => ({
+                label: window.label,
+                days: window.days,
+                rate: window.observation.observedRate,
+              }))}
+              totals={
+                ca.windows[0].observation.sampleDays > 0
+                  ? {
+                      actual: ca.windows[0].observation.totalActual,
+                      reference: ca.windows[0].observation.totalReference,
+                    }
+                  : null
+              }
+              coverage={ca.coverage}
+            />
+          </div>
+        ) : null}
 
         <h2 className="mb-3 flex items-center gap-2 text-xl font-black tracking-tight">
           Aujourd&apos;hui
