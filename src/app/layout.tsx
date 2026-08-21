@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from 'next';
 import './globals.css';
 import { ServiceWorkerRegistrar } from '@/components/pwa/service-worker-registrar';
 import { RattrapageLienActivation } from '@/components/pwa/rattrapage-lien-activation';
+import { TraceurNavigation } from '@/components/pwa/traceur-navigation';
 import { NouvelleVersion } from '@/components/pwa/nouvelle-version';
 import { IOS_SPLASH_SCREENS, splashHref, splashMediaQuery } from '@/lib/pwa/splash-screens';
 
@@ -65,6 +66,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
         {children}
         <ServiceWorkerRegistrar />
         <RattrapageLienActivation />
+        <TraceurNavigation />
         <NouvelleVersion />
       </body>
     </html>

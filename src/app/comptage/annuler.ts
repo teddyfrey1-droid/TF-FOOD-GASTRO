@@ -2,6 +2,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { createClient } from '@/lib/supabase/server';
+import { journaliser } from '@/app/journal';
 
 /**
  * Annule un comptage commencé.
@@ -15,6 +16,8 @@ export async function annulerComptage(sessionId: string): Promise<{ error?: stri
   const { error } = await supabase.rpc('mep_annuler_comptage', { p_session_id: sessionId });
 
   if (error) return { error: error.message };
+
+  void journaliser('action', 'Comptage annulé');
 
   revalidatePath('/');
   revalidatePath('/comptage');
@@ -33,6 +36,8 @@ export async function rouvrirComptage(sessionId: string): Promise<{ error?: stri
   const { error } = await supabase.rpc('mep_rouvrir_comptage', { p_session_id: sessionId });
 
   if (error) return { error: error.message };
+
+  void journaliser('action', 'Comptage rouvert');
 
   revalidatePath('/');
   revalidatePath('/comptage');

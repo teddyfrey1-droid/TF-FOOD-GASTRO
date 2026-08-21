@@ -421,6 +421,38 @@ export type Database = {
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /** Écrit une ligne d'activité au nom de l'appelant. Jamais d'un autre. */
+      mep_journaliser: {
+        Args: { p_kind: string; p_label: string; p_detail?: Json | null };
+        Returns: undefined;
+      };
+      /** Tableau d'activité par personne. Propriétaire uniquement. */
+      mep_suivi_equipe: {
+        Args: Record<string, never>;
+        Returns: {
+          user_id: string;
+          full_name: string;
+          email: string | null;
+          role: UserRole;
+          is_active: boolean;
+          derniere_connexion: string | null;
+          derniere_activite: string | null;
+          vues_7j: number;
+          actions_7j: number;
+          comptages_30j: number;
+          modifications_30j: number;
+        }[];
+      };
+      /** Frise d'activité d'une personne. Propriétaire uniquement. */
+      mep_suivi_detail: {
+        Args: { p_user_id: string; p_jours?: number; p_limite?: number };
+        Returns: {
+          survenu_le: string;
+          categorie: string;
+          libelle: string;
+          detail: string;
+        }[];
+      };
       /** Supprime un produit jamais compté. Refuse sinon. */
       mep_supprimer_produit: { Args: { p_product_id: string }; Returns: undefined };
       /** Remet un comptage validé du jour en cours de saisie. */

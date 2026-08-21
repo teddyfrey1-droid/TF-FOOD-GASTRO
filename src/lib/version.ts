@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '3.1.0';
+export const VERSION = '3.2.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,15 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '3.2.0',
+    date: '2026-08-25',
+    points: [
+      'Nouvel espace « Suivi de connexion » dans Gestion, réservé au propriétaire.',
+      'Chaque personne se déplie sur ses trente derniers jours : connexions, écrans, comptages, réglages.',
+      'Les traces s’effacent d’elles-mêmes au bout de 90 jours.',
+    ],
+  },
   {
     version: '3.1.0',
     date: '2026-08-24',

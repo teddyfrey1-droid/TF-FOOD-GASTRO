@@ -1,5 +1,6 @@
 import { requireManager } from '@/lib/auth';
 import {
+  Activity,
   BarChart3,
   Check,
   Euro,
@@ -172,6 +173,20 @@ export default async function DashboardPage() {
       </GroupeMenu>
 
       <ControleAcces initial={droits} />
+
+      {/* Réservé au propriétaire : l'entrée n'apparaît même pas pour le
+          directeur, et les fonctions appelées le refuseraient de toute
+          façon. */}
+      {user.role === 'owner' ? (
+        <GroupeMenu titre="Propriétaire">
+          <RangeeMenu
+            href="/admin/suivi"
+            icone={<Activity className="size-5" strokeWidth={2.2} />}
+            titre="Suivi de connexion"
+            detail="Qui se connecte, et ce qui a été fait"
+          />
+        </GroupeMenu>
+      ) : null}
 
       {sansBase > 0 || tousEnPrioriteParDefaut ? (
         <Card className="rounded-3xl p-5">

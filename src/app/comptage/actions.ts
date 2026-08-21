@@ -3,6 +3,7 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient } from '@/lib/supabase/server';
+import { journaliser } from '@/app/journal';
 import type { SessionKind } from '@/lib/supabase/database.types';
 
 /** Ouvre (ou retrouve) la session du jour et prépare une ligne par produit actif. */
@@ -155,6 +156,12 @@ export async function submitCount(sessionId: string): Promise<{
     // montre tel quel plutôt que noyé dans un préfixe technique.
     return { error: error.code === 'P0001' ? error.message : `Validation impossible : ${error.message}` };
   }
+
+  // Le geste le plus structurant de la journée : il mérite sa trace,
+  // avec le nombre de relances qu'il a produites.
+  void journaliser('action', 'Comptage validé', {
+    relances: (data ?? []).length,
+  });
 
   revalidatePath('/');
   revalidatePath('/comptage', 'layout');

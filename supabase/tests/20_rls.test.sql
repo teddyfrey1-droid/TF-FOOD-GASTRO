@@ -1702,4 +1702,85 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 26. LE SUIVI D''ACTIVITÉ ---'
+
+-- La table n'accorde aucune lecture directe : ni à l'employé, ni au
+-- directeur, ni au propriétaire. Tout passe par les fonctions.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000f';
+select pg_temp.check_denied('Le journal n''est pas lisible en direct, même par le propriétaire',
+  'select * from public.activity_log');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Chacun écrit sa propre ligne, et rien d'autre : l'auteur vient du
+-- jeton, jamais d'un paramètre.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select public.mep_journaliser('vue', '/comptage/matin');
+select public.mep_journaliser('action', 'comptage validé');
+reset role;
+reset "request.jwt.claim.sub";
+
+select pg_temp.check_equal('La ligne est bien attribuée à son auteur',
+  (select count(*)::int from public.activity_log
+   where user_id = 'a0000000-0000-0000-0000-00000000000e'),
+  2);
+
+-- Le suivi est réservé au propriétaire : le directeur lui-même est
+-- refusé, c'est tout l'objet de la demande.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('L''employé n''accède pas au suivi',
+  'select * from public.mep_suivi_equipe()');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_denied('...ni l''assistant manager',
+  'select * from public.mep_suivi_equipe()');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('...ni même le directeur',
+  'select * from public.mep_suivi_equipe()');
+select pg_temp.check_denied('...ni au détail d''une personne',
+  'select * from public.mep_suivi_detail(''a0000000-0000-0000-0000-00000000000e''::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000f';
+select pg_temp.check_equal('Le propriétaire obtient le tableau',
+  (select count(*)::int > 0 from public.mep_suivi_equipe()),
+  true);
+select pg_temp.check_equal('...et la frise de l''employé',
+  (select count(*)::int >= 2
+   from public.mep_suivi_detail('a0000000-0000-0000-0000-00000000000e'::uuid)),
+  true);
+reset role;
+reset "request.jwt.claim.sub";
+
+-- La purge n'est exécutable par personne depuis l'application : elle
+-- appartient à la tâche planifiée.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000f';
+select pg_temp.check_denied('Personne ne déclenche la purge à la main',
+  'select public.mep_purger_activite()');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Les lignes trop vieilles s'en vont.
+insert into public.activity_log (user_id, kind, label, occurred_at)
+values ('a0000000-0000-0000-0000-00000000000e', 'vue', '/vieux',
+        now() - interval '100 days');
+
+select pg_temp.check_equal('La purge efface au-delà de 90 jours',
+  (select public.mep_purger_activite()),
+  1);
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='
