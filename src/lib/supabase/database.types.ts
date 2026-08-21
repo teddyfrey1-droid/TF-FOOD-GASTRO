@@ -65,6 +65,7 @@ type ProductRow = {
   image_url: string | null;
   in_saladbar: boolean;
   in_fridge: boolean;
+  in_desserts: boolean;
   sort_order: number;
   is_active: boolean;
   notes: string | null;
@@ -89,6 +90,7 @@ type ProductForCountRow = {
   count_step: number;
   in_saladbar: boolean;
   in_fridge: boolean;
+  in_desserts: boolean;
   sort_order: number;
   notes: string | null;
   image_url: string | null;
@@ -158,6 +160,7 @@ type CountLineRow = {
   product_id: string;
   qty_saladbar: number;
   qty_fridge: number;
+  qty_desserts: number;
   qty_total: number;
   target_snapshot: number | null;
   min_snapshot: number | null;
@@ -172,6 +175,7 @@ type CountLineRow = {
   counted_at: string | null;
   counted_saladbar_at: string | null;
   counted_fridge_at: string | null;
+  counted_desserts_at: string | null;
   updated_at: string;
 };
 
@@ -250,6 +254,7 @@ export type Database = {
         | 'unit'
         | 'base_qty'
         | 'in_saladbar'
+        | 'in_desserts'
         | 'in_fridge'
         | 'sort_order'
         | 'is_active'
@@ -463,9 +468,11 @@ export type Database = {
           unit: ProductUnit;
           qty_saladbar: number;
           qty_fridge: number;
+          qty_desserts: number;
           qty_total: number;
           in_saladbar: boolean;
           in_fridge: boolean;
+          in_desserts: boolean;
           etat: 'rupture' | 'juste' | 'ok' | 'surplus' | 'surplus_fort' | 'absent' | 'reporte';
           surplus: number;
         }[];
@@ -546,6 +553,7 @@ export type Database = {
           unit: ProductUnit;
           qty_saladbar: number;
           qty_fridge: number;
+          qty_desserts: number;
           qty_total: number;
           counted_at: string | null;
           is_not_applicable: boolean;

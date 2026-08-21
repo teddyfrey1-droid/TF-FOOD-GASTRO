@@ -1631,4 +1631,75 @@ select pg_temp.check_equal('...et celui qui avait servi est toujours là',
   1);
 
 \echo ''
+\echo '--- 25. LE FRIGO DESSERTS ---'
+
+do $$
+declare v_cat uuid; v_dessert uuid; v_sess uuid;
+begin
+  select id into v_cat from public.product_categories order by sort_order limit 1;
+
+  insert into public.products (name, category_id, unit, base_qty, priority,
+                               in_saladbar, in_fridge, in_desserts, is_active)
+  values ('Tiramisu témoin', v_cat, 'piece', 20, 3, false, false, true, true)
+  returning id into v_dessert;
+
+  delete from public.count_sessions where date = current_date and session = 'morning';
+  insert into public.count_sessions (date, session, user_id, status)
+  values (current_date, 'morning', 'a0000000-0000-0000-0000-00000000000e', 'draft')
+  returning id into v_sess;
+
+  insert into public.count_lines (session_id, product_id) values (v_sess, v_dessert);
+
+  perform set_config('mep.sess_dessert', v_sess::text, false);
+  perform set_config('mep.produit_dessert', v_dessert::text, false);
+end;
+$$;
+
+-- Un produit du frigo desserts n'est relevé que là. Marquer le saladbar
+-- ne doit rien valider : sinon on validerait un comptage sans avoir
+-- ouvert le meuble.
+select pg_temp.check_equal('Le dessert non relevé bloque encore la validation',
+  (select public.mep_count_pending(current_setting('mep.sess_dessert')::uuid) > 0),
+  true);
+
+update public.count_lines
+set counted_saladbar_at = now(), counted_fridge_at = now()
+where session_id = current_setting('mep.sess_dessert')::uuid
+  and product_id = current_setting('mep.produit_dessert')::uuid;
+
+select pg_temp.check_equal('Cocher les deux autres zones ne suffit pas',
+  (select public.mep_count_pending(current_setting('mep.sess_dessert')::uuid) > 0),
+  true);
+
+update public.count_lines
+set counted_desserts_at = now(), qty_desserts = 4
+where session_id = current_setting('mep.sess_dessert')::uuid
+  and product_id = current_setting('mep.produit_dessert')::uuid;
+
+select pg_temp.check_equal('Relevé au frigo desserts, il ne bloque plus',
+  (select public.mep_count_pending(current_setting('mep.sess_dessert')::uuid)),
+  0);
+
+-- Le total additionne bien les trois zones.
+update public.count_lines
+set qty_saladbar = 1, qty_fridge = 2, qty_desserts = 4
+where session_id = current_setting('mep.sess_dessert')::uuid
+  and product_id = current_setting('mep.produit_dessert')::uuid;
+
+select pg_temp.check_equal('Le total additionne les trois zones',
+  (select qty_total from public.count_lines
+   where session_id = current_setting('mep.sess_dessert')::uuid
+     and product_id = current_setting('mep.produit_dessert')::uuid),
+  7::numeric);
+
+-- Et les repères de production restent hors de portée de l'équipe,
+-- troisième zone ou pas.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('La cible reste invisible malgré la nouvelle colonne',
+  'select target_snapshot from public.count_lines');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

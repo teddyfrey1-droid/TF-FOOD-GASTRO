@@ -200,6 +200,9 @@ function ComptageDeplie({ comptage }: { comptage: ComptagePasse }) {
                   <span className="text-muted-foreground w-9 shrink-0 text-right tabular-nums">
                     {ligne.inFridge ? formatQty(ligne.qtyFridge) : '·'}
                   </span>
+                  <span className="text-muted-foreground w-9 shrink-0 text-right tabular-nums">
+                    {ligne.inDesserts ? formatQty(ligne.qtyDesserts) : '·'}
+                  </span>
                   <span className="w-9 shrink-0 text-right font-black tabular-nums">
                     {formatQty(ligne.qtyTotal)}
                   </span>

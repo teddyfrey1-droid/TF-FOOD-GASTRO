@@ -38,6 +38,7 @@ export interface CountProduct {
   countStep: number;
   inSaladbar: boolean;
   inFridge: boolean;
+  inDesserts: boolean;
   notes: string | null;
   imageUrl: string | null;
 }
@@ -133,10 +134,12 @@ export function CountingScreen({
           productId: entry.productId,
           qtySaladbar: entry.qtySaladbar,
           qtyFridge: entry.qtyFridge,
+          qtyDesserts: entry.qtyDesserts,
           isNotApplicable: entry.isNotApplicable,
           notApplicableReason: entry.notApplicableReason,
           countedSaladbar: entry.countedSaladbar,
           countedFridge: entry.countedFridge,
+          countedDesserts: entry.countedDesserts,
           isDeferred: entry.isDeferred,
           deferredReason: entry.deferredReason,
         })),
@@ -220,10 +223,12 @@ export function CountingScreen({
         productId,
         qtySaladbar: next.qtySaladbar,
         qtyFridge: next.qtyFridge,
+        qtyDesserts: next.qtyDesserts,
         isNotApplicable: next.isNotApplicable,
         notApplicableReason: next.notApplicableReason,
         countedSaladbar: next.countedSaladbar,
         countedFridge: next.countedFridge,
+        countedDesserts: next.countedDesserts,
         isDeferred: next.isDeferred,
         deferredReason: next.deferredReason,
         updatedAt,
@@ -242,10 +247,12 @@ export function CountingScreen({
             productId,
             qtySaladbar: next.qtySaladbar,
             qtyFridge: next.qtyFridge,
+            qtyDesserts: next.qtyDesserts,
             isNotApplicable: next.isNotApplicable,
             notApplicableReason: next.notApplicableReason,
             countedSaladbar: next.countedSaladbar,
             countedFridge: next.countedFridge,
+            countedDesserts: next.countedDesserts,
             isDeferred: next.isDeferred,
             deferredReason: next.deferredReason,
           });
@@ -284,8 +291,8 @@ export function CountingScreen({
         ...previous,
         ...patch,
         // Seule la zone que l'employé vient de toucher est marquée relevée.
-        // Un produit absent ou reporté, lui, vaut pour les DEUX zones : il
-        // n'y a rien à relever nulle part.
+        // Un produit absent ou reporté, lui, vaut pour les TROIS zones :
+        // il n'y a rien à relever nulle part.
         countedSaladbar:
           previous.countedSaladbar ||
           touchedZone === 'saladbar' ||
@@ -294,6 +301,11 @@ export function CountingScreen({
         countedFridge:
           previous.countedFridge ||
           touchedZone === 'fridge' ||
+          patch.isNotApplicable === true ||
+          patch.isDeferred === true,
+        countedDesserts:
+          previous.countedDesserts ||
+          touchedZone === 'desserts' ||
           patch.isNotApplicable === true ||
           patch.isDeferred === true,
       };
@@ -312,12 +324,33 @@ export function CountingScreen({
   const remaining = products.length - countedTotal;
 
   /** Vrai si la ligne a été relevée DANS la zone en cours. */
+  /**
+   * Ce produit est-il rangé dans cette zone ?
+   *
+   * Une seule fonction plutôt qu'un ternaire recopié à sept endroits :
+   * l'ajout du frigo desserts en aurait laissé un derrière, et l'oubli
+   * ne se serait vu qu'à la première validation refusée.
+   */
+  const dansLaZone = useCallback(
+    (product: CountProduct, zoneKey: CountZone) =>
+      zoneKey === 'saladbar'
+        ? product.inSaladbar
+        : zoneKey === 'fridge'
+          ? product.inFridge
+          : product.inDesserts,
+    [],
+  );
+
   const isCountedInZone = useCallback(
     (productId: string) => {
       const line = state[productId];
       if (!line) return false;
       if (line.isNotApplicable || line.isDeferred) return true;
-      return zone === 'saladbar' ? line.countedSaladbar : line.countedFridge;
+      return zone === 'saladbar'
+        ? line.countedSaladbar
+        : zone === 'fridge'
+          ? line.countedFridge
+          : line.countedDesserts;
     },
     [state, zone],
   );
@@ -346,12 +379,11 @@ export function CountingScreen({
     () =>
       products.filter((product) => {
         // Un produit absent de la zone en cours n'a pas à s'y afficher.
-        if (zone === 'saladbar' && !product.inSaladbar) return false;
-        if (zone === 'fridge' && !product.inFridge) return false;
+        if (!dansLaZone(product, zone)) return false;
         if (activeCategory && product.categoryName !== activeCategory) return false;
         return needle ? correspond(product) : true;
       }),
-    [products, needle, correspond, activeCategory, zone],
+    [products, needle, correspond, activeCategory, zone, dansLaZone],
   );
 
   /**
@@ -362,15 +394,23 @@ export function CountingScreen({
    * concluait qu'il n'existait pas. On compte donc aussi les résultats
    * d'en face, pour proposer d'y aller au lieu de nier.
    */
-  const ailleurs = useMemo(() => {
-    if (!needle) return 0;
-    return products.filter(
-      (product) =>
-        correspond(product) && (zone === 'saladbar' ? product.inFridge : product.inSaladbar),
-    ).length;
-  }, [products, needle, correspond, zone]);
+  const zonesVoisines = useMemo(
+    () => (['saladbar', 'fridge', 'desserts'] as const).filter((autre) => autre !== zone),
+    [zone],
+  );
 
-  const autreZone: CountZone = zone === 'saladbar' ? 'fridge' : 'saladbar';
+  /** La première zone voisine qui contient un résultat, et combien. */
+  const ailleurs = useMemo(() => {
+    if (!needle) return { total: 0, zone: null as CountZone | null };
+
+    for (const autre of zonesVoisines) {
+      const n = products.filter(
+        (product) => correspond(product) && dansLaZone(product, autre),
+      ).length;
+      if (n > 0) return { total: n, zone: autre };
+    }
+    return { total: 0, zone: null as CountZone | null };
+  }, [products, needle, correspond, zonesVoisines, dansLaZone]);
 
   /**
    * Avancement de CHAQUE zone, séparément.
@@ -380,24 +420,30 @@ export function CountingScreen({
    */
   const zoneProgress = useMemo(() => {
     const build = (zoneKey: CountZone) => {
-      const list = products.filter((product) =>
-        zoneKey === 'saladbar' ? product.inSaladbar : product.inFridge,
-      );
+      const list = products.filter((product) => dansLaZone(product, zoneKey));
       const counted = list.filter((product) => {
         const line = state[product.id];
         if (!line) return false;
         if (line.isNotApplicable || line.isDeferred) return true;
-        return zoneKey === 'saladbar' ? line.countedSaladbar : line.countedFridge;
+        return zoneKey === 'saladbar'
+          ? line.countedSaladbar
+          : zoneKey === 'fridge'
+            ? line.countedFridge
+            : line.countedDesserts;
       }).length;
       return { counted, total: list.length };
     };
-    return { saladbar: build('saladbar'), fridge: build('fridge') };
-  }, [products, state]);
+    return {
+      saladbar: build('saladbar'),
+      fridge: build('fridge'),
+      desserts: build('desserts'),
+    };
+  }, [products, state, dansLaZone]);
 
   /** Avancement par catégorie DANS LA ZONE EN COURS, affiché dans les pills. */
   const categories = useMemo(() => {
     const inZone = products.filter((product) =>
-      zone === 'saladbar' ? product.inSaladbar : product.inFridge,
+      dansLaZone(product, zone),
     );
     const byName = new Map<string, { name: string; counted: number; total: number }>();
     for (const product of inZone) {
@@ -411,7 +457,7 @@ export function CountingScreen({
       byName.set(product.categoryName, entry);
     }
     return [...byName.values()];
-  }, [products, zone, isCountedInZone]);
+  }, [products, zone, isCountedInZone, dansLaZone]);
 
   const grouped = useMemo(() => {
     const byCategory = new Map<string, CountProduct[]>();
@@ -438,6 +484,7 @@ export function CountingScreen({
       if (line?.isNotApplicable || line?.isDeferred) return null;
       if (product.inSaladbar && !line?.countedSaladbar) return 'saladbar';
       if (product.inFridge && !line?.countedFridge) return 'fridge';
+      if (product.inDesserts && !line?.countedDesserts) return 'desserts';
       return null;
     };
 
@@ -462,6 +509,25 @@ export function CountingScreen({
       });
     });
   }
+
+  /**
+   * La zone en cours est-elle finie, et laquelle vient après ?
+   *
+   * Avec trois meubles, « saladbar fini → aller au frigo » ne suffit
+   * plus : on cherche la première zone non terminée, dans l'ordre des
+   * onglets, en ignorant celles qui n'ont aucun produit.
+   */
+  const zoneTerminee =
+    zoneProgress[zone].total > 0 &&
+    zoneProgress[zone].counted === zoneProgress[zone].total;
+
+  const zoneSuivante =
+    (['saladbar', 'fridge', 'desserts'] as const).find(
+      (candidate) =>
+        candidate !== zone &&
+        zoneProgress[candidate].total > 0 &&
+        zoneProgress[candidate].counted < zoneProgress[candidate].total,
+    ) ?? null;
 
   async function handleSubmit() {
     setSubmitting(true);
@@ -621,27 +687,28 @@ export function CountingScreen({
             <p className="text-muted-foreground text-sm font-semibold">
               Aucun produit « {search} » au {ZONE_LABELS[zone].toLowerCase()}.
             </p>
-            {ailleurs > 0 ? (
+            {ailleurs.total > 0 && ailleurs.zone ? (
               <button
                 type="button"
-                onClick={() => setZone(autreZone)}
+                onClick={() => setZone(ailleurs.zone!)}
                 className="bg-primary text-primary-foreground mt-3 inline-flex h-11 items-center gap-2 rounded-full px-5 text-sm font-black"
               >
-                {ailleurs} résultat{ailleurs > 1 ? 's' : ''} au {ZONE_LABELS[autreZone].toLowerCase()}
+                {ailleurs.total} résultat{ailleurs.total > 1 ? 's' : ''} au{' '}
+                {ZONE_LABELS[ailleurs.zone].toLowerCase()}
               </button>
             ) : null}
           </div>
-        ) : ailleurs > 0 ? (
+        ) : ailleurs.total > 0 && ailleurs.zone ? (
           /* Des résultats existent aussi en face : on le dit sans imposer
              le changement de zone, l'employé compte peut-être encore ici. */
           <button
             type="button"
-            onClick={() => setZone(autreZone)}
+            onClick={() => setZone(ailleurs.zone!)}
             className="text-muted-foreground hover:text-foreground mb-2 flex w-full items-center justify-center gap-1.5 rounded-xl py-2 text-xs font-bold transition-colors"
           >
             <Search className="size-3.5" />
-            {ailleurs} autre{ailleurs > 1 ? 's' : ''} résultat{ailleurs > 1 ? 's' : ''} au{' '}
-            {ZONE_LABELS[autreZone].toLowerCase()}
+            {ailleurs.total} autre{ailleurs.total > 1 ? 's' : ''} résultat
+            {ailleurs.total > 1 ? 's' : ''} au {ZONE_LABELS[ailleurs.zone].toLowerCase()}
           </button>
         ) : null}
 
@@ -729,16 +796,16 @@ export function CountingScreen({
             </button>
           )}
 
-          {zone === 'saladbar' &&
-          zoneProgress.saladbar.counted === zoneProgress.saladbar.total &&
-          zoneProgress.fridge.counted < zoneProgress.fridge.total ? (
-            // Le saladbar est fini : on envoie l'employé au frigo plutôt que
-            // de le laisser chercher pourquoi le bouton reste gris.
+          {zoneTerminee && zoneSuivante ? (
+            // La zone en cours est finie : on envoie l'employé au meuble
+            // suivant plutôt que de le laisser chercher pourquoi le bouton
+            // de validation reste gris.
             <Button
-              onClick={() => setZone('fridge')}
+              onClick={() => setZone(zoneSuivante)}
               className="h-14 w-full rounded-2xl text-base font-bold"
             >
-              Saladbar terminé — passer au {ZONE_LABELS.fridge.toLowerCase()}
+              {ZONE_LABELS[zone]} terminé — passer au{' '}
+              {ZONE_LABELS[zoneSuivante].toLowerCase()}
             </Button>
           ) : (
             <Button

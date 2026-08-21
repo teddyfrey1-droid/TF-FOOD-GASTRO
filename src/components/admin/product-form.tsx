@@ -302,7 +302,11 @@ export function ProductForm({
             </label>
             <label className="flex items-center gap-2 text-sm">
               <Switch name="in_fridge" defaultChecked={product?.in_fridge ?? true} />
-              Présent au frigo
+              Présent au frigo du bas
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <Switch name="in_desserts" defaultChecked={product?.in_desserts ?? false} />
+              Présent au frigo desserts
             </label>
             <label className="flex items-center gap-2 text-sm">
               <Switch name="is_active" defaultChecked={product?.is_active ?? true} />

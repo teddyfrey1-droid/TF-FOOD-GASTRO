@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { Check, CircleOff, Salad, Snowflake, Trash2 } from 'lucide-react';
+import { Check, CircleOff, IceCream, Salad, Snowflake, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -72,7 +72,9 @@ export function ProductsManager({
   const [showInactive, setShowInactive] = useState(false);
   // Un seul filtre de zone à la fois : on veut répondre à « qu'est-ce
   // qu'on compte en haut ? », pas composer une requête.
-  const [filtreZone, setFiltreZone] = useState<'saladbar' | 'fridge' | 'aucune' | null>(null);
+  const [filtreZone, setFiltreZone] = useState<'saladbar' | 'fridge' | 'desserts' | null>(
+    null,
+  );
   const [editing, setEditing] = useState<ProductWithCategory | null>(null);
   const [creating, setCreating] = useState(false);
 
@@ -82,7 +84,7 @@ export function ProductsManager({
       if (!showInactive && !product.is_active) return false;
       if (filtreZone === 'saladbar' && !product.in_saladbar) return false;
       if (filtreZone === 'fridge' && !product.in_fridge) return false;
-      if (filtreZone === 'aucune' && (product.in_saladbar || product.in_fridge)) return false;
+      if (filtreZone === 'desserts' && !product.in_desserts) return false;
       if (!needle) return true;
       return (
         product.name.toLowerCase().includes(needle) ||
@@ -119,7 +121,7 @@ export function ProductsManager({
   const compteurs = {
     saladbar: actifs.filter((product) => product.in_saladbar).length,
     fridge: actifs.filter((product) => product.in_fridge).length,
-    aucune: actifs.filter((product) => !product.in_saladbar && !product.in_fridge).length,
+    desserts: actifs.filter((product) => product.in_desserts).length,
   };
 
   return (
@@ -132,10 +134,9 @@ export function ProductsManager({
         {[
           { cle: 'saladbar' as const, Icone: Salad, titre: 'Saladbar', n: compteurs.saladbar },
           { cle: 'fridge' as const, Icone: Snowflake, titre: 'Frigo du bas', n: compteurs.fridge },
-          { cle: 'aucune' as const, Icone: CircleOff, titre: 'Nulle part', n: compteurs.aucune },
+          { cle: 'desserts' as const, Icone: IceCream, titre: 'Frigo desserts', n: compteurs.desserts },
         ].map((tuile) => {
           const actif = filtreZone === tuile.cle;
-          const alerte = tuile.cle === 'aucune' && tuile.n > 0;
 
           return (
             <button
@@ -145,11 +146,7 @@ export function ProductsManager({
               onClick={() => setFiltreZone(actif ? null : tuile.cle)}
               className={cn(
                 'rounded-2xl border p-3 text-left transition-colors',
-                actif
-                  ? 'border-foreground bg-muted'
-                  : alerte
-                    ? 'border-alert-border bg-alert hover:bg-alert/80'
-                    : 'bg-card hover:bg-muted/50',
+                actif ? 'border-foreground bg-muted' : 'bg-card hover:bg-muted/50',
               )}
             >
               {/* Icône de trait, pas emoji : trois pastilles de couleurs
@@ -157,12 +154,7 @@ export function ProductsManager({
                   s'arrêtait dessus au lieu du nombre. */}
               <span
                 aria-hidden
-                className={cn(
-                  'flex size-7 items-center justify-center rounded-lg',
-                  alerte && !actif
-                    ? 'bg-alert-foreground/15 text-alert-foreground'
-                    : 'bg-muted text-foreground/70',
-                )}
+                className="bg-muted text-foreground/70 flex size-7 items-center justify-center rounded-lg"
               >
                 <tuile.Icone className="size-4" strokeWidth={2.2} />
               </span>
@@ -170,10 +162,7 @@ export function ProductsManager({
                 {tuile.n}
               </span>
               <span
-                className={cn(
-                  'mt-1 block text-[11px] leading-tight font-bold',
-                  alerte && !actif ? 'text-alert-foreground' : 'text-muted-foreground',
-                )}
+                className="text-muted-foreground mt-1 block text-[11px] leading-tight font-bold"
               >
                 {tuile.titre}
               </span>
@@ -181,6 +170,22 @@ export function ProductsManager({
           );
         })}
       </div>
+
+      {(() => {
+        const orphelins = actifs.filter(
+          (product) => !product.in_saladbar && !product.in_fridge && !product.in_desserts,
+        );
+        if (orphelins.length === 0) return null;
+
+        return (
+          <p className="bg-alert text-alert-foreground border-alert-border flex items-center gap-2 rounded-2xl border px-4 py-2.5 text-[13px] font-bold">
+            <CircleOff className="size-4 shrink-0" strokeWidth={2.6} />
+            {orphelins.length} produit{orphelins.length > 1 ? 's ne sont' : ' n’est'} rangé
+            {orphelins.length > 1 ? 's' : ''} dans aucun meuble : {orphelins.length > 1 ? 'ils n’apparaissent' : 'il n’apparaît'} dans aucun
+            comptage.
+          </p>
+        );
+      })()}
 
       {filtreZone ? (
         <p className="text-muted-foreground text-[13px] font-semibold">
@@ -260,7 +265,7 @@ function CarteProduit({
   product: ProductWithCategory;
   onEdit: () => void;
 }) {
-  const nullePart = !product.in_saladbar && !product.in_fridge;
+  const nullePart = !product.in_saladbar && !product.in_fridge && !product.in_desserts;
 
   return (
     <div
@@ -344,7 +349,7 @@ function ZonesProduit({ product }: { product: ProductWithCategory }) {
   const [pending, startTransition] = useTransition();
   const [erreur, setErreur] = useState<string | null>(null);
 
-  function regler(zones: { inSaladbar: boolean; inFridge: boolean }) {
+  function regler(zones: { inSaladbar: boolean; inFridge: boolean; inDesserts: boolean }) {
     setErreur(null);
     startTransition(async () => {
       const resultat = await updateProductInline(product.id, zones);
@@ -355,11 +360,12 @@ function ZonesProduit({ product }: { product: ProductWithCategory }) {
   const zones = [
     { cle: 'saladbar' as const, label: 'Saladbar', actif: product.in_saladbar },
     { cle: 'fridge' as const, label: 'Frigo du bas', actif: product.in_fridge },
+    { cle: 'desserts' as const, label: 'Desserts', actif: product.in_desserts },
   ];
 
   return (
     <>
-      <div className="grid grid-cols-2 gap-2">
+      <div className="grid grid-cols-3 gap-1.5">
         {zones.map((zone) => (
           <button
             key={zone.cle}
@@ -370,10 +376,11 @@ function ZonesProduit({ product }: { product: ProductWithCategory }) {
               regler({
                 inSaladbar: zone.cle === 'saladbar' ? !zone.actif : product.in_saladbar,
                 inFridge: zone.cle === 'fridge' ? !zone.actif : product.in_fridge,
+                inDesserts: zone.cle === 'desserts' ? !zone.actif : product.in_desserts,
               })
             }
             className={cn(
-              'flex h-10 items-center justify-center gap-1.5 rounded-xl border text-[13px] font-bold transition-colors',
+              'flex h-10 items-center justify-center gap-1 rounded-xl border px-1 text-[12px] font-bold transition-colors',
               zone.actif
                 ? 'border-primary bg-primary text-primary-foreground'
                 : 'text-muted-foreground hover:bg-muted/60 border-dashed',
@@ -543,7 +550,7 @@ function CategoryZoneShortcut({ items }: { items: ProductWithCategory[] }) {
   const categoryId = items[0]?.category?.id;
   if (!categoryId) return null;
 
-  function apply(zones: { inSaladbar: boolean; inFridge: boolean }) {
+  function apply(zones: { inSaladbar: boolean; inFridge: boolean; inDesserts: boolean }) {
     setError(null);
     startTransition(async () => {
       const result = await setCategoryZones(categoryId!, zones);
@@ -556,9 +563,10 @@ function CategoryZoneShortcut({ items }: { items: ProductWithCategory[] }) {
       {error ? <span className="text-destructive text-xs font-semibold">{error}</span> : null}
       <span className="text-muted-foreground text-[11px] font-bold">Tout le rayon&nbsp;:</span>
       {[
-        { label: 'Haut seulement', zones: { inSaladbar: true, inFridge: false } },
-        { label: 'Bas seulement', zones: { inSaladbar: false, inFridge: true } },
-        { label: 'Les deux', zones: { inSaladbar: true, inFridge: true } },
+        { label: 'Saladbar', zones: { inSaladbar: true, inFridge: false, inDesserts: false } },
+        { label: 'Frigo du bas', zones: { inSaladbar: false, inFridge: true, inDesserts: false } },
+        { label: 'Desserts', zones: { inSaladbar: false, inFridge: false, inDesserts: true } },
+        { label: 'Haut + bas', zones: { inSaladbar: true, inFridge: true, inDesserts: false } },
       ].map((choice) => (
         <Button
           key={choice.label}

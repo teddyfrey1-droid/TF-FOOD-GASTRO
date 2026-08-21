@@ -190,6 +190,7 @@ begin
   update public.count_lines
   set qty_saladbar = 0, qty_fridge = 0, counted_at = now(),
       counted_saladbar_at = now(), counted_fridge_at = now(),
+      counted_desserts_at = now(),
       deferred_at = now(), deferred_reason = 'Livraison en retard'
   where session_id = v_session and product_id = v_produit;
 
@@ -265,11 +266,12 @@ begin
   update public.count_lines
   set counted_at = coalesce(counted_at, now()),
       counted_saladbar_at = coalesce(counted_saladbar_at, now()),
-      counted_fridge_at = coalesce(counted_fridge_at, now())
+      counted_fridge_at = coalesce(counted_fridge_at, now()),
+      counted_desserts_at = coalesce(counted_desserts_at, now())
   where session_id = v_session;
 
   perform pg_temp.check_equal(
-    'Une fois les deux zones relevées, plus rien ne manque',
+    'Une fois les trois zones relevées, plus rien ne manque',
     public.mep_count_pending(v_session),
     0);
 
@@ -438,7 +440,8 @@ begin
 
   -- Tout est relevé, puis un produit est retiré du catalogue.
   update public.count_lines
-  set counted_at = now(), counted_saladbar_at = now(), counted_fridge_at = now()
+  set counted_at = now(), counted_saladbar_at = now(), counted_fridge_at = now(),
+      counted_desserts_at = now()
   where session_id = v_session;
 
   perform pg_temp.check_equal(
@@ -447,7 +450,8 @@ begin
   -- Le produit sort du catalogue APRÈS que sa ligne a été créée, et sans
   -- avoir été relevé : c'est le cas qui bloquait.
   update public.count_lines
-  set counted_at = null, counted_saladbar_at = null, counted_fridge_at = null
+  set counted_at = null, counted_saladbar_at = null, counted_fridge_at = null,
+      counted_desserts_at = null
   where session_id = v_session and product_id = v_retire;
 
   perform pg_temp.check_equal(

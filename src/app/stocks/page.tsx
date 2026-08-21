@@ -50,9 +50,11 @@ export default async function StocksPage() {
     categoryName: ligne.category_name,
     qtySaladbar: Number(ligne.qty_saladbar),
     qtyFridge: Number(ligne.qty_fridge),
+    qtyDesserts: Number(ligne.qty_desserts),
     qtyTotal: Number(ligne.qty_total),
     inSaladbar: ligne.in_saladbar,
     inFridge: ligne.in_fridge,
+    inDesserts: ligne.in_desserts,
     etat: ligne.etat,
     surplus: Number(ligne.surplus),
   }));

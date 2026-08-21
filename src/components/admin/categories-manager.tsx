@@ -21,6 +21,7 @@ export interface CategoryRow {
   productCount: number;
   saladbarCount: number;
   fridgeCount: number;
+  dessertsCount: number;
 }
 
 export function CategoriesManager({ categories }: { categories: CategoryRow[] }) {
@@ -175,6 +176,7 @@ function CategoryCard({
               </p>
               <p className="text-muted-foreground text-xs font-semibold">
                 {category.saladbarCount} au saladbar · {category.fridgeCount} au frigo du bas
+                {category.dessertsCount > 0 ? ` · ${category.dessertsCount} au frigo desserts` : ''}
               </p>
             </div>
 

@@ -108,7 +108,7 @@ export default async function CountPage({ params }: { params: Promise<{ session:
       // Colonnes explicites : les cibles et seuils figés ne sont plus
       // lisibles par un compte connecté, et `*` échouerait.
       .select(
-        'product_id, qty_saladbar, qty_fridge, is_not_applicable, not_applicable_reason, counted_saladbar_at, counted_fridge_at, deferred_at, deferred_reason',
+        'product_id, qty_saladbar, qty_fridge, qty_desserts, is_not_applicable, not_applicable_reason, counted_saladbar_at, counted_fridge_at, counted_desserts_at, deferred_at, deferred_reason',
       )
       .eq('session_id', opened.sessionId),
   ]);
@@ -127,6 +127,7 @@ export default async function CountPage({ params }: { params: Promise<{ session:
       countStep: toNumber(row.count_step, 1),
       inSaladbar: row.in_saladbar,
       inFridge: row.in_fridge,
+    inDesserts: row.in_desserts,
       notes: row.notes,
       imageUrl: row.image_url,
     }))
@@ -142,10 +143,12 @@ export default async function CountPage({ params }: { params: Promise<{ session:
     initial[product.id] = {
       qtySaladbar: toNumber(line?.qty_saladbar, 0),
       qtyFridge: toNumber(line?.qty_fridge, 0),
+      qtyDesserts: toNumber(line?.qty_desserts, 0),
       isNotApplicable: line?.is_not_applicable ?? false,
       notApplicableReason: line?.not_applicable_reason ?? null,
       countedSaladbar: Boolean(line?.counted_saladbar_at),
       countedFridge: Boolean(line?.counted_fridge_at),
+      countedDesserts: Boolean(line?.counted_desserts_at),
       isDeferred: Boolean(line?.deferred_at),
       deferredReason: line?.deferred_reason ?? null,
     };

@@ -15,9 +15,11 @@ export interface DetailComptagePasse {
     productName: string;
     qtySaladbar: number;
     qtyFridge: number;
+    qtyDesserts: number;
     qtyTotal: number;
     inSaladbar: boolean;
     inFridge: boolean;
+    inDesserts: boolean;
     etat: string;
     surplus: number;
   }[];
@@ -64,9 +66,11 @@ export async function chargerDetailComptage(sessionId: string): Promise<DetailCo
       productName: ligne.product_name,
       qtySaladbar: Number(ligne.qty_saladbar),
       qtyFridge: Number(ligne.qty_fridge),
+      qtyDesserts: Number(ligne.qty_desserts),
       qtyTotal: Number(ligne.qty_total),
       inSaladbar: ligne.in_saladbar,
       inFridge: ligne.in_fridge,
+      inDesserts: ligne.in_desserts,
       etat: ligne.etat,
       surplus: Number(ligne.surplus),
     })),

@@ -25,10 +25,12 @@ const lineSchema = z.object({
   productId: z.uuid(),
   qtySaladbar: z.number().min(0).max(999),
   qtyFridge: z.number().min(0).max(999),
+  qtyDesserts: z.number().min(0).max(999),
   isNotApplicable: z.boolean(),
   notApplicableReason: z.string().trim().max(200).nullable(),
   countedSaladbar: z.boolean(),
   countedFridge: z.boolean(),
+  countedDesserts: z.boolean(),
   isDeferred: z.boolean(),
   deferredReason: z.string().trim().max(200).nullable(),
 });
@@ -65,6 +67,7 @@ export async function saveCountLine(input: SaveLineInput): Promise<{ error?: str
       // Un produit non applicable ne porte pas de quantité.
       qty_saladbar: isNotApplicable || isDeferred ? 0 : parsed.data.qtySaladbar,
       qty_fridge: isNotApplicable || isDeferred ? 0 : parsed.data.qtyFridge,
+      qty_desserts: isNotApplicable || isDeferred ? 0 : parsed.data.qtyDesserts,
       is_not_applicable: isNotApplicable,
       not_applicable_reason: isNotApplicable ? notApplicableReason : null,
       counted_at: now,
@@ -74,6 +77,8 @@ export async function saveCountLine(input: SaveLineInput): Promise<{ error?: str
         isNotApplicable || isDeferred || parsed.data.countedSaladbar ? now : null,
       counted_fridge_at:
         isNotApplicable || isDeferred || parsed.data.countedFridge ? now : null,
+      counted_desserts_at:
+        isNotApplicable || isDeferred || parsed.data.countedDesserts ? now : null,
       // Reporté : on ne sait RIEN du stock. La quantité reste à zéro mais
       // le produit sortira du rapport plutôt que d'y entrer comme un vide.
       deferred_at: isDeferred ? now : null,

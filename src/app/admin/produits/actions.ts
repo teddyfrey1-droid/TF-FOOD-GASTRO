@@ -44,6 +44,7 @@ const productSchema = z
     shelf_life_label: z.string().trim().max(20).nullable(),
     in_saladbar: z.boolean(),
     in_fridge: z.boolean(),
+    in_desserts: z.boolean(),
     sort_order: z.coerce.number().int(),
     is_active: z.boolean(),
     notes: z.string().trim().max(500).nullable(),
@@ -58,8 +59,8 @@ const productSchema = z
     message: 'Le diviseur doit être strictement positif.',
     path: ['min_divisor'],
   })
-  .refine((data) => data.in_saladbar || data.in_fridge, {
-    message: 'Un produit doit être stocké au saladbar, au frigo, ou aux deux.',
+  .refine((data) => data.in_saladbar || data.in_fridge || data.in_desserts, {
+    message: 'Un produit doit être rangé dans au moins un des trois meubles.',
     path: ['in_saladbar'],
   })
   .refine((data) => data.min_mode !== 'manual' || data.min_qty_manual !== null, {
@@ -104,6 +105,7 @@ function readForm(formData: FormData) {
     shelf_life_label: text('shelf_life_label'),
     in_saladbar: bool('in_saladbar'),
     in_fridge: bool('in_fridge'),
+    in_desserts: bool('in_desserts'),
     sort_order: String(formData.get('sort_order') ?? '0'),
     is_active: bool('is_active'),
     notes: text('notes'),
@@ -176,6 +178,7 @@ export async function updateProductInline(
     imageUrl?: string | null;
     inSaladbar?: boolean;
     inFridge?: boolean;
+    inDesserts?: boolean;
     categoryId?: string;
   },
 ): Promise<{ error?: string }> {
@@ -193,6 +196,7 @@ export async function updateProductInline(
     imageUrl: z.union([z.url('Adresse de photo invalide.'), z.literal('')]).nullable().optional(),
     inSaladbar: z.boolean().optional(),
     inFridge: z.boolean().optional(),
+    inDesserts: z.boolean().optional(),
     categoryId: z.uuid().optional(),
   });
 
@@ -203,7 +207,10 @@ export async function updateProductInline(
 
   // Un produit rangé nulle part ne serait plus jamais comptable : la
   // validation du jour l'attendrait sans qu'aucun écran ne l'affiche.
-  if (parsed.data.inSaladbar === false && parsed.data.inFridge === false) {
+  // Les trois zones arrivent ensemble depuis la fiche, on peut donc
+  // trancher ici — la contrainte de la base fait filet de sécurité.
+  const { inSaladbar, inFridge, inDesserts } = parsed.data;
+  if (inSaladbar === false && inFridge === false && inDesserts === false) {
     return { error: 'Un produit doit rester dans au moins une zone.' };
   }
 
@@ -220,12 +227,14 @@ export async function updateProductInline(
     image_url: string | null;
     in_saladbar: boolean;
     in_fridge: boolean;
+    in_desserts: boolean;
     category_id: string;
   }> = {};
   if (parsed.data.name !== undefined) payload.name = parsed.data.name;
   if (parsed.data.imageUrl !== undefined) payload.image_url = parsed.data.imageUrl || null;
   if (parsed.data.inSaladbar !== undefined) payload.in_saladbar = parsed.data.inSaladbar;
   if (parsed.data.inFridge !== undefined) payload.in_fridge = parsed.data.inFridge;
+  if (parsed.data.inDesserts !== undefined) payload.in_desserts = parsed.data.inDesserts;
   if (parsed.data.categoryId !== undefined) payload.category_id = parsed.data.categoryId;
   if (parsed.data.priority !== undefined) payload.priority = parsed.data.priority;
   if (parsed.data.minDivisor !== undefined) payload.min_divisor = parsed.data.minDivisor;
@@ -270,7 +279,7 @@ export async function updateProductInline(
  */
 export async function setProductZones(
   id: string,
-  zones: { inSaladbar: boolean; inFridge: boolean },
+  zones: { inSaladbar: boolean; inFridge: boolean; inDesserts: boolean },
 ): Promise<{ error?: string }> {
   return updateProductInline(id, zones);
 }
@@ -278,9 +287,9 @@ export async function setProductZones(
 /** Applique les mêmes zones à toute une catégorie, d'un geste. */
 export async function setCategoryZones(
   categoryId: string,
-  zones: { inSaladbar: boolean; inFridge: boolean },
+  zones: { inSaladbar: boolean; inFridge: boolean; inDesserts: boolean },
 ): Promise<{ error?: string }> {
-  if (!zones.inSaladbar && !zones.inFridge) {
+  if (!zones.inSaladbar && !zones.inFridge && !zones.inDesserts) {
     return { error: 'Un produit doit rester dans au moins une zone.' };
   }
   if (!z.uuid().safeParse(categoryId).success) return { error: 'Catégorie invalide.' };
@@ -289,7 +298,11 @@ export async function setCategoryZones(
   const { error, count } = await supabase
     .from('products')
     .update(
-      { in_saladbar: zones.inSaladbar, in_fridge: zones.inFridge },
+      {
+        in_saladbar: zones.inSaladbar,
+        in_fridge: zones.inFridge,
+        in_desserts: zones.inDesserts,
+      },
       { count: 'exact' },
     )
     .eq('category_id', categoryId);

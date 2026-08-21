@@ -19,11 +19,13 @@ export interface PendingCount {
   productId: string;
   qtySaladbar: number;
   qtyFridge: number;
+  qtyDesserts: number;
   isNotApplicable: boolean;
   notApplicableReason: string | null;
   /** Zones réellement relevées : l'employé compte en deux passes. */
   countedSaladbar: boolean;
   countedFridge: boolean;
+  countedDesserts: boolean;
   /** Comptage remis à plus tard, avec son motif. */
   isDeferred: boolean;
   deferredReason: string | null;

@@ -13,9 +13,11 @@ export interface LigneStock {
   categoryName: string;
   qtySaladbar: number;
   qtyFridge: number;
+  qtyDesserts: number;
   qtyTotal: number;
   inSaladbar: boolean;
   inFridge: boolean;
+  inDesserts: boolean;
   etat: 'rupture' | 'juste' | 'ok' | 'surplus' | 'surplus_fort' | 'absent' | 'reporte';
   surplus: number;
 }
@@ -144,9 +146,10 @@ export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
         <Card className="overflow-hidden rounded-3xl p-0">
           <div className="bg-muted/60 text-muted-foreground sticky top-0 z-10 flex items-center gap-2 border-b px-3 py-2 text-[10px] font-black tracking-wide uppercase backdrop-blur">
             <span className="min-w-0 flex-1">Produit</span>
-            <span className="w-12 text-right">Salad.</span>
-            <span className="w-12 text-right">Frigo</span>
-            <span className="w-12 text-right">Total</span>
+            <span className="w-10 text-right">Salad.</span>
+            <span className="w-10 text-right">Bas</span>
+            <span className="w-10 text-right">Des.</span>
+            <span className="w-11 text-right">Total</span>
             <span className="w-20 text-right">État</span>
           </div>
 
@@ -172,8 +175,9 @@ export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
 
                 <Quantite valeur={ligne.qtySaladbar} presente={ligne.inSaladbar} />
                 <Quantite valeur={ligne.qtyFridge} presente={ligne.inFridge} />
+                <Quantite valeur={ligne.qtyDesserts} presente={ligne.inDesserts} />
 
-                <span className="w-12 text-right text-[15px] font-black tabular-nums">
+                <span className="w-11 text-right text-[15px] font-black tabular-nums">
                   {formatQty(ligne.qtyTotal)}
                 </span>
 
@@ -194,7 +198,7 @@ function Quantite({ valeur, presente }: { valeur: number; presente: boolean }) {
   return (
     <span
       className={cn(
-        'w-12 text-right text-[13px] font-bold tabular-nums',
+        'w-10 text-right text-[13px] font-bold tabular-nums',
         presente ? 'text-muted-foreground' : 'text-muted-foreground/30',
       )}
     >

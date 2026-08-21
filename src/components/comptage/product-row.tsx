@@ -13,12 +13,15 @@ import type { CountProduct } from './counting-screen';
 export interface CountState {
   qtySaladbar: number;
   qtyFridge: number;
+  qtyDesserts: number;
   isNotApplicable: boolean;
   notApplicableReason: string | null;
   /** Le saladbar a été relevé (même à zéro). */
   countedSaladbar: boolean;
   /** Le frigo du bas a été relevé (même à zéro). */
   countedFridge: boolean;
+  /** Le frigo à desserts a été relevé (même à zéro). */
+  countedDesserts: boolean;
   /** Comptage remis à plus tard : ne bloque pas, n'entre pas au rapport. */
   isDeferred: boolean;
   deferredReason: string | null;
@@ -27,10 +30,12 @@ export interface CountState {
 export const EMPTY_LINE: CountState = {
   qtySaladbar: 0,
   qtyFridge: 0,
+  qtyDesserts: 0,
   isNotApplicable: false,
   notApplicableReason: null,
   countedSaladbar: false,
   countedFridge: false,
+  countedDesserts: false,
   isDeferred: false,
   deferredReason: null,
 };
@@ -46,12 +51,13 @@ export type CountLayout = 'grille' | 'liste';
  */
 export function isLineDone(
   line: CountState | null | undefined,
-  product: { inSaladbar: boolean; inFridge: boolean },
+  product: { inSaladbar: boolean; inFridge: boolean; inDesserts: boolean },
 ): boolean {
   if (!line) return false;
   if (line.isNotApplicable || line.isDeferred) return true;
   if (product.inSaladbar && !line.countedSaladbar) return false;
   if (product.inFridge && !line.countedFridge) return false;
+  if (product.inDesserts && !line.countedDesserts) return false;
   return true;
 }
 
@@ -74,18 +80,47 @@ function ProductRowImpl({
   onChange: (productId: string, patch: Partial<CountState>, zone: CountZone) => void;
 }) {
   const line = state ?? EMPTY_LINE;
-  const zoneCounted = zone === 'saladbar' ? line.countedSaladbar : line.countedFridge;
+  const zoneCounted =
+    zone === 'saladbar'
+      ? line.countedSaladbar
+      : zone === 'fridge'
+        ? line.countedFridge
+        : line.countedDesserts;
   const [demande, setDemande] = useState<null | 'absent' | 'report'>(null);
   const [motif, setMotif] = useState('');
 
-  const isSaladbar = zone === 'saladbar';
-  const value = isSaladbar ? line.qtySaladbar : line.qtyFridge;
-  const otherValue = isSaladbar ? line.qtyFridge : line.qtySaladbar;
-  const otherLabel = isSaladbar ? ZONE_LABELS.fridge : ZONE_LABELS.saladbar;
+  /** Le produit vit-il dans plus d'un meuble ? */
+  const zonesDuProduit = [
+    product.inSaladbar && 'saladbar',
+    product.inFridge && 'fridge',
+    product.inDesserts && 'desserts',
+  ].filter(Boolean) as CountZone[];
+  const value =
+    zone === 'saladbar'
+      ? line.qtySaladbar
+      : zone === 'fridge'
+        ? line.qtyFridge
+        : line.qtyDesserts;
+
+  /** Ce qui a été relevé dans les AUTRES meubles, pour le rappel « + N ». */
+  const otherValue =
+    (zone === 'saladbar' ? 0 : line.qtySaladbar) +
+    (zone === 'fridge' ? 0 : line.qtyFridge) +
+    (zone === 'desserts' ? 0 : line.qtyDesserts);
+
+  /** Le champ que la zone en cours écrit. */
+  const champQuantite = (n: number) =>
+    zone === 'saladbar'
+      ? { qtySaladbar: n }
+      : zone === 'fridge'
+        ? { qtyFridge: n }
+        : { qtyDesserts: n };
+  const autresZones = zonesDuProduit.filter((autre) => autre !== zone);
+  const otherLabel = autresZones.map((autre) => ZONE_LABELS[autre]).join(' + ');
 
   // Un produit qui n'est pas stocké dans cette zone n'a rien à y faire.
-  const presentHere = isSaladbar ? product.inSaladbar : product.inFridge;
-  const inBothZones = product.inSaladbar && product.inFridge;
+  const presentHere = zonesDuProduit.includes(zone);
+  const inBothZones = zonesDuProduit.length > 1;
 
   if (!presentHere) return null;
 
@@ -98,9 +133,7 @@ function ProductRowImpl({
   const ajouterUn = () =>
     onChange(
       product.id,
-      isSaladbar
-        ? { qtySaladbar: value + product.countStep }
-        : { qtyFridge: value + product.countStep },
+      champQuantite(value + product.countStep),
       zone,
     );
 
@@ -139,7 +172,7 @@ function ProductRowImpl({
         {!zoneCounted && !misDeCote ? 'Touchez la photo pour +1 · ' : ''}
         {product.unit === 'piece' ? 'pièces' : 'gastros'}
         {inBothZones && !grille ? ` · ${otherLabel} : ${otherValue}` : ''}
-        {inBothZones && grille ? ` · ${otherValue} ${isSaladbar ? 'en bas' : 'en haut'}` : ''}
+        {inBothZones && grille ? ` · ${otherValue} ailleurs` : ''}
       </p>
     </>
   );
@@ -226,10 +259,10 @@ function ProductRowImpl({
             counted={zoneCounted}
             compact={grille}
             onChange={(next) =>
-              onChange(product.id, isSaladbar ? { qtySaladbar: next } : { qtyFridge: next }, zone)
+              onChange(product.id, champQuantite(next), zone)
             }
             onZero={() =>
-              onChange(product.id, isSaladbar ? { qtySaladbar: 0 } : { qtyFridge: 0 }, zone)
+              onChange(product.id, champQuantite(0), zone)
             }
           />
         </div>

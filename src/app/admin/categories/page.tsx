@@ -12,7 +12,7 @@ export default async function CategoriesPage() {
 
   const [{ data: categories }, { data: products }] = await Promise.all([
     supabase.from('product_categories').select('id, name').order('sort_order'),
-    supabase.from('products').select('category_id, in_saladbar, in_fridge').eq('is_active', true),
+    supabase.from('products').select('category_id, in_saladbar, in_fridge, in_desserts').eq('is_active', true),
   ]);
 
   const rows: CategoryRow[] = (categories ?? []).map((category) => {
@@ -23,6 +23,7 @@ export default async function CategoriesPage() {
       productCount: own.length,
       saladbarCount: own.filter((product) => product.in_saladbar).length,
       fridgeCount: own.filter((product) => product.in_fridge).length,
+      dessertsCount: own.filter((product) => product.in_desserts).length,
     };
   });
 
