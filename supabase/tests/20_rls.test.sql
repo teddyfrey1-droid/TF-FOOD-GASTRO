@@ -1409,4 +1409,104 @@ select pg_temp.check_equal('Le directeur débloque un comptage laissé en plan',
   0);
 
 \echo ''
+\echo '--- 22. LE CONTRÔLE D''ACCÈS ---'
+
+-- Le directeur et le propriétaire ont tout, sans passer par la table :
+-- aucune combinaison d'interrupteurs ne peut les enfermer dehors.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_equal('Le directeur a tous les droits, quoi qu''il règle',
+  (select public.mep_a_le_droit('historique') and public.mep_a_le_droit('ruptures')
+      and public.mep_a_le_droit('carte') and public.mep_a_le_droit('simulateur')),
+  true);
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Un salarié n'a rien par défaut : les valeurs initiales reproduisent le
+-- comportement d'avant ce réglage.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_equal('Le salarié n''a aucun droit par défaut',
+  (select public.mep_a_le_droit('historique') or public.mep_a_le_droit('ruptures')),
+  false);
+select pg_temp.check_denied('Un salarié ne règle aucun droit',
+  'select public.mep_regler_droit(''historique'', ''employee''::public.user_role, true)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_equal('L''assistant manager garde l''historique',
+  (select public.mep_a_le_droit('historique')),
+  true);
+select pg_temp.check_denied('...mais ne règle rien non plus',
+  'select public.mep_regler_droit(''ruptures'', ''assistant_manager''::public.user_role, true)');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- LE test qui compte : couper le droit doit réellement fermer la porte,
+-- pas seulement masquer un bouton.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select public.mep_regler_droit('historique', 'assistant_manager'::public.user_role, false);
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_denied('Droit retiré : l''historique se ferme vraiment',
+  'select * from public.mep_count_history(current_date - 7, current_date)');
+select pg_temp.check_equal('...et les comptages passés disparaissent de sa vue',
+  (select count(*)::int from public.count_sessions where date < current_date),
+  0);
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Et l'ouvrir doit réellement ouvrir.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select public.mep_regler_droit('historique', 'assistant_manager'::public.user_role, true);
+select public.mep_regler_droit('ruptures', 'assistant_manager'::public.user_role, true);
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_equal('Droit rendu : l''historique se rouvre',
+  (select count(*)::int >= 0 from public.mep_count_history(current_date - 7, current_date)),
+  true);
+select pg_temp.check_equal('Droit « ruptures » ouvert : l''analyse répond',
+  (select count(*)::int >= 0 from public.mep_stockout_history(current_date - 7, current_date)),
+  true);
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Le catalogue ferme la porte aux droits qui ne doivent jamais s'ouvrir :
+-- le simulateur affiche les cibles de production.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('Le simulateur ne s''ouvre pas à un salarié',
+  'select public.mep_regler_droit(''simulateur'', ''employee''::public.user_role, true)');
+select pg_temp.check_denied('Le chiffre d''affaires n''est pas un droit réglable',
+  'select public.mep_regler_droit(''chiffre_affaires'', ''employee''::public.user_role, true)');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Même ouvert en grand, un droit ne donne jamais accès au CA.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_denied('L''assistant manager n''atteint toujours pas le CA',
+  'select public.mep_forecast_revenue(current_date)');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Personne ne réécrit la table à la main.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('Même le directeur n''écrit pas directement dans la table',
+  'update public.role_permissions set allowed = true');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

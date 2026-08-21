@@ -1,4 +1,4 @@
-import { requireUser } from '@/lib/auth';
+import { aLeDroit, requireUser } from '@/lib/auth';
 import Link from 'next/link';
 import { Check, ChevronRight, CircleAlert, Refrigerator } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -108,6 +108,8 @@ export default async function HomePage() {
     days: window.days,
     rate: window.observation.observedRate,
   }));
+
+  const peutSimuler = await aLeDroit('simulateur');
 
   return (
     <>
@@ -235,7 +237,7 @@ export default async function HomePage() {
         </div>
       </main>
 
-      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={isManagerRole(user.role)} />
+      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={peutSimuler} />
     </>
   );
 }

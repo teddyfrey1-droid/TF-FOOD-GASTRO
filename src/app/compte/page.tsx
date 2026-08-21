@@ -1,4 +1,4 @@
-import { requireUser, ROLE_DESCRIPTIONS, ROLE_LABELS } from '@/lib/auth';
+import { aLeDroit, requireUser, ROLE_DESCRIPTIONS, ROLE_LABELS } from '@/lib/auth';
 import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
 import { Bell, KeyRound, Smartphone, Users } from 'lucide-react';
 import { PasswordForm } from './password-form';
@@ -17,6 +17,8 @@ export const metadata = { title: 'Mon compte — Lafayette' };
 export default async function AccountPage() {
   const user = await requireUser();
   const prenom = user.fullName.trim().split(/\s+/)[0] || user.fullName;
+
+  const peutSimuler = await aLeDroit('simulateur');
 
   return (
     <>
@@ -109,7 +111,7 @@ export default async function AccountPage() {
         </div>
       </main>
 
-      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={isManagerRole(user.role)} />
+      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={peutSimuler} />
     </>
   );
 }

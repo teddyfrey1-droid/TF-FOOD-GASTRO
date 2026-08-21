@@ -70,3 +70,28 @@ export async function requireManager(): Promise<CurrentUser> {
   if (!isManagerRole(user.role)) redirect('/');
   return user;
 }
+
+/**
+ * Exige un droit réglable, pas un statut.
+ *
+ * C'est la base qui tranche : `mep_a_le_droit` répond toujours oui au
+ * directeur et au propriétaire, et consulte le tableau des droits pour
+ * les autres. La page n'a donc pas à connaître la règle — elle changera
+ * sans qu'on y revienne.
+ */
+export async function requireDroit(permission: string): Promise<CurrentUser> {
+  const user = await requireUser();
+
+  const supabase = await createClient();
+  const { data } = await supabase.rpc('mep_a_le_droit', { p_permission: permission });
+
+  if (data !== true) redirect('/');
+  return user;
+}
+
+/** Le même contrôle, sans redirection : pour masquer une entrée de menu. */
+export async function aLeDroit(permission: string): Promise<boolean> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc('mep_a_le_droit', { p_permission: permission });
+  return data === true;
+}

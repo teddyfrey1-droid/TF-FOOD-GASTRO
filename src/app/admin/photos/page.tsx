@@ -1,4 +1,4 @@
-import { requireManager } from '@/lib/auth';
+import { requireDroit } from '@/lib/auth';
 import { getCategories, getProducts } from '@/lib/admin/queries';
 import { PhotosManager, type PhotoRow } from '@/components/admin/photos-manager';
 
@@ -7,7 +7,7 @@ export const dynamic = 'force-dynamic';
 export const metadata = { title: 'Photos — Lafayette' };
 
 export default async function PhotosPage() {
-  await requireManager();
+  await requireDroit('carte');
   const [products, categories] = await Promise.all([getProducts(false), getCategories()]);
   const categoryById = new Map(categories.map((category) => [category.id, category.name]));
 

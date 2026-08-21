@@ -1,11 +1,11 @@
-import { requireManager } from '@/lib/auth';
+import { requireDroit } from '@/lib/auth';
 import { getFamilySettings } from '@/lib/admin/queries';
 import { TargetSimulator } from '@/components/admin/target-simulator';
 
 export const dynamic = 'force-dynamic';
 
 export default async function SimulatorPage() {
-  await requireManager();
+  await requireDroit('simulateur');
   const families = await getFamilySettings();
 
   return (

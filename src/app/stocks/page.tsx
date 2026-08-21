@@ -1,5 +1,5 @@
-import { requireUser } from '@/lib/auth';
-import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
+import { aLeDroit, requireUser } from '@/lib/auth';
+import { isStaffLeadRole } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { todayInParis } from '@/lib/format';
 import { BottomTabs } from '@/components/bottom-tabs';
@@ -57,6 +57,8 @@ export default async function StocksPage() {
     surplus: Number(ligne.surplus),
   }));
 
+  const peutSimuler = await aLeDroit('simulateur');
+
   return (
     <>
       <main className="pt-safe-header mx-auto w-full max-w-md px-5 pt-4 pb-28">
@@ -89,7 +91,7 @@ export default async function StocksPage() {
         )}
       </main>
 
-      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={isManagerRole(user.role)} />
+      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={peutSimuler} />
     </>
   );
 }

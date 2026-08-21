@@ -322,6 +322,11 @@ export type Database = {
        * de service peut les lire, puisqu'un code doit pouvoir être validé
        * par quelqu'un qui n'est justement pas encore connecté.
        */
+      /** Droits réglables par rôle. En lecture seule depuis le navigateur. */
+      role_permissions: Table<
+        { permission: string; role: UserRole; allowed: boolean; updated_at: string },
+        'updated_at'
+      >;
       activation_codes: Table<
         {
           id: string;
@@ -408,6 +413,13 @@ export type Database = {
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /** Vrai si l'appelant a ce droit. Directeur et propriétaire : toujours vrai. */
+      mep_a_le_droit: { Args: { p_permission: string }; Returns: boolean };
+      /** Ouvre ou ferme un droit pour un statut. Directeur uniquement. */
+      mep_regler_droit: {
+        Args: { p_permission: string; p_role: UserRole; p_allowed: boolean };
+        Returns: undefined;
+      };
       /** Efface un comptage EN COURS et ses lignes. Jamais un validé. */
       mep_annuler_comptage: { Args: { p_session_id: string }; Returns: undefined };
       /** Crée un code d'activation et invalide les précédents. */

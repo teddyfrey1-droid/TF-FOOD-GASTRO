@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '2.1.0';
+export const VERSION = '2.2.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,14 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '2.2.0',
+    date: '2026-08-23',
+    points: [
+      'Nouvelle section « Contrôle d’accès » dans Gestion : un interrupteur par accès et par statut.',
+      'Le chiffre d’affaires, les cibles et la gestion des comptes restent verrouillés — et l’écran dit pourquoi.',
+    ],
+  },
   {
     version: '2.1.0',
     date: '2026-08-23',

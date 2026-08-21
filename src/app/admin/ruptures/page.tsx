@@ -1,4 +1,4 @@
-import { requireManager } from '@/lib/auth';
+import { requireDroit } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { getProducts } from '@/lib/admin/queries';
 import { todayInParis } from '@/lib/format';
@@ -27,7 +27,7 @@ export default async function RupturesPage({
 }: {
   searchParams: Promise<{ jours?: string }>;
 }) {
-  await requireManager();
+  await requireDroit('ruptures');
 
   const { jours: joursParam } = await searchParams;
   const jours = FENETRES.some((f) => String(f.jours) === joursParam) ? Number(joursParam) : 30;

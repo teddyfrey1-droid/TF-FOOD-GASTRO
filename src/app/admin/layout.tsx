@@ -1,5 +1,5 @@
-import { requireStaffLead } from '@/lib/auth';
-import { isManagerRole, isStaffLeadRole, ROLE_LABELS } from '@/lib/roles';
+import { aLeDroit, requireStaffLead } from '@/lib/auth';
+import { isStaffLeadRole, ROLE_LABELS } from '@/lib/roles';
 import { AvatarCompte } from '@/components/avatar-compte';
 import { AdminNav } from '@/components/admin/admin-nav';
 import { BottomTabs } from '@/components/bottom-tabs';
@@ -11,6 +11,9 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // compris. Chaque page sensible pose ensuite sa propre garde : la
   // barrière du chiffre d'affaires reste `requireManager`, ici et en base.
   const user = await requireStaffLead();
+  // L'onglet Simulateur suit le droit, plus le seul statut : le
+  // directeur peut désormais l'ouvrir à un assistant manager.
+  const simulateur = await aLeDroit('simulateur');
 
   return (
     <div className="min-h-dvh">
@@ -36,7 +39,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
       {/* Un onglet du bas doit rester visible une fois arrivé, sinon c'est
           une porte à sens unique : on entre dans Gestion et la barre
           disparaît. */}
-      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={isManagerRole(user.role)} />
+      <BottomTabs isStaffLead={isStaffLeadRole(user.role)} isManager={simulateur} />
     </div>
   );
 }

@@ -21,6 +21,7 @@ import { formatDateLong, todayInParis } from '@/lib/format';
 import { Card } from '@/components/ui/card';
 import { GroupeMenu, RangeeMenu } from '@/components/rangee-menu';
 import { HorairesComptage } from '@/components/admin/horaires-comptage';
+import { ControleAcces } from '@/components/admin/controle-acces';
 import { SignOutButton } from '@/components/pwa/sign-out-button';
 
 export const dynamic = 'force-dynamic';
@@ -30,10 +31,11 @@ export default async function DashboardPage() {
   const today = todayInParis();
   const supabase = await createClient();
 
-  const [statuses, products, heures, { count: equipe }] = await Promise.all([
+  const [statuses, products, heures, { data: droitsBruts }, { count: equipe }] = await Promise.all([
     getDailyCountStatus(today),
     getProducts(false),
     getCountHours(),
+    supabase.from('role_permissions').select('permission, role, allowed'),
     supabase.from('profiles').select('id', { count: 'exact', head: true }),
   ]);
 
@@ -46,6 +48,12 @@ export default async function DashboardPage() {
   const sansBase = products.filter((product) => Number(product.base_qty) <= 0).length;
   const sansPhoto = products.filter((product) => !product.image_url).length;
   const tousEnPrioriteParDefaut = products.every((product) => product.priority === 3);
+
+  // « permission:role » → autorisé. L'écran d'interrupteurs n'a besoin
+  // que de ça, et la table est minuscule.
+  const droits = Object.fromEntries(
+    (droitsBruts ?? []).map((ligne) => [`${ligne.permission}:${ligne.role}`, ligne.allowed]),
+  );
 
   const faits = statuses.filter((status) => status.status === 'submitted').length;
   const relancesEnAttente = statuses.reduce((sum, status) => sum + status.pendingTasks, 0);
@@ -87,6 +95,8 @@ export default async function DashboardPage() {
       {heures ? (
         <HorairesComptage morning={heures.morning} afternoon={heures.afternoon} />
       ) : null}
+
+      <ControleAcces initial={droits} />
 
       <GroupeMenu titre="La carte">
         <RangeeMenu
