@@ -143,7 +143,7 @@ function ProductRowImpl({
         name={product.name}
         categoryName={product.categoryName}
         imageUrl={product.imageUrl}
-        className={cn(grille && 'aspect-square size-full rounded-xl text-3xl')}
+        className={cn(grille && 'aspect-[5/4] size-full rounded-xl text-2xl')}
       />
       {done ? (
         <span className="bg-primary text-primary-foreground absolute -right-1 -bottom-1 flex size-6 items-center justify-center rounded-full">

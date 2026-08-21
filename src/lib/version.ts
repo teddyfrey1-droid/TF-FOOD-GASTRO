@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '3.2.0';
+export const VERSION = '3.2.1';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,15 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '3.2.1',
+    date: '2026-08-25',
+    points: [
+      'Les deux compteurs de l’onglet Stocks sont centrés et nettement plus gros.',
+      'Le CA prévisionnel respire lentement pour attirer l’œil, sans que la carte grandisse.',
+      'Vignettes du comptage réduites d’un cran : plus de produits par écran.',
+    ],
+  },
   {
     version: '3.2.0',
     date: '2026-08-25',

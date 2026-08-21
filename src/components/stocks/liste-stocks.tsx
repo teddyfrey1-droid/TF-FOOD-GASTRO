@@ -299,26 +299,29 @@ function Chiffre({
   return (
     <Card
       className={cn(
-        'flex items-center gap-3 rounded-2xl p-3.5',
+        'flex flex-col items-center justify-center gap-0.5 rounded-2xl px-3 py-4',
         alerte && rouge && 'border-destructive/30 bg-destructive/[0.06]',
         alerte && !rouge && 'border-alert-border bg-alert',
       )}
     >
-      {alerte && !rouge ? (
-        <TriangleAlert className="text-alert-foreground size-5 shrink-0" strokeWidth={2.8} />
-      ) : null}
+      {/* Centré : le nombre et son libellé se lisent comme un tout. Côte
+          à côte, l'œil parcourait la carte de gauche à droite avant de
+          comprendre de quoi on parlait. */}
       <p
         className={cn(
-          'text-2xl leading-none font-black tabular-nums',
+          'flex items-center gap-1.5 text-4xl leading-none font-black tabular-nums',
           alerte && rouge && 'text-destructive',
           alerte && !rouge && 'text-alert-foreground',
         )}
       >
+        {alerte && !rouge ? (
+          <TriangleAlert className="size-6 shrink-0" strokeWidth={2.8} />
+        ) : null}
         {valeur}
       </p>
       <p
         className={cn(
-          'text-[11px] leading-tight font-bold',
+          'text-[13px] leading-tight font-bold',
           alerte && !rouge ? 'text-alert-foreground/80' : 'text-muted-foreground',
         )}
       >

@@ -33,11 +33,15 @@ export function BlocChiffreAffaires({
           l'écran sans en occuper la moitié. */}
       {/* Serré : mêmes corps de texte, moins d'air entre eux. La carte
           tient dans moins de hauteur sans rien perdre en lisibilité. */}
-      <Card className="bg-primary/10 border-primary/25 rounded-3xl px-5 py-4">
+      <Card className="bg-primary/10 border-primary/25 rounded-3xl px-5 py-3.5">
         <p className="text-primary text-sm font-black tracking-wide uppercase">
           CA prévisionnel du jour
         </p>
-        <p className="text-primary mt-1 text-[2.75rem] leading-none font-black tracking-tight tabular-nums">
+        {/* Une respiration très lente plutôt qu'un clignotement : le
+            chiffre attire l'œil au premier coup d'œil sans devenir
+            fatigant, et l'animation se coupe d'elle-même pour qui a
+            demandé moins de mouvement dans son système. */}
+        <p className="text-primary animation-respire mt-1 text-[3.1rem] leading-none font-black tracking-tight tabular-nums">
           {formatEuro(forecast)}
         </p>
 
@@ -52,18 +56,18 @@ export function BlocChiffreAffaires({
              production. Le montant est le CA RÉELLEMENT ENCAISSÉ l'an
              dernier, avant majoration — sans lui, le taux de croissance ne
              se contrôle pas. */
-          <div className="border-primary/20 mt-3 border-t pt-3">
+          <div className="border-primary/20 mt-2.5 border-t pt-2.5">
             {/* Surligné : c'est le point de comparaison, et il doit se
                 repérer sans être cherché. */}
-            <p className="bg-primary/15 text-primary inline-block rounded-md px-1.5 py-0.5 text-[12px] font-black tracking-wide uppercase">
+            <p className="bg-foreground/10 text-foreground inline-block rounded-md px-2 py-0.5 text-[13px] font-black tracking-wide uppercase">
               L&apos;an dernier, avant majoration
             </p>
             {/* Dans une pastille, plus gros que l'intitulé : le nombre
                 prime sur son étiquette. */}
-            <p className="mt-1.5">
-              <span className="bg-muted ring-border inline-block rounded-full px-3 py-1 text-[17px] leading-snug font-black ring-1">
+            <p className="mt-1">
+              <span className="bg-background ring-border inline-block rounded-full px-3.5 py-1 text-[19px] leading-snug font-black ring-1">
                 {anDernier ? formatEuro(anDernier.revenueHt) : '—'}
-                <span className="text-muted-foreground ml-1.5 text-[15px] font-bold">
+                <span className="text-muted-foreground ml-1.5 text-[16px] font-bold">
                   {anDernier
                     ? `le ${formatDateLong(anDernier.jour).replace(/ \d{4}$/, '')}`
                     : 'aucune journée comparable'}
@@ -73,7 +77,7 @@ export function BlocChiffreAffaires({
           </div>
         )}
 
-        <div className="text-muted-foreground border-primary/20 mt-3 flex items-center gap-2 border-t pt-2.5 text-[11px] font-medium">
+        <div className="text-muted-foreground border-primary/20 mt-2.5 flex items-center gap-2 border-t pt-2 text-[11px] font-medium">
           <CalendarCheck2 className="size-4 shrink-0" />
           {coverage.days > 0 ? (
             <span>

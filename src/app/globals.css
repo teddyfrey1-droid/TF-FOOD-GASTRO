@@ -309,3 +309,35 @@
     }
   }
 }
+
+/* ---------------------------------------------------------------------
+ * Le chiffre d'affaires prévisionnel respire.
+ *
+ * Une pulsation très lente et de faible amplitude : l'œil se pose
+ * dessus en ouvrant l'écran, sans que le mouvement devienne une gêne
+ * quand on regarde le reste de la carte. Un clignotement franc aurait
+ * fatigué au bout de la deuxième journée.
+ * ------------------------------------------------------------------- */
+@keyframes mep-respire {
+  0%,
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.82;
+    transform: scale(1.025);
+  }
+}
+
+.animation-respire {
+  transform-origin: left center;
+  animation: mep-respire 2.8s ease-in-out infinite;
+}
+
+/* Le mouvement s'efface pour qui l'a demandé au niveau du système. */
+@media (prefers-reduced-motion: reduce) {
+  .animation-respire {
+    animation: none;
+  }
+}

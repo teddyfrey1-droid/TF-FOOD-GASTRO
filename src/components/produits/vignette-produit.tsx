@@ -23,7 +23,7 @@ export function VignetteProduit({
 }) {
   const tailles = {
     sm: 'size-11 rounded-xl text-xl',
-    md: 'size-14 rounded-2xl text-2xl',
+    md: 'size-12 rounded-2xl text-2xl',
   } as const;
 
   return (
