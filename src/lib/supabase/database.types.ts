@@ -391,6 +391,16 @@ export type Database = {
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
       /**
+       * CA brut encaissé le jour de référence l'an dernier, AVANT
+       * majoration — à ne pas confondre avec `mep_reference_revenue`,
+       * qui renvoie la cible du service. La date accompagne le montant :
+       * une journée fermée fait remonter d'une semaine.
+       */
+      mep_ca_an_dernier: {
+        Args: { d: string };
+        Returns: { jour: string; revenue_ht: number }[];
+      };
+      /**
        * Réserve un des deux créneaux d'envoi horaires et renvoie son
        * identifiant. Lève une erreur — portant l'heure du prochain
        * créneau — quand le quota est atteint.

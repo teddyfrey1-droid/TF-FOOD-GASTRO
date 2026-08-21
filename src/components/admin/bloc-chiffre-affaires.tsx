@@ -2,7 +2,6 @@ import { CalendarCheck2 } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { GrowthCard, type GrowthWindow } from '@/components/admin/growth-card';
 import { formatDateLong, formatEuro } from '@/lib/format';
-import { referenceDateLastYear } from '@/lib/mep';
 
 /**
  * Le chiffre d'affaires du jour, prévision et provenance.
@@ -14,62 +13,64 @@ import { referenceDateLastYear } from '@/lib/mep';
  * toute façon de servir ces chiffres à quelqu'un d'autre.
  */
 export function BlocChiffreAffaires({
-  today,
   forecast,
-  reference,
+  anDernier,
   growthRate,
   windows,
-  totals,
   coverage,
 }: {
-  today: string;
   forecast: number | null;
-  reference: number | null;
+  /** CA brut de l'an dernier, avec la date réellement retenue. */
+  anDernier: { jour: string; revenueHt: number } | null;
   growthRate: number;
   windows: GrowthWindow[];
-  totals: { actual: number; reference: number } | null;
   coverage: { days: number; lastDate: string | null };
 }) {
-  const jourDeReference = formatDateLong(referenceDateLastYear(today)).replace(/ \d{4}$/, '');
 
   return (
     <section className="grid gap-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
       {/* Vert franc mais posé : le CA reste le chiffre le plus important de
           l'écran sans en occuper la moitié. */}
-      <Card className="bg-primary/10 border-primary/25 rounded-3xl px-6 py-5">
+      {/* Serré : mêmes corps de texte, moins d'air entre eux. La carte
+          tient dans moins de hauteur sans rien perdre en lisibilité. */}
+      <Card className="bg-primary/10 border-primary/25 rounded-3xl px-5 py-4">
         <p className="text-primary text-sm font-black tracking-wide uppercase">
           CA prévisionnel du jour
         </p>
-        <p className="text-primary mt-2 text-[2.75rem] leading-none font-black tracking-tight tabular-nums">
+        <p className="text-primary mt-1 text-[2.75rem] leading-none font-black tracking-tight tabular-nums">
           {formatEuro(forecast)}
         </p>
 
         {forecast === null ? (
-          <p className="text-muted-foreground mt-3 text-[13px] leading-snug">
+          <p className="text-muted-foreground mt-2.5 text-[13px] leading-snug">
             Aucun CA de référence pour l&apos;an dernier à cette date : la production ne peut pas
             être calculée aujourd&apos;hui.
           </p>
         ) : (
           /* D'où vient le chiffre, en gras et détaché : c'est ce qui permet
              de juger si la prévision est crédible avant de lancer la
-             production. Le montant de l'an dernier est donné NU, avant
-             majoration — sans lui, le taux de croissance ne se contrôle
-             pas. */
-          <div className="border-primary/20 mt-4 border-t pt-3.5">
+             production. Le montant est le CA RÉELLEMENT ENCAISSÉ l'an
+             dernier, avant majoration — sans lui, le taux de croissance ne
+             se contrôle pas. */
+          <div className="border-primary/20 mt-3 border-t pt-3">
             <p className="text-muted-foreground text-[11px] font-black tracking-wide uppercase">
               L&apos;an dernier, avant majoration
             </p>
-            <p className="mt-1 text-[15px] leading-snug font-bold">
-              {formatEuro(reference)}{' '}
-              <span className="text-muted-foreground font-semibold">le {jourDeReference}</span>
+            <p className="mt-0.5 text-[15px] leading-snug font-bold">
+              {anDernier ? formatEuro(anDernier.revenueHt) : '—'}{' '}
+              <span className="text-muted-foreground font-semibold">
+                {anDernier
+                  ? `le ${formatDateLong(anDernier.jour).replace(/ \d{4}$/, '')}`
+                  : 'aucune journée comparable'}
+              </span>
             </p>
-            <p className="text-muted-foreground mt-1.5 text-[13px] leading-snug font-semibold">
+            <p className="text-muted-foreground mt-1 text-[13px] leading-snug font-semibold">
               Majoré du taux de croissance ci-contre pour donner la prévision.
             </p>
           </div>
         )}
 
-        <div className="text-muted-foreground border-primary/20 mt-4 flex items-center gap-2 border-t pt-3.5 text-[11px] font-medium">
+        <div className="text-muted-foreground border-primary/20 mt-3 flex items-center gap-2 border-t pt-2.5 text-[11px] font-medium">
           <CalendarCheck2 className="size-4 shrink-0" />
           {coverage.days > 0 ? (
             <span>
@@ -82,7 +83,7 @@ export function BlocChiffreAffaires({
         </div>
       </Card>
 
-      <GrowthCard currentRate={growthRate} windows={windows} totals={totals} />
+      <GrowthCard currentRate={growthRate} windows={windows} />
     </section>
   );
 }

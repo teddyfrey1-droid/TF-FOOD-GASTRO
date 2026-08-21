@@ -292,3 +292,19 @@ export async function getRevenueCoverage(): Promise<RevenueCoverage> {
     lastRevenue: last.data ? toNumber(last.data.revenue_ht, 0) : null,
   };
 }
+
+/**
+ * Le CA réellement encaissé le même jour de semaine l'an dernier.
+ *
+ * À ne pas confondre avec `getReferenceRevenue`, qui renvoie la CIBLE du
+ * service — la prévision majorée de la marge de sécurité. Les deux se
+ * ressemblaient à l'écran au point d'afficher le même nombre deux fois.
+ */
+export async function getLastYearRevenue(
+  date: string,
+): Promise<{ jour: string; revenueHt: number } | null> {
+  const supabase = await createClient();
+  const { data } = await supabase.rpc('mep_ca_an_dernier', { d: date });
+  const ligne = data?.[0];
+  return ligne ? { jour: ligne.jour, revenueHt: Number(ligne.revenue_ht) } : null;
+}

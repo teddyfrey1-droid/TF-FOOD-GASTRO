@@ -961,4 +961,74 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 16. LE CA DE L''AN DERNIER EST BIEN CELUI DE L''AN DERNIER ---'
+
+-- L'écran affichait la cible du jour sous l'intitulé « l'an dernier » :
+-- `mep_reference_revenue` renvoie la prévision majorée, pas le passé. Ce
+-- test fige la distinction — la valeur brute ne doit JAMAIS égaler la
+-- prévision tant qu'un taux de croissance est appliqué.
+--
+-- Les données se posent hors rôle ; les lectures se font en directeur,
+-- puisque la fonction refuse tout le monde d'autre.
+delete from public.revenue_history where date between date '2025-01-01' and date '2025-12-31';
+update public.revenue_settings set growth_rate = 0.28;
+-- Un test précédent a posé un coefficient sur cette journée : on repart
+-- d'une prévision purement calculée, sinon l'assertion mesure autre chose.
+delete from public.daily_forecast where date = date '2026-08-21';
+
+insert into public.revenue_history (date, revenue_ht, is_closed_day)
+values (public.mep_reference_date(date '2026-08-21'), 1000, false)
+on conflict (date) do update set revenue_ht = 1000, is_closed_day = false;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+
+select pg_temp.check_equal('Le CA brut de l''an dernier est rendu tel quel',
+  (select revenue_ht from public.mep_ca_an_dernier(date '2026-08-21')),
+  1000::numeric);
+select pg_temp.check_equal('La prévision applique bien les 28 %',
+  (select public.mep_forecast_revenue(date '2026-08-21')),
+  1280::numeric);
+select pg_temp.check_equal('Les deux montants diffèrent',
+  (select (select revenue_ht from public.mep_ca_an_dernier(date '2026-08-21'))
+          <> public.mep_forecast_revenue(date '2026-08-21')),
+  true);
+
+reset role;
+reset "request.jwt.claim.sub";
+
+-- La journée de référence peut manquer : on remonte de semaine en
+-- semaine, et la date renvoyée doit être celle réellement retenue —
+-- sinon le montant affiché ne correspond pas à la date affichée.
+update public.revenue_history set is_closed_day = true
+  where date = public.mep_reference_date(date '2026-08-21');
+
+insert into public.revenue_history (date, revenue_ht, is_closed_day)
+values (public.mep_reference_date(date '2026-08-21') - 7, 900, false)
+on conflict (date) do update set revenue_ht = 900, is_closed_day = false;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_equal('Jour fermé : on remonte d''une semaine, et on le dit',
+  (select jour from public.mep_ca_an_dernier(date '2026-08-21')),
+  public.mep_reference_date(date '2026-08-21') - 7);
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Une donnée de chiffre d'affaires ne sort pas de l'encadrement.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Le CA de l''an dernier est refusé à l''employé',
+  'select * from public.mep_ca_an_dernier(current_date)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_denied('...et à l''assistant manager',
+  'select * from public.mep_ca_an_dernier(current_date)');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

@@ -5,11 +5,12 @@ import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
 import {
   getForecastRevenue,
   getGrowthWindows,
-  getReferenceRevenue,
+  getLastYearRevenue,
   getRevenueCoverage,
   getRevenueSettings,
 } from '@/lib/admin/queries';
 import { BlocChiffreAffaires } from '@/components/admin/bloc-chiffre-affaires';
+import { GrowthObservedCard } from '@/components/admin/growth-card';
 import { createClient } from '@/lib/supabase/server';
 import { NotificationToggle } from '@/components/pwa/notification-toggle';
 import { SessionCard } from '@/components/session-card';
@@ -88,16 +89,22 @@ export default async function HomePage() {
 
   const ca = directeur
     ? await (async () => {
-        const [forecast, reference, settings, windows, coverage] = await Promise.all([
+        const [forecast, anDernier, settings, windows, coverage] = await Promise.all([
           getForecastRevenue(isoToday),
-          getReferenceRevenue(isoToday, 'morning'),
+          getLastYearRevenue(isoToday),
           getRevenueSettings(),
           getGrowthWindows(isoToday),
           getRevenueCoverage(),
         ]);
-        return { forecast, reference, settings, windows, coverage };
+        return { forecast, anDernier, settings, windows, coverage };
       })()
     : null;
+
+  const fenetres = (ca?.windows ?? []).map((window) => ({
+    label: window.label,
+    days: window.days,
+    rate: window.observation.observedRate,
+  }));
 
   return (
     <>
@@ -161,29 +168,16 @@ export default async function HomePage() {
         {ca ? (
           <div className="mb-7">
             <BlocChiffreAffaires
-              today={isoToday}
               forecast={ca.forecast}
-              reference={ca.reference}
+              anDernier={ca.anDernier}
               growthRate={ca.settings.growthRate}
-              windows={ca.windows.map((window) => ({
-                label: window.label,
-                days: window.days,
-                rate: window.observation.observedRate,
-              }))}
-              totals={
-                ca.windows[0].observation.sampleDays > 0
-                  ? {
-                      actual: ca.windows[0].observation.totalActual,
-                      reference: ca.windows[0].observation.totalReference,
-                    }
-                  : null
-              }
+              windows={fenetres}
               coverage={ca.coverage}
             />
           </div>
         ) : null}
 
-        <h2 className="mb-3 flex items-center gap-2 text-xl font-black tracking-tight">
+        <h2 className="mb-3 flex items-center gap-2.5 text-2xl font-black tracking-tight">
           Aujourd&apos;hui
           <PastilleEtat texte={`${done}/2`} ton={done === 2 ? 'fait' : 'alerte'} />
         </h2>
@@ -192,16 +186,20 @@ export default async function HomePage() {
           <SessionCard
             kind="morning"
             title="Comptage du matin"
-            description="Avant l'ouverture — mise en place de la journée"
             session={bySession.get('morning') ?? null}
           />
           <SessionCard
             kind="afternoon"
             title="Comptage de l'après-midi"
-            description="Après le service du midi — relance pour le soir"
             session={bySession.get('afternoon') ?? null}
           />
         </div>
+
+        {ca ? (
+          <div className="mt-7">
+            <GrowthObservedCard currentRate={ca.settings.growthRate} windows={fenetres} />
+          </div>
+        ) : null}
 
         <div className="mt-auto pt-8">
           <NotificationToggle />

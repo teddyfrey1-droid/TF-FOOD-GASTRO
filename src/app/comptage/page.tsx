@@ -100,13 +100,11 @@ export default async function PageComptages() {
           <SessionCard
             kind="morning"
             title="Comptage du matin"
-            description="Avant l'ouverture — mise en place de la journée"
             session={carte('morning')}
           />
           <SessionCard
             kind="afternoon"
             title="Comptage de l'après-midi"
-            description="Après le service du midi — relance pour le soir"
             session={carte('afternoon')}
           />
         </div>

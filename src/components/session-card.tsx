@@ -23,32 +23,26 @@ interface SessionSummary {
 export function SessionCard({
   kind,
   title,
-  description,
   session,
 }: {
   kind: SessionKind;
   title: string;
-  description: string;
   session: SessionSummary | null;
 }) {
   const status = session?.status ?? null;
 
   const label = status === 'submitted' ? 'Fait' : status === 'draft' ? 'En cours' : 'À faire';
 
-  // « Fait à 08h42 par Karim » : l'employé doit voir d'un coup d'œil si
-  // quelqu'un s'en est déjà chargé.
-  const detail =
-    status === 'submitted'
-      ? [
-          session?.submitted_at ? `à ${TIME_FORMAT.format(new Date(session.submitted_at))}` : null,
-          session?.authorName ? `par ${session.authorName}` : null,
-        ]
-          .filter(Boolean)
-          .join(' ')
+  // Qui s'en occupe : c'est la première question qu'on se pose devant la
+  // carte. Le nom passe donc dans une pastille — verte dès que quelqu'un
+  // a pris le comptage, ambre tant que personne ne l'a fait.
+  const responsable = session?.authorName ?? null;
+
+  const heure =
+    status === 'submitted' && session?.submitted_at
+      ? `Validé à ${TIME_FORMAT.format(new Date(session.submitted_at))}`
       : status === 'draft'
-        ? session?.authorName
-          ? `Commencé par ${session.authorName}`
-          : 'Commencé'
+        ? 'Comptage commencé'
         : null;
 
   // Le comptage validé n'est pas la fin du travail : ce qui reste à produire
@@ -60,10 +54,14 @@ export function SessionCard({
 
   return (
     <Link href={`/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}`} className="block">
+      {/* Les deux cartes portent la journée : une ombre franche et un
+          liseré les détachent du fond crème, où elles se confondaient. */}
       <Card
         className={cn(
-          'bg-card flex min-h-36 flex-col justify-between gap-3 rounded-3xl p-6 transition-transform active:scale-[0.99]',
-          status === 'submitted' && tasks.pending === 0 && 'opacity-70',
+          'bg-card flex flex-col justify-between gap-3.5 rounded-3xl border p-5 shadow-md transition-all active:scale-[0.99] active:shadow-sm',
+          status === 'submitted' && tasks.pending === 0
+            ? 'border-primary/25 shadow-primary/5'
+            : 'border-border/80',
         )}
       >
         <div className="flex items-start justify-between gap-3">
@@ -99,10 +97,31 @@ export function SessionCard({
           </span>
         </div>
 
-        <div>
-          <p className="text-muted-foreground text-sm">{description}</p>
-          {detail ? (
-            <p className="text-muted-foreground mt-1 text-sm font-medium">{detail}</p>
+        <div className="flex flex-wrap items-center gap-2">
+          <span
+            className={cn(
+              'flex h-8 items-center gap-1.5 rounded-full pr-3.5 pl-1.5 text-[13px] font-bold',
+              responsable
+                ? 'bg-primary/12 text-primary'
+                : 'bg-alert text-alert-foreground ring-alert-border ring-1',
+            )}
+          >
+            <span
+              aria-hidden
+              className={cn(
+                'flex size-5 items-center justify-center rounded-full text-[11px] font-black',
+                responsable
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-alert-foreground/20 text-alert-foreground',
+              )}
+            >
+              {responsable ? responsable.trim().charAt(0).toUpperCase() : '—'}
+            </span>
+            {responsable ?? 'Personne'}
+          </span>
+
+          {heure ? (
+            <span className="text-muted-foreground text-[13px] font-semibold">{heure}</span>
           ) : null}
         </div>
 
