@@ -15,10 +15,9 @@ export default async function ProductsPage() {
           Produits <span className="text-muted-foreground">({products.filter((p) => p.is_active).length})</span>
         </h1>
         <p className="text-muted-foreground mt-1.5 text-sm">
-          Touchez une tuile pour ne voir qu&apos;une zone, un nom pour le corriger, «&nbsp;Haut /
-          Bas&nbsp;» pour dire où le produit est rangé. L&apos;interrupteur le retire des
-          comptages sans toucher au passé ; la corbeille ne s&apos;ouvre que sur un produit
-          jamais compté.
+          Chaque fiche répond à trois questions : où le produit est rangé, à partir de quelle
+          quantité il faut en refaire, et s&apos;il entre encore dans les comptages. Le reste —
+          cible, base, DLC, photo — vit derrière «&nbsp;Modifier&nbsp;».
         </p>
       </header>
 

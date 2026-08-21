@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Check, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -214,92 +214,278 @@ export function ProductsManager({
             <CategoryZoneShortcut items={items} />
           </div>
 
-          <div className="divide-y overflow-hidden rounded-lg border">
+          <div className="space-y-2.5">
             {items.map((product) => (
-              <div
+              <CarteProduit
                 key={product.id}
-                className="hover:bg-muted/40 flex flex-wrap items-center gap-x-4 gap-y-2 p-4 transition-colors"
-              >
-                <VignetteProduit
-                  name={product.name}
-                  categoryName={product.category?.name}
-                  imageUrl={product.image_url}
-                  taille="sm"
-                />
-
-                <div className="min-w-48 flex-1">
-                  <div className="flex items-center gap-2">
-                    <QuickEdit product={product} />
-                    {!product.is_active ? <Badge variant="outline">Désactivé</Badge> : null}
-                    {Number(product.base_qty) <= 0 ? (
-                      <Badge variant="outline" className="border-amber-500/50 text-amber-600">
-                        base à saisir
-                      </Badge>
-                    ) : null}
-                  </div>
-                  <p className="text-muted-foreground mt-0.5 text-xs">
-                    {product.family === 'les_plus' ? 'Les plus' : 'Mise en place'} ·{' '}
-                    {product.unit === 'piece' ? 'pièce' : 'gastro'}
-                    {product.shelf_life_label ? ` · DLC ${product.shelf_life_label}` : ''}
-                  </p>
-                </div>
-
-                <dl className="text-muted-foreground grid grid-cols-2 gap-x-6 gap-y-1 text-xs sm:grid-cols-4">
-                  <div>
-                    <dt className="sr-only">Minimum de relance</dt>
-                    <dd>Relance {describeMinimum(product)}</dd>
-                  </div>
-                  <div>
-                    <dt className="sr-only">Seuil critique</dt>
-                    <dd className="font-semibold text-red-600">
-                      Critique {describeCritical(product)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="sr-only">Bornes de cible</dt>
-                    <dd>
-                      Cible {formatQty(product.floor_qty as number | null)} –{' '}
-                      {formatQty(product.ceiling_qty as number | null)}
-                    </dd>
-                  </div>
-                  <div>
-                    <dt className="sr-only">Base « VENTE POUR »</dt>
-                    <dd>Base {formatQty(Number(product.base_qty))}</dd>
-                  </div>
-                  <div>
-                    <dt className="sr-only">Stockage</dt>
-                    <dd>
-                      {[product.in_saladbar ? 'saladbar' : null, product.in_fridge ? 'frigo' : null]
-                        .filter(Boolean)
-                        .join(' + ')}
-                    </dd>
-                  </div>
-                </dl>
-
-                <div className="flex items-center gap-2">
-                  <InlineZones product={product} />
-                  <InlinePriority product={product} />
-                  <InlineMinimum product={product} />
-                  <InlineCritical product={product} />
-                  <Button variant="outline" size="sm" onClick={() => setEditing(product)}>
-                    Modifier
-                  </Button>
-                  {/* L'interrupteur retire le produit des comptages sans
-                      toucher au passé ; la corbeille l'efface pour de bon,
-                      et la base refuse dès qu'il a servi une fois. */}
-                  <Switch
-                    checked={product.is_active}
-                    aria-label={product.is_active ? 'Désactiver' : 'Réactiver'}
-                    onCheckedChange={(checked) => toggleProductActive(product.id, checked)}
-                  />
-                  <BoutonSupprimer product={product} />
-                </div>
-              </div>
+                product={product}
+                onEdit={() => setEditing(product)}
+              />
             ))}
           </div>
         </section>
       ))}
     </div>
+  );
+}
+
+/**
+ * Une fiche produit, pensée pour un pouce.
+ *
+ * L'ancienne rangée alignait six contrôles minuscules et une liste de
+ * cinq valeurs abrégées — « Relance sous la moitié de la cible »,
+ * « Critique », « Cible 4 – 12 », « Base 30 » — toutes au même niveau
+ * visuel. On ne savait plus laquelle répondait à quelle question.
+ *
+ * La carte répond à trois questions, dans l'ordre où elles se posent :
+ * où est-il rangé, à partir de quand faut-il en refaire, et qu'est-ce
+ * que j'en fais. Le reste (cible, base, DLC) vit dans « Modifier » :
+ * ce sont des réglages qu'on touche une fois, pas au quotidien.
+ */
+function CarteProduit({
+  product,
+  onEdit,
+}: {
+  product: ProductWithCategory;
+  onEdit: () => void;
+}) {
+  const nullePart = !product.in_saladbar && !product.in_fridge;
+
+  return (
+    <div
+      className={cn(
+        'bg-card rounded-2xl border p-3.5 transition-colors',
+        !product.is_active && 'opacity-60',
+        nullePart && product.is_active && 'border-alert-border',
+      )}
+    >
+      <div className="flex items-start gap-3">
+        <VignetteProduit
+          name={product.name}
+          categoryName={product.category?.name}
+          imageUrl={product.image_url}
+          taille="sm"
+          className="shrink-0"
+        />
+
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-2">
+            <QuickEdit product={product} />
+            {!product.is_active ? (
+              <Badge variant="outline" className="shrink-0">
+                Désactivé
+              </Badge>
+            ) : null}
+          </div>
+          <p className="text-muted-foreground mt-0.5 text-[11px] font-semibold">
+            {product.unit === 'piece' ? 'pièce' : 'gastro'}
+            {Number(product.base_qty) > 0 ? ` · base ${formatQty(Number(product.base_qty))}` : ''}
+            {product.shelf_life_label ? ` · DLC ${product.shelf_life_label}` : ''}
+          </p>
+        </div>
+
+        <InlinePriority product={product} />
+      </div>
+
+      {/* 1. Où est-il rangé ? Deux cibles larges, nommées en entier :
+             « Haut » et « Bas » demandaient de se souvenir de quoi on
+             parlait. Un produit rangé nulle part n'entre dans aucun
+             comptage — la carte le dit au lieu de le laisser passer. */}
+      <div className="mt-3">
+        <p className="text-muted-foreground mb-1.5 text-[10px] font-black tracking-wide uppercase">
+          Où est-il rangé
+        </p>
+        <ZonesProduit product={product} />
+        {nullePart ? (
+          <p className="text-alert-foreground mt-1.5 text-[11px] font-bold">
+            Rangé nulle part : il n&apos;apparaîtra dans aucun comptage.
+          </p>
+        ) : null}
+      </div>
+
+      {/* 2. À partir de quand faut-il en refaire ? Les deux seuils
+             côte à côte, chacun sous son intitulé en toutes lettres. */}
+      <div className="mt-3 grid grid-cols-2 gap-2">
+        <SeuilProduit product={product} type="minimum" />
+        <SeuilProduit product={product} type="critique" />
+      </div>
+
+      {/* 3. Qu'est-ce que j'en fais ? */}
+      <div className="mt-3 flex items-center gap-2 border-t pt-3">
+        <InterrupteurActif product={product} />
+        <Button variant="outline" size="sm" className="ml-auto h-9 rounded-xl" onClick={onEdit}>
+          Modifier
+        </Button>
+        <BoutonSupprimer product={product} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Les deux zones, en deux vraies cibles tactiles.
+ *
+ * Cas concret : les desserts ne vivent qu'au saladbar. Tant qu'ils sont
+ * aussi marqués « frigo du bas », l'employé doit les relever deux fois,
+ * dont une devant une étagère où ils ne se trouvent pas.
+ */
+function ZonesProduit({ product }: { product: ProductWithCategory }) {
+  const [pending, startTransition] = useTransition();
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  function regler(zones: { inSaladbar: boolean; inFridge: boolean }) {
+    setErreur(null);
+    startTransition(async () => {
+      const resultat = await updateProductInline(product.id, zones);
+      if (resultat.error) setErreur(resultat.error);
+    });
+  }
+
+  const zones = [
+    { cle: 'saladbar' as const, label: 'Saladbar', actif: product.in_saladbar },
+    { cle: 'fridge' as const, label: 'Frigo du bas', actif: product.in_fridge },
+  ];
+
+  return (
+    <>
+      <div className="grid grid-cols-2 gap-2">
+        {zones.map((zone) => (
+          <button
+            key={zone.cle}
+            type="button"
+            disabled={pending}
+            aria-pressed={zone.actif}
+            onClick={() =>
+              regler({
+                inSaladbar: zone.cle === 'saladbar' ? !zone.actif : product.in_saladbar,
+                inFridge: zone.cle === 'fridge' ? !zone.actif : product.in_fridge,
+              })
+            }
+            className={cn(
+              'flex h-10 items-center justify-center gap-1.5 rounded-xl border text-[13px] font-bold transition-colors',
+              zone.actif
+                ? 'border-primary bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:bg-muted/60 border-dashed',
+            )}
+          >
+            {zone.actif ? <Check className="size-3.5" strokeWidth={3.5} /> : null}
+            {zone.label}
+          </button>
+        ))}
+      </div>
+      {erreur ? (
+        <p className="text-destructive mt-1 text-[11px] font-semibold">{erreur}</p>
+      ) : null}
+    </>
+  );
+}
+
+/**
+ * Un seuil, avec son intitulé en toutes lettres.
+ *
+ * « Min auto » et « Min fixe » sur deux boutons collés ne disaient ni de
+ * quoi il s'agissait, ni quelle valeur s'appliquait. Ici le bloc annonce
+ * la règle en cours ; un appui bascule entre calculé et fixe, et le
+ * champ n'apparaît que quand il y a un nombre à saisir.
+ */
+function SeuilProduit({
+  product,
+  type,
+}: {
+  product: ProductWithCategory;
+  type: 'minimum' | 'critique';
+}) {
+  const [pending, startTransition] = useTransition();
+
+  const minimum = type === 'minimum';
+  const manuel = minimum ? product.min_mode === 'manual' : product.crit_mode === 'manual';
+  const valeur = minimum ? product.min_qty_manual : product.crit_qty_manual;
+
+  const [draft, setDraft] = useState(valeur === null ? '' : String(valeur));
+
+  function basculer() {
+    startTransition(async () => {
+      const nombre = Number(draft.replace(',', '.')) || 1;
+      await updateProductInline(
+        product.id,
+        minimum
+          ? { minMode: manuel ? 'auto' : 'manual', minQtyManual: manuel ? null : nombre }
+          : { critMode: manuel ? 'auto' : 'manual', critQtyManual: manuel ? null : nombre },
+      );
+    });
+  }
+
+  function enregistrer() {
+    const nombre = Number(draft.replace(',', '.'));
+    if (!Number.isFinite(nombre) || nombre < 0) return;
+    if (nombre === Number(valeur)) return;
+    startTransition(async () => {
+      await updateProductInline(
+        product.id,
+        minimum ? { minQtyManual: nombre } : { critQtyManual: nombre },
+      );
+    });
+  }
+
+  return (
+    <div className={cn('rounded-xl border p-2.5', !minimum && 'border-destructive/25')}>
+      <p
+        className={cn(
+          'text-[10px] font-black tracking-wide uppercase',
+          minimum ? 'text-muted-foreground' : 'text-destructive/80',
+        )}
+      >
+        {minimum ? 'On en refait sous' : 'Seuil critique'}
+      </p>
+
+      <div className="mt-1.5 flex items-center gap-1.5">
+        {manuel ? (
+          <Input
+            value={draft}
+            inputMode="decimal"
+            disabled={pending}
+            aria-label={`${minimum ? 'Minimum' : 'Seuil critique'} de ${product.name}`}
+            onChange={(evenement) => setDraft(evenement.target.value)}
+            onBlur={enregistrer}
+            className="h-9 w-14 rounded-lg text-center text-base font-black tabular-nums"
+          />
+        ) : (
+          <span className="text-[13px] leading-tight font-bold">
+            {minimum ? describeMinimum(product) : describeCritical(product)}
+          </span>
+        )}
+
+        <button
+          type="button"
+          disabled={pending}
+          onClick={basculer}
+          className="text-muted-foreground hover:text-foreground ml-auto shrink-0 rounded-lg px-1.5 py-1 text-[11px] font-bold underline underline-offset-2"
+        >
+          {manuel ? 'auto' : 'fixer'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+/** L'interrupteur, avec son mot : un rail nu ne dit pas ce qu'il commande. */
+function InterrupteurActif({ product }: { product: ProductWithCategory }) {
+  const [pending, demarrer] = useTransition();
+
+  return (
+    <label className="flex items-center gap-2 text-[13px] font-bold">
+      <Switch
+        checked={product.is_active}
+        disabled={pending}
+        aria-label={product.is_active ? `Désactiver ${product.name}` : `Réactiver ${product.name}`}
+        onCheckedChange={(coche) =>
+          demarrer(async () => {
+            await toggleProductActive(product.id, coche);
+          })
+        }
+      />
+      {product.is_active ? 'Compté' : 'Hors comptage'}
+    </label>
   );
 }
 
@@ -338,109 +524,6 @@ function InlinePriority({ product }: { product: ProductWithCategory }) {
   );
 }
 
-/** Bascule auto / manuel et saisie du minimum, sans quitter le tableau. */
-function InlineMinimum({ product }: { product: ProductWithCategory }) {
-  const [pending, startTransition] = useTransition();
-  const [draft, setDraft] = useState(
-    product.min_qty_manual === null ? '' : String(product.min_qty_manual),
-  );
-
-  const isManual = product.min_mode === 'manual';
-
-  return (
-    <div className="flex items-center gap-1">
-      <Button
-        variant={isManual ? 'default' : 'outline'}
-        size="sm"
-        disabled={pending}
-        title={isManual ? 'Repasser en minimum automatique' : 'Fixer un minimum manuel'}
-        onClick={() =>
-          startTransition(async () => {
-            await updateProductInline(product.id, {
-              minMode: isManual ? 'auto' : 'manual',
-              minQtyManual: isManual ? null : Number(draft.replace(',', '.')) || 1,
-            });
-          })
-        }
-      >
-        {isManual ? 'Min fixe' : 'Min auto'}
-      </Button>
-
-      {isManual ? (
-        <Input
-          value={draft}
-          inputMode="decimal"
-          aria-label={`Minimum fixe de ${product.name}`}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={() => {
-            const parsed = Number(draft.replace(',', '.'));
-            if (!Number.isFinite(parsed) || parsed < 0) return;
-            if (parsed === Number(product.min_qty_manual)) return;
-            startTransition(async () => {
-              await updateProductInline(product.id, { minQtyManual: parsed });
-            });
-          }}
-          className="h-8 w-16 text-center text-xs tabular-nums"
-        />
-      ) : null}
-    </div>
-  );
-}
-
-/**
- * Les deux zones d'un produit, réglables sans ouvrir sa fiche.
- *
- * Cas concret : les desserts ne vivent qu'au saladbar. Tant qu'ils étaient
- * aussi marqués « frigo du bas », l'employé devait les relever deux fois,
- * dont une devant une étagère où ils ne se trouvent pas.
- */
-function InlineZones({ product }: { product: ProductWithCategory }) {
-  const [pending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
-
-  function set(zones: { inSaladbar: boolean; inFridge: boolean }) {
-    setError(null);
-    startTransition(async () => {
-      const result = await updateProductInline(product.id, zones);
-      if (result.error) setError(result.error);
-    });
-  }
-
-  const zones = [
-    { key: 'saladbar' as const, label: 'Haut', on: product.in_saladbar },
-    { key: 'fridge' as const, label: 'Bas', on: product.in_fridge },
-  ];
-
-  return (
-    <div className="flex flex-col items-start gap-0.5">
-      <div className="bg-muted flex rounded-full p-0.5" title="Zones de stockage">
-        {zones.map((zone) => (
-          <button
-            key={zone.key}
-            type="button"
-            disabled={pending}
-            aria-pressed={zone.on}
-            aria-label={`${product.name} — ${zone.key === 'saladbar' ? 'saladbar' : 'frigo du bas'}`}
-            onClick={() =>
-              set({
-                inSaladbar: zone.key === 'saladbar' ? !zone.on : product.in_saladbar,
-                inFridge: zone.key === 'fridge' ? !zone.on : product.in_fridge,
-              })
-            }
-            className={cn(
-              'rounded-full px-2.5 py-1 text-xs font-bold transition-colors',
-              zone.on ? 'bg-primary text-primary-foreground' : 'text-muted-foreground',
-            )}
-          >
-            {zone.label}
-          </button>
-        ))}
-      </div>
-      {error ? <span className="text-destructive text-[11px] font-semibold">{error}</span> : null}
-    </div>
-  );
-}
-
 /** « Tous les desserts au saladbar uniquement », en un geste. */
 function CategoryZoneShortcut({ items }: { items: ProductWithCategory[] }) {
   const [pending, startTransition] = useTransition();
@@ -460,7 +543,7 @@ function CategoryZoneShortcut({ items }: { items: ProductWithCategory[] }) {
   return (
     <div className="flex items-center gap-2">
       {error ? <span className="text-destructive text-xs font-semibold">{error}</span> : null}
-      <span className="text-muted-foreground text-xs font-semibold">Tout le rayon :</span>
+      <span className="text-muted-foreground text-[11px] font-bold">Tout le rayon&nbsp;:</span>
       {[
         { label: 'Haut seulement', zones: { inSaladbar: true, inFridge: false } },
         { label: 'Bas seulement', zones: { inSaladbar: false, inFridge: true } },
@@ -477,62 +560,6 @@ function CategoryZoneShortcut({ items }: { items: ProductWithCategory[] }) {
           {choice.label}
         </Button>
       ))}
-    </div>
-  );
-}
-
-/**
- * Le seuil CRITIQUE, réglable sans ouvrir la fiche.
- *
- * C'est le réglage qui décide de l'ordre du rapport les jours tendus : un
- * produit sous son critique passe devant un produit plus prioritaire.
- */
-function InlineCritical({ product }: { product: ProductWithCategory }) {
-  const [pending, startTransition] = useTransition();
-  const [draft, setDraft] = useState(
-    product.crit_qty_manual === null ? '' : String(product.crit_qty_manual),
-  );
-
-  const isManual = product.crit_mode === 'manual';
-
-  return (
-    <div className="flex items-center gap-1">
-      <Button
-        variant={isManual ? 'destructive' : 'outline'}
-        size="sm"
-        disabled={pending}
-        title={
-          isManual ? 'Repasser en critique automatique' : 'Fixer un seuil critique manuel'
-        }
-        onClick={() =>
-          startTransition(async () => {
-            await updateProductInline(product.id, {
-              critMode: isManual ? 'auto' : 'manual',
-              critQtyManual: isManual ? null : Number(draft.replace(',', '.')) || 1,
-            });
-          })
-        }
-      >
-        {isManual ? 'Crit. fixe' : 'Crit. auto'}
-      </Button>
-
-      {isManual ? (
-        <Input
-          value={draft}
-          inputMode="decimal"
-          aria-label={`Seuil critique de ${product.name}`}
-          onChange={(event) => setDraft(event.target.value)}
-          onBlur={() => {
-            const parsed = Number(draft.replace(',', '.'));
-            if (!Number.isFinite(parsed) || parsed < 0) return;
-            if (parsed === Number(product.crit_qty_manual)) return;
-            startTransition(async () => {
-              await updateProductInline(product.id, { critQtyManual: parsed });
-            });
-          }}
-          className="h-8 w-16 text-center text-xs tabular-nums"
-        />
-      ) : null}
     </div>
   );
 }
@@ -573,7 +600,7 @@ function BoutonSupprimer({ product }: { product: ProductWithCategory }) {
           variant="destructive"
           size="sm"
           disabled={pending}
-          className="h-8"
+          className="h-9 rounded-xl font-bold"
           onClick={() =>
             demarrer(async () => {
               const resultat = await supprimerProduit(product.id);
@@ -586,7 +613,7 @@ function BoutonSupprimer({ product }: { product: ProductWithCategory }) {
         >
           Supprimer
         </Button>
-        <Button variant="ghost" size="sm" className="h-8" onClick={() => setConfirme(false)}>
+        <Button variant="ghost" size="sm" className="h-9" onClick={() => setConfirme(false)}>
           Non
         </Button>
       </span>
@@ -597,7 +624,7 @@ function BoutonSupprimer({ product }: { product: ProductWithCategory }) {
     <Button
       variant="ghost"
       size="sm"
-      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive h-8"
+      className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive size-9 rounded-xl p-0"
       title={`Supprimer ${product.name}`}
       onClick={() => setConfirme(true)}
     >
