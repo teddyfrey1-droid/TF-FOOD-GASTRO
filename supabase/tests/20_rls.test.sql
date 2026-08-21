@@ -1031,4 +1031,106 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 17. L''ÉTAT DES STOCKS : LES QUANTITÉS OUI, LES REPÈRES NON ---'
+
+do $$
+declare
+  v_session uuid;
+  v_produit uuid;
+  v_cat     uuid;
+begin
+  select id into v_cat from public.product_categories order by sort_order limit 1;
+
+  insert into public.products (name, category_id, unit, base_qty, priority,
+                               in_saladbar, in_fridge, is_active)
+  values ('Saumon témoin', v_cat, 'gastro', 100, 3, true, true, true)
+  returning id into v_produit;
+
+  insert into public.count_sessions (date, session, user_id, status, submitted_at)
+  values (current_date, 'morning', 'a0000000-0000-0000-0000-00000000000e',
+          'submitted', now())
+  on conflict (date, session) do update set status = 'submitted', submitted_at = now()
+  returning id into v_session;
+
+  -- Cible 5, minimum 3, critique 1 — et 7 en stock : c'est un surplus.
+  insert into public.count_lines (session_id, product_id, qty_saladbar, qty_fridge,
+                                  counted_at, counted_saladbar_at, counted_fridge_at,
+                                  target_snapshot, min_snapshot, crit_snapshot)
+  values (v_session, v_produit, 4, 3, now(), now(), now(), 5, 3, 1)
+  on conflict (session_id, product_id) do update
+    set qty_saladbar = 4, qty_fridge = 3,
+        target_snapshot = 5, min_snapshot = 3, crit_snapshot = 1;
+
+  perform set_config('mep.session_stock', v_session::text, false);
+  perform set_config('mep.produit_stock', v_produit::text, false);
+end;
+$$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+
+select pg_temp.check_equal('L''employé voit la quantité totale relevée',
+  (select qty_total from public.mep_etat_stock(current_setting('mep.session_stock')::uuid)
+   where product_id = current_setting('mep.produit_stock')::uuid),
+  7::numeric);
+
+select pg_temp.check_equal('Il voit le détail par zone',
+  (select qty_saladbar::float8 || '/' || qty_fridge::float8
+   from public.mep_etat_stock(current_setting('mep.session_stock')::uuid)
+   where product_id = current_setting('mep.produit_stock')::uuid),
+  '4/3');
+
+select pg_temp.check_equal('7 pour une cible de 5 : c''est un surplus',
+  (select etat from public.mep_etat_stock(current_setting('mep.session_stock')::uuid)
+   where product_id = current_setting('mep.produit_stock')::uuid),
+  'surplus');
+
+select pg_temp.check_equal('...et l''excédent vaut 2',
+  (select surplus from public.mep_etat_stock(current_setting('mep.session_stock')::uuid)
+   where product_id = current_setting('mep.produit_stock')::uuid),
+  2::numeric);
+
+-- LE test de confidentialité : aucune colonne de la fonction ne doit
+-- porter un repère de production. Si quelqu'un en ajoute un, ceci casse.
+select pg_temp.check_equal('Aucun repère ne sort avec les quantités',
+  (select count(*)::int
+   from information_schema.columns
+   where table_schema = 'public'
+     and table_name = 'mep_etat_stock'
+     and column_name in ('target_snapshot', 'min_snapshot', 'crit_snapshot',
+                         'production_needed_snapshot', 'forecast_revenue')),
+  0);
+
+reset role;
+reset "request.jwt.claim.sub";
+
+-- Un comptage d'une autre journée reste hors de portée de l'équipe.
+do $$
+declare v_vieux uuid;
+begin
+  insert into public.count_sessions (date, session, user_id, status, submitted_at)
+  values (current_date - 5, 'afternoon', 'a0000000-0000-0000-0000-00000000000d',
+          'submitted', now() - interval '5 days')
+  returning id into v_vieux;
+  perform set_config('mep.session_vieille', v_vieux::text, false);
+end;
+$$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Les stocks d''une journée passée sont refusés à l''employé',
+  'select * from public.mep_etat_stock(current_setting(''mep.session_vieille'')::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_equal('Le directeur y a accès',
+  (select count(*)::int >= 0
+   from public.mep_etat_stock(current_setting('mep.session_vieille')::uuid)),
+  true);
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

@@ -391,6 +391,30 @@ export type Database = {
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
       /**
+       * Quantités relevées par produit, avec un état en toutes lettres.
+       *
+       * Volontairement SANS cible ni seuil : l'état est calculé en base et
+       * n'en ressort que sous forme de mot. Un salarié apprend qu'il y a
+       * un surplus, jamais à partir de quel nombre.
+       */
+      mep_etat_stock: {
+        Args: { p_session_id: string };
+        Returns: {
+          product_id: string;
+          product_name: string;
+          category_name: string;
+          image_url: string | null;
+          unit: ProductUnit;
+          qty_saladbar: number;
+          qty_fridge: number;
+          qty_total: number;
+          in_saladbar: boolean;
+          in_fridge: boolean;
+          etat: 'rupture' | 'juste' | 'ok' | 'surplus' | 'absent' | 'reporte';
+          surplus: number;
+        }[];
+      };
+      /**
        * CA brut encaissé le jour de référence l'an dernier, AVANT
        * majoration — à ne pas confondre avec `mep_reference_revenue`,
        * qui renvoie la cible du service. La date accompagne le montant :

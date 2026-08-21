@@ -80,7 +80,17 @@ export default async function ReportPage({ params }: { params: Promise<{ session
         sufficientCount={sufficientCount}
       />
 
-      <Link href="/" className={buttonVariants({ variant: 'ghost', className: 'mt-8 h-11 w-full' })}>
+      {/* Juste après la validation : c'est là qu'on se demande « et le
+          reste, il y en a assez ? ». Le rapport ne dit que ce qu'il faut
+          produire ; les quantités sont à un appui. */}
+      <Link
+        href="/stocks"
+        className={buttonVariants({ variant: 'outline', className: 'mt-8 h-12 w-full font-bold' })}
+      >
+        Voir toutes les quantités
+      </Link>
+
+      <Link href="/" className={buttonVariants({ variant: 'ghost', className: 'mt-2 h-11 w-full' })}>
         Retour à l&apos;accueil
       </Link>
     </main>

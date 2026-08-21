@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { ClipboardList, Home, Settings2, SlidersHorizontal } from 'lucide-react';
+import { ClipboardList, Home, Refrigerator, Settings2, SlidersHorizontal } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 /**
@@ -33,6 +33,12 @@ export function BottomTabs({
       label: 'Comptage',
       icon: ClipboardList,
       match: (p: string) => p.startsWith('/comptage'),
+    },
+    {
+      href: '/stocks',
+      label: 'Stocks',
+      icon: Refrigerator,
+      match: (p: string) => p.startsWith('/stocks'),
     },
     ...(isManager
       ? [
@@ -71,11 +77,11 @@ export function BottomTabs({
                 href={tab.href}
                 aria-current={active ? 'page' : undefined}
                 className={cn(
-                  'no-select flex h-16 flex-col items-center justify-center gap-1 px-0.5 text-[11px] font-bold transition-colors',
+                  'no-select flex h-16 flex-col items-center justify-center gap-1 px-0.5 text-[10px] font-bold transition-colors',
                   active ? 'text-primary' : 'text-muted-foreground',
                 )}
               >
-                <Icon className="size-6" strokeWidth={active ? 2.6 : 2} />
+                <Icon className="size-[22px]" strokeWidth={active ? 2.6 : 2} />
                 {tab.label}
               </Link>
             </li>

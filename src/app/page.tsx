@@ -1,5 +1,6 @@
 import { requireUser } from '@/lib/auth';
-import { Check, CircleAlert } from 'lucide-react';
+import Link from 'next/link';
+import { Check, ChevronRight, CircleAlert, Refrigerator } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { isManagerRole, isStaffLeadRole } from '@/lib/roles';
 import {
@@ -194,6 +195,30 @@ export default async function HomePage() {
             session={bySession.get('afternoon') ?? null}
           />
         </div>
+
+        {/* Le raccourci vers les quantités : la question « il y en a
+            combien ? » se pose en plein service, pas en ouvrant
+            l'application. Une ligne suffit, mais elle doit être là. */}
+        <Link
+          href="/stocks"
+          className="bg-card hover:bg-muted/40 mt-4 flex items-center gap-3 rounded-2xl border p-4 transition-colors"
+        >
+          <span
+            aria-hidden
+            className="bg-muted text-foreground/70 flex size-11 shrink-0 items-center justify-center rounded-xl"
+          >
+            <Refrigerator className="size-5" strokeWidth={2.2} />
+          </span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[15px] leading-tight font-bold">
+              Voir ce qu’il y a dans les frigos
+            </span>
+            <span className="text-muted-foreground mt-0.5 block text-[12px] font-semibold">
+              Les quantités du dernier comptage, avec recherche
+            </span>
+          </span>
+          <ChevronRight className="text-muted-foreground/60 size-5 shrink-0" strokeWidth={2.5} />
+        </Link>
 
         {ca ? (
           <div className="mt-7">

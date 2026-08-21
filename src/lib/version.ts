@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '1.6.0';
+export const VERSION = '1.7.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,14 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '1.7.0',
+    date: '2026-08-22',
+    points: [
+      'Nouvel onglet « Stocks » : les quantités de chaque produit, avec recherche, pour toute l’équipe.',
+      'Un produit en trop grande quantité est signalé, avec l’excédent — pour garder un œil dessus.',
+    ],
+  },
   {
     version: '1.6.0',
     date: '2026-08-22',
