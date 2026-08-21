@@ -220,6 +220,62 @@ export async function envoyerLienActivation(
  * de bord. Il pointe droit sur `/definir-mot-de-passe`, qui échange le
  * jeton lui-même : rien à régler ailleurs pour que ça marche.
  */
+/**
+ * Vérifie où atterrit RÉELLEMENT le lien envoyé par courriel.
+ *
+ * Supabase n'accepte une adresse de retour que si elle figure dans sa
+ * liste blanche ; sinon il retombe silencieusement sur l'« adresse du
+ * site » configurée dans son tableau de bord. Quand celle-ci est restée
+ * sur `http://localhost:3000`, le courriel part, arrive — et son lien
+ * mène à une machine de développement. Vu de l'écran Équipe, tout allait
+ * bien.
+ *
+ * `generateLink` renvoie l'adresse que Supabase a retenue : on la lit et
+ * on la compare à la nôtre. Le diagnostic remonte donc du serveur, au
+ * lieu de rester dans les journaux.
+ */
+export async function verifierRetourCourriel(): Promise<{
+  correct?: boolean;
+  retenue?: string;
+  attendue?: string;
+  error?: string;
+}> {
+  try {
+    await requireManagerOrThrow();
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Accès refusé.' };
+  }
+
+  const attendue = adresseDuSite();
+
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { error: 'La clé de service manque : impossible de vérifier.' };
+  }
+
+  const { data: equipe } = await (await createClient()).rpc('mep_equipe');
+  const cobaye = (equipe ?? []).find((membre) => membre.email)?.email;
+  if (!cobaye) return { error: 'Aucune adresse en base pour faire le test.' };
+
+  // `generateLink` n'envoie aucun courriel : la vérification ne coûte
+  // rien au quota, et peut donc se faire à chaque ouverture de l'écran.
+  const { data, error } = await admin.auth.admin.generateLink({
+    type: 'recovery',
+    email: cobaye,
+    options: { redirectTo: `${attendue}/definir-mot-de-passe` },
+  });
+
+  if (error) return { error: error.message };
+
+  const lien = data.properties?.action_link;
+  if (!lien) return { error: 'Supabase n’a pas renvoyé de lien.' };
+
+  const retenue = new URL(lien).searchParams.get('redirect_to') ?? '(aucune)';
+  return { correct: retenue.startsWith(attendue), retenue, attendue };
+}
+
 export async function genererLienActivation(
   email: string,
 ): Promise<{ error?: string; lien?: string }> {

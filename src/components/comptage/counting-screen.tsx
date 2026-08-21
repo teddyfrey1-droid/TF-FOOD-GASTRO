@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ArrowDown, Check, CloudOff, LayoutGrid, List, Search } from 'lucide-react';
+import { ArrowDown, Check, CloudOff, LayoutGrid, List, Loader2, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
@@ -35,6 +35,16 @@ export interface CountProduct {
 
 const AUTOSAVE_DELAY_MS = 600;
 
+/** Ce que devient la file après une tentative d'envoi. */
+interface FlushResult {
+  /** Saisies encore en attente. Zéro = tout est arrivé au serveur. */
+  restant: number;
+  /** Le réseau a manqué : il n'y a rien à corriger, juste à attendre. */
+  horsLigne?: boolean;
+  /** Le serveur a refusé, et pourquoi. */
+  erreur?: string;
+}
+
 export function CountingScreen({
   sessionId,
   title,
@@ -58,6 +68,7 @@ export function CountingScreen({
   const [layout, setLayout] = useState<CountLayout>('grille');
   const [online, setOnline] = useState(true);
   const [pendingCount, setPendingCount] = useState(0);
+  const [envoiEnCours, setEnvoiEnCours] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -67,34 +78,55 @@ export function CountingScreen({
     setPendingCount((await listPending(sessionId)).length);
   }, [sessionId]);
 
-  /** Rejoue les saisies restées en attente. Appelé au retour du réseau. */
-  const flushPending = useCallback(async () => {
+  /**
+   * Rejoue les saisies restées en attente, et dit ce qu'il en reste.
+   *
+   * Le retour compte : la validation s'appuie dessus pour refuser de figer
+   * un comptage dont des saisies ne sont pas encore arrivées. Un envoi qui
+   * échoue laisse la saisie dans la file — jamais perdue, réessayée plus
+   * tard — et remonte son motif pour qu'on puisse l'afficher.
+   */
+  const flushPending = useCallback(async (): Promise<FlushResult> => {
     const pending = await listPending(sessionId);
-    if (pending.length === 0) return;
+    if (pending.length === 0) return { restant: 0 };
 
-    const result = await saveCountLines(
-      pending.map((entry) => ({
-        sessionId: entry.sessionId,
-        productId: entry.productId,
-        qtySaladbar: entry.qtySaladbar,
-        qtyFridge: entry.qtyFridge,
-        isNotApplicable: entry.isNotApplicable,
-        notApplicableReason: entry.notApplicableReason,
-        countedSaladbar: entry.countedSaladbar,
-        countedFridge: entry.countedFridge,
-        isDeferred: entry.isDeferred,
-        deferredReason: entry.deferredReason,
-      })),
-    );
+    if (!navigator.onLine) return { restant: pending.length, horsLigne: true };
 
-    await Promise.all(
-      result.savedKeys.map((key) => {
-        const entry = pending.find((candidate) => candidate.key === key);
-        return entry ? dequeue(key, entry.updatedAt) : Promise.resolve();
-      }),
-    );
+    setEnvoiEnCours(true);
+    try {
+      const result = await saveCountLines(
+        pending.map((entry) => ({
+          sessionId: entry.sessionId,
+          productId: entry.productId,
+          qtySaladbar: entry.qtySaladbar,
+          qtyFridge: entry.qtyFridge,
+          isNotApplicable: entry.isNotApplicable,
+          notApplicableReason: entry.notApplicableReason,
+          countedSaladbar: entry.countedSaladbar,
+          countedFridge: entry.countedFridge,
+          isDeferred: entry.isDeferred,
+          deferredReason: entry.deferredReason,
+        })),
+      );
 
-    await refreshPending();
+      await Promise.all(
+        result.savedKeys.map((key) => {
+          const entry = pending.find((candidate) => candidate.key === key);
+          return entry ? dequeue(key, entry.updatedAt) : Promise.resolve();
+        }),
+      );
+
+      const restant = pending.length - result.savedKeys.length;
+      setPendingCount(restant);
+      return { restant, erreur: result.error };
+    } catch {
+      // Coupure en plein envoi : rien n'est retiré de la file, tout sera
+      // rejoué. On le dit plutôt que d'échouer en silence.
+      await refreshPending();
+      return { restant: pending.length, horsLigne: true };
+    } finally {
+      setEnvoiEnCours(false);
+    }
   }, [sessionId, refreshPending]);
 
   useEffect(() => {
@@ -115,6 +147,20 @@ export function CountingScreen({
       window.removeEventListener('offline', goOffline);
     };
   }, [flushPending, refreshPending]);
+
+  // Le réseau peut revenir sans que le navigateur émette « online » : un
+  // wifi de sous-sol qui répond de nouveau, un serveur qui se remet. On
+  // retente donc régulièrement tant qu'il reste quelque chose à envoyer,
+  // sans jamais rien perdre entre deux essais.
+  useEffect(() => {
+    if (pendingCount === 0 || !online) return;
+
+    const minuterie = setInterval(() => {
+      void flushPending();
+    }, 15_000);
+
+    return () => clearInterval(minuterie);
+  }, [pendingCount, online, flushPending]);
 
   // Les minuteries d'anti-rebond en cours doivent être annulées au démontage,
   // sinon un retour arrière déclencherait des envois fantômes.
@@ -358,8 +404,23 @@ export function CountingScreen({
     setSubmitting(true);
     setError(null);
 
-    // Ne jamais valider sur des saisies encore en attente : le rapport serait faux.
-    await flushPending();
+    // Ne jamais valider sur des saisies encore en attente : le rapport
+    // serait calculé sur un stock incomplet. Jusqu'ici on tentait l'envoi
+    // sans regarder s'il avait abouti — et on validait quand même.
+    const file = await flushPending();
+    if (file.restant > 0) {
+      setError(
+        file.horsLigne
+          ? `${file.restant} saisie${file.restant > 1 ? 's ne sont' : ' n’est'} pas encore ` +
+            'enregistrée' +
+            (file.restant > 1 ? 's' : '') +
+            ' : reconnectez-vous au réseau avant de valider. Rien n’est perdu.'
+          : (file.erreur ??
+            `${file.restant} saisie${file.restant > 1 ? 's' : ''} n’a pas pu être enregistrée. Réessayez dans un instant.`),
+      );
+      setSubmitting(false);
+      return;
+    }
 
     const result = await submitCount(sessionId);
     if (result.error) {
@@ -447,14 +508,42 @@ export function CountingScreen({
         <div
           role="status"
           aria-live="polite"
-          className="pointer-events-none fixed inset-x-0 bottom-24 z-30 flex justify-center px-5 print:hidden"
+          className="fixed inset-x-0 bottom-24 z-30 flex justify-center px-5 print:hidden"
         >
-          <p className="bg-foreground/85 text-background flex items-center gap-1.5 rounded-full px-3.5 py-1.5 text-xs font-bold shadow-lg backdrop-blur">
-            <CloudOff className="size-3.5" />
-            {online
-              ? `${pendingCount} saisie${pendingCount > 1 ? 's' : ''} en cours d’envoi`
-              : `Hors ligne — ${pendingCount} saisie${pendingCount > 1 ? 's' : ''} en attente`}
-          </p>
+          <div
+            className={cn(
+              'flex items-center gap-2 rounded-full py-2 pr-2 pl-4 text-xs font-bold shadow-lg backdrop-blur',
+              online
+                ? 'bg-foreground/90 text-background'
+                : 'bg-alert text-alert-foreground ring-alert-foreground/15 ring-1',
+            )}
+          >
+            {envoiEnCours ? (
+              <Loader2 className="size-3.5 animate-spin" />
+            ) : (
+              <CloudOff className="size-3.5" />
+            )}
+
+            <span>
+              {envoiEnCours
+                ? `Envoi de ${pendingCount} saisie${pendingCount > 1 ? 's' : ''}…`
+                : online
+                  ? `${pendingCount} saisie${pendingCount > 1 ? 's' : ''} à renvoyer`
+                  : `Hors ligne — ${pendingCount} saisie${pendingCount > 1 ? 's' : ''} gardée${pendingCount > 1 ? 's' : ''}`}
+            </span>
+
+            {/* Rien n'est perdu, mais l'attente inquiète : un bouton rend la
+                main à l'employé plutôt que de le laisser deviner. */}
+            {online && !envoiEnCours && pendingCount > 0 ? (
+              <button
+                type="button"
+                onClick={() => void flushPending()}
+                className="bg-background/20 hover:bg-background/30 rounded-full px-2.5 py-1 font-black transition-colors"
+              >
+                Réessayer
+              </button>
+            ) : null}
+          </div>
         </div>
       ) : null}
 

@@ -1,4 +1,6 @@
 import { requireUser } from '@/lib/auth';
+import { Check, CircleAlert } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { isStaffLeadRole } from '@/lib/roles';
 import { createClient } from '@/lib/supabase/server';
 import { NotificationToggle } from '@/components/pwa/notification-toggle';
@@ -68,6 +70,7 @@ export default async function HomePage() {
   const pendingTasks = (tasks ?? []).filter((task) => !task.is_done).length;
 
   const prenom = user.fullName.trim().split(/\s+/)[0] || user.fullName;
+  const tousFaits = done === 2 && pendingTasks === 0;
 
   return (
     <>
@@ -85,30 +88,35 @@ export default async function HomePage() {
           <AvatarCompte nom={user.fullName} />
         </header>
 
-        {/* L'état de la journée en un coup d'œil, avant même de lire les
-            cartes : c'est la seule question qu'on se pose en arrivant. */}
+        {/* L'état de la journée en une ligne.
+
+            Deux phrases empilées dans un gros aplat de couleur faisaient
+            doublon : la seconde répétait la première, et le compteur `0/2`
+            juste en dessous la répétait une troisième fois. Une seule
+            phrase, un liseré plutôt qu'un aplat plein. */}
         <div
-          className={
-            done === 2 && pendingTasks === 0
-              ? 'bg-primary text-primary-foreground mb-6 rounded-3xl p-5'
-              : 'bg-alert text-alert-foreground mb-6 rounded-3xl p-5'
-          }
+          className={cn(
+            'mb-6 flex items-center gap-3 rounded-2xl border px-4 py-3.5',
+            tousFaits
+              ? 'border-primary/25 bg-primary/10 text-primary'
+              : 'border-alert-border bg-alert text-alert-foreground',
+          )}
         >
-          <p className="text-2xl leading-tight font-black">
-            {done === 2 && pendingTasks === 0
+          <span aria-hidden className="shrink-0">
+            {tousFaits ? (
+              <Check className="size-5" strokeWidth={3} />
+            ) : (
+              <CircleAlert className="size-5" strokeWidth={2.6} />
+            )}
+          </span>
+          <p className="text-[15px] leading-snug font-black">
+            {tousFaits
               ? 'Tout est à jour.'
               : done === 2
-                ? `${pendingTasks} relance${pendingTasks > 1 ? 's' : ''} à produire`
+                ? `${pendingTasks} relance${pendingTasks > 1 ? 's' : ''} encore à produire.`
                 : done === 1
-                  ? 'Un comptage reste à faire'
-                  : 'Les deux comptages restent à faire'}
-          </p>
-          <p className="mt-1 text-sm font-semibold opacity-80">
-            {done === 2 && pendingTasks === 0
-              ? 'Les deux comptages sont validés, rien ne manque.'
-              : done === 2
-                ? 'Les comptages sont faits — il reste la production.'
-                : `${done} comptage sur 2 validé aujourd’hui.`}
+                  ? 'Il reste un comptage à faire.'
+                  : 'Les deux comptages sont à faire.'}
           </p>
         </div>
 

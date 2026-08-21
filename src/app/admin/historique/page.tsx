@@ -13,6 +13,8 @@ import {
 import { toNullableNumber, toNumber } from '@/lib/admin/mappers';
 import { HistoryFiltersBar } from '@/components/admin/history-filters';
 import { SessionsTable } from '@/components/admin/sessions-table';
+import { HistoriqueSynthese } from '@/components/admin/historique-synthese';
+import { HistoriqueParPersonne } from '@/components/admin/historique-par-personne';
 import { AnomaliesPanel } from '@/components/admin/anomalies-panel';
 import { ConsumptionTable } from '@/components/admin/consumption-table';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -141,8 +143,10 @@ export default async function HistoryPage({
           ) : null}
         </TabsList>
 
-        <TabsContent value="sessions" className="mt-5">
+        <TabsContent value="sessions" className="mt-5 space-y-5">
+          <HistoriqueSynthese sessions={sessions} joursAttendus={expectedDates.length} />
           <SessionsTable sessions={sessions} />
+          <HistoriqueParPersonne sessions={sessions} />
         </TabsContent>
 
         {estDirecteur ? (

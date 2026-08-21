@@ -1,5 +1,5 @@
 import Link from 'next/link';
-import { ChevronRight } from 'lucide-react';
+import { Check, ChevronRight } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { SessionKind, SessionStatus } from '@/lib/supabase/database.types';
@@ -68,16 +68,33 @@ export function SessionCard({
       >
         <div className="flex items-start justify-between gap-3">
           <h2 className="text-xl font-black tracking-tight">{title}</h2>
+
+          {/* La pastille porte l'état de la journée : c'est ce qu'on cherche
+              en ouvrant l'application. Un point de couleur devant le mot la
+              rend lisible de loin sans avoir à l'agrandir davantage — et
+              elle reste lisible pour qui distingue mal les couleurs, le mot
+              disant déjà tout. */}
           <span
             className={cn(
-              'shrink-0 rounded-full px-3 py-1 text-xs font-bold',
+              'flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-black',
               status === 'submitted'
-                ? 'bg-primary/10 text-primary'
+                ? 'bg-primary/12 text-primary ring-primary/20 ring-1'
                 : status === 'draft'
-                  ? 'bg-alert text-alert-foreground'
-                  : 'bg-foreground text-background',
+                  ? 'bg-alert text-alert-foreground ring-alert-border ring-1'
+                  : 'bg-muted text-foreground/75 ring-border ring-1',
             )}
           >
+            {status === 'submitted' ? (
+              <Check className="size-3.5" strokeWidth={3.5} />
+            ) : (
+              <span
+                aria-hidden
+                className={cn(
+                  'size-2 rounded-full',
+                  status === 'draft' ? 'bg-alert-foreground/70' : 'bg-foreground/40',
+                )}
+              />
+            )}
             {label}
           </span>
         </div>
@@ -93,7 +110,9 @@ export function SessionCard({
           <div
             className={cn(
               'flex items-center justify-between gap-2 rounded-2xl px-4 py-3',
-              tasks.pending > 0 ? 'bg-alert text-alert-foreground' : 'bg-primary/10 text-primary',
+              tasks.pending > 0
+                ? 'bg-alert text-alert-foreground ring-alert-border ring-1'
+                : 'bg-primary/10 text-primary ring-primary/20 ring-1',
             )}
           >
             <span className="text-sm font-black">

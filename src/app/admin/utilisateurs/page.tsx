@@ -1,6 +1,7 @@
 import { requireManager, ROLE_LABELS } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { TeamManager, type TeamMember } from '@/components/admin/team-manager';
+import { verifierRetourCourriel } from './actions';
 import { Card } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
@@ -40,6 +41,9 @@ export default async function UsersPage() {
     .gt('sent_at', ilYAUneHeure)
     .order('sent_at');
 
+  // Où le lien d'un courriel atterrit vraiment. Ne consomme aucun quota.
+  const retour = await verifierRetourCourriel();
+
   const envoisRestants = Math.max(0, 2 - (envois?.length ?? 0));
   const prochainCreneau =
     envoisRestants === 0 && envois?.[0]
@@ -74,6 +78,38 @@ export default async function UsersPage() {
           {jamaisConnectes > 1 ? 'ont' : 'a'} jamais servi. Envoyez-leur le lien d&apos;activation
           avec le bouton ✉️.
         </p>
+      ) : null}
+
+      {retour.correct === false ? (
+        <Card className="border-destructive/30 bg-destructive/[0.06] rounded-3xl p-5">
+          <h2 className="text-destructive text-[17px] font-black">
+            Les e-mails ne mènent pas au site
+          </h2>
+          <p className="mt-2 text-sm leading-relaxed">
+            Supabase renvoie les liens de ses e-mails vers{' '}
+            <code className="bg-background rounded px-1.5 py-0.5 text-[12px] font-bold">
+              {retour.retenue}
+            </code>{' '}
+            au lieu de{' '}
+            <code className="bg-background rounded px-1.5 py-0.5 text-[12px] font-bold">
+              {retour.attendue}
+            </code>
+            . L’e-mail part bien, mais son lien ne mène nulle part depuis un téléphone.
+          </p>
+          <p className="mt-3 text-sm leading-relaxed font-semibold">
+            À corriger une fois pour toutes dans Supabase → Authentication → URL Configuration :
+            mettre <b>Site URL</b> à{' '}
+            <code className="bg-background rounded px-1.5 py-0.5 text-[12px] font-bold">
+              {retour.attendue}
+            </code>{' '}
+            et ajouter{' '}
+            <code className="bg-background rounded px-1.5 py-0.5 text-[12px] font-bold">
+              {retour.attendue}
+              {'/**'}
+            </code>{' '}
+            dans <b>Redirect URLs</b>. En attendant, « Copier le lien » fonctionne parfaitement.
+          </p>
+        </Card>
       ) : null}
 
       <Card className="rounded-3xl p-5">
