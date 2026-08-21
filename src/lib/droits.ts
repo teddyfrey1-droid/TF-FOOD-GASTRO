@@ -1,3 +1,14 @@
+import {
+  Euro,
+  History,
+  Salad,
+  SlidersHorizontal,
+  Snowflake,
+  TriangleAlert,
+  Undo2,
+  Users,
+  type LucideIcon,
+} from 'lucide-react';
 import type { UserRole } from '@/lib/supabase/database.types';
 
 /**
@@ -11,7 +22,15 @@ import type { UserRole } from '@/lib/supabase/database.types';
  */
 export interface DroitReglable {
   cle: string;
-  emoji: string;
+  /**
+   * Une icône de trait, pas un emoji.
+   *
+   * Six emojis de couleurs différentes sur une même colonne se lisent
+   * comme un décor : l'œil s'arrête sur la couleur au lieu du texte. Le
+   * trait gris laisse le libellé porter le sens, comme partout ailleurs
+   * dans Gestion.
+   */
+  icone: LucideIcon;
   titre: string;
   /** Ce que la personne pourra faire, en une phrase concrète. */
   description: string;
@@ -22,42 +41,42 @@ export interface DroitReglable {
 export const DROITS: DroitReglable[] = [
   {
     cle: 'historique',
-    emoji: '📋',
+    icone: History,
     titre: 'Historique des comptages',
     description: 'Relire les journées passées : qui a compté, quand, et ce qui restait à faire.',
     reglablePour: ['assistant_manager', 'employee'],
   },
   {
     cle: 'stocks_passes',
-    emoji: '❄️',
+    icone: Snowflake,
     titre: 'Stocks des jours passés',
     description: 'Remonter aux quantités relevées les jours précédents, pas seulement aujourd’hui.',
     reglablePour: ['assistant_manager', 'employee'],
   },
   {
     cle: 'annuler_autrui',
-    emoji: '↩️',
+    icone: Undo2,
     titre: 'Annuler le comptage d’un collègue',
     description: 'Débloquer une journée quand quelqu’un a commencé sans pouvoir finir.',
     reglablePour: ['assistant_manager', 'employee'],
   },
   {
     cle: 'ruptures',
-    emoji: '🚨',
+    icone: TriangleAlert,
     titre: 'Analyse des ruptures',
     description: 'Voir ce qui manque trop souvent, et sur quels produits la base est trop basse.',
     reglablePour: ['assistant_manager', 'employee'],
   },
   {
     cle: 'carte',
-    emoji: '🥗',
+    icone: Salad,
     titre: 'Modifier la carte',
     description: 'Ajouter ou renommer des produits, changer les photos et les catégories.',
     reglablePour: ['assistant_manager'],
   },
   {
     cle: 'simulateur',
-    emoji: '🎚️',
+    icone: SlidersHorizontal,
     titre: 'Simulateur de production',
     description: 'Essayer un chiffre d’affaires et voir les cibles. Affiche les objectifs.',
     reglablePour: ['assistant_manager'],
@@ -71,20 +90,24 @@ export const DROITS: DroitReglable[] = [
  * la règle plutôt que de la chercher — et comprend que son absence
  * d'interrupteur est un choix, pas un oubli.
  */
-export const DROITS_VERROUILLES = [
+export const DROITS_VERROUILLES: {
+  icone: LucideIcon;
+  titre: string;
+  description: string;
+}[] = [
   {
-    emoji: '💶',
+    icone: Euro,
     titre: 'Chiffre d’affaires et cibles',
     description:
       'Réservé au directeur et au propriétaire. C’est la règle fondatrice de l’application : personne d’autre ne voit le CA ni les objectifs de production.',
   },
   {
-    emoji: '👥',
+    icone: Users,
     titre: 'Gestion des comptes',
     description:
       'Créer, supprimer ou changer le statut de quelqu’un reste au directeur. Un droit qui se donne à soi-même n’est plus un droit.',
   },
-] as const;
+];
 
 /** Les statuts qui portent des interrupteurs, dans l'ordre d'affichage. */
 export const STATUTS_REGLABLES: UserRole[] = ['assistant_manager', 'employee'];

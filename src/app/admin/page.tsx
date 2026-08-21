@@ -96,7 +96,6 @@ export default async function DashboardPage() {
         <HorairesComptage morning={heures.morning} afternoon={heures.afternoon} />
       ) : null}
 
-      <ControleAcces initial={droits} />
 
       <GroupeMenu titre="La carte">
         <RangeeMenu
@@ -171,6 +170,8 @@ export default async function DashboardPage() {
           detail="Sur l'écran d'accueil des téléphones"
         />
       </GroupeMenu>
+
+      <ControleAcces initial={droits} />
 
       {sansBase > 0 || tousEnPrioriteParDefaut ? (
         <Card className="rounded-3xl p-5">

@@ -1,7 +1,7 @@
 'use client';
 
 import { useOptimistic, useState, useTransition } from 'react';
-import { Lock, ShieldCheck } from 'lucide-react';
+import { ChevronDown, Lock, ShieldCheck } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
 import { ROLE_LABELS } from '@/lib/roles';
@@ -31,6 +31,10 @@ export interface EtatDroits {
 export function ControleAcces({ initial }: { initial: EtatDroits }) {
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState<string | null>(null);
+  // Replié par défaut : on règle les droits le jour où quelqu'un change
+  // de poste, pas tous les matins. Déplié, le tableau poussait tout le
+  // reste de Gestion hors de l'écran.
+  const [ouvert, setOuvert] = useState(false);
 
   // L'interrupteur suit le doigt, puis le serveur confirme. Sur un
   // téléphone en cuisine, un demi-second de latence donne l'impression
@@ -56,14 +60,40 @@ export function ControleAcces({ initial }: { initial: EtatDroits }) {
   }
 
   return (
-    <Card className="rounded-3xl p-5">
-      <h2 className="flex items-center gap-2 text-[17px] font-black">
-        <ShieldCheck className="size-4.5" strokeWidth={2.6} />
-        Contrôle d&apos;accès
-      </h2>
-      <p className="text-muted-foreground mt-1 text-[13px] leading-relaxed">
-        Ce que chaque statut peut ouvrir. Les changements prennent effet tout de suite, sur les
-        téléphones comme dans la base.
+    <Card className="overflow-hidden rounded-3xl p-0">
+      <button
+        type="button"
+        onClick={() => setOuvert((actuel) => !actuel)}
+        aria-expanded={ouvert}
+        className="hover:bg-muted/40 flex w-full items-center gap-3 px-5 py-4 text-left transition-colors"
+      >
+        <span
+          aria-hidden
+          className="bg-muted text-foreground/70 flex size-11 shrink-0 items-center justify-center rounded-xl"
+        >
+          <ShieldCheck className="size-5" strokeWidth={2.2} />
+        </span>
+
+        <span className="min-w-0 flex-1">
+          <span className="block text-[17px] leading-tight font-bold">Contrôle d&apos;accès</span>
+          <span className="text-muted-foreground mt-0.5 block text-[13px] font-medium">
+            Ce que chaque statut peut ouvrir
+          </span>
+        </span>
+
+        <ChevronDown
+          className={cn(
+            'text-muted-foreground/60 size-5 shrink-0 transition-transform',
+            ouvert && 'rotate-180',
+          )}
+          strokeWidth={2.5}
+        />
+      </button>
+
+      {ouvert ? (
+      <div className="border-t px-5 pt-4 pb-5">
+      <p className="text-muted-foreground text-[13px] leading-relaxed">
+        Les changements prennent effet tout de suite, sur les téléphones comme dans la base.
       </p>
 
       {/* L'en-tête des colonnes, une fois pour toutes. */}
@@ -80,8 +110,11 @@ export function ControleAcces({ initial }: { initial: EtatDroits }) {
         {DROITS.map((droit) => (
           <li key={droit.cle} className="flex items-center gap-2 py-3">
             <span className="flex min-w-0 flex-1 items-start gap-2.5">
-              <span aria-hidden className="text-lg leading-none">
-                {droit.emoji}
+              <span
+                aria-hidden
+                className="bg-muted text-foreground/70 mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg"
+              >
+                <droit.icone className="size-4" strokeWidth={2.2} />
               </span>
               <span className="min-w-0">
                 <span className="block text-[14px] leading-tight font-bold">{droit.titre}</span>
@@ -146,8 +179,11 @@ export function ControleAcces({ initial }: { initial: EtatDroits }) {
         <ul className="space-y-2">
           {DROITS_VERROUILLES.map((verrou) => (
             <li key={verrou.titre} className="flex items-start gap-2.5">
-              <span aria-hidden className="text-base leading-none">
-                {verrou.emoji}
+              <span
+                aria-hidden
+                className="bg-muted text-muted-foreground mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg"
+              >
+                <verrou.icone className="size-4" strokeWidth={2.2} />
               </span>
               <span className="min-w-0">
                 <span className="flex items-center gap-1.5 text-[13px] font-bold">
@@ -162,6 +198,8 @@ export function ControleAcces({ initial }: { initial: EtatDroits }) {
           ))}
         </ul>
       </div>
+      </div>
+      ) : null}
     </Card>
   );
 }
