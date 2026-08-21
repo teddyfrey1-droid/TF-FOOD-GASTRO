@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '1.8.0';
+export const VERSION = '2.0.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,16 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '2.0.0',
+    date: '2026-08-23',
+    points: [
+      'Fini les liens par e-mail « expirés » : l’accès se donne avec un code de 8 caractères, valable 24 h.',
+      'Première connexion et mot de passe oublié passent par le même écran, sans aucun e-mail.',
+      'Un compte peut être supprimé définitivement depuis Équipe.',
+      'Déconnexion en bas de Gestion.',
+    ],
+  },
   {
     version: '1.8.0',
     date: '2026-08-22',

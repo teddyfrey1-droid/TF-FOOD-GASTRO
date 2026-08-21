@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition } from 'react';
 import { useFormStatus } from 'react-dom';
-import { Check, Copy, KeyRound, Link2, Mail, UserPlus, X } from 'lucide-react';
+import { Check, Copy, KeyRound, Trash2, UserPlus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -12,11 +12,11 @@ import { cn } from '@/lib/utils';
 import { ROLE_DESCRIPTIONS, ROLE_LABELS } from '@/lib/roles';
 import {
   createTeamMember,
+  creerCodeActivation,
   resetMemberPassword,
-  envoyerLienActivation,
-  genererLienActivation,
   setMemberActive,
   setMemberRole,
+  supprimerCompte,
   type UserFormState,
 } from '@/app/admin/utilisateurs/actions';
 import type { UserRole } from '@/lib/supabase/database.types';
@@ -191,7 +191,8 @@ function MemberRow({ member }: { member: TeamMember }) {
   const [resetting, setResetting] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [message, setMessage] = useState<string | null>(null);
-  const [lien, setLien] = useState<string | null>(null);
+  const [code, setCode] = useState<string | null>(null);
+  const [confirmeSuppression, setConfirmeSuppression] = useState(false);
 
   return (
     <Card className={cn('rounded-2xl p-4', !member.isActive && 'opacity-60')}>
@@ -241,69 +242,37 @@ function MemberRow({ member }: { member: TeamMember }) {
             ))}
           </select>
 
-          {/* Deux façons de donner son mot de passe à quelqu'un.
+          {/* Un code, pas un lien.
 
-              Le lien copié ne consomme aucun quota et arrive à coup sûr :
-              c'est celui à utiliser au quotidien. Le courriel est plus
-              confortable, mais Supabase n'en accepte que deux par heure. */}
+              Les liens de Supabase passent par son point de vérification,
+              qui consomme le jeton puis redirige vers une adresse que nous
+              ne maîtrisons pas — et les antivirus des messageries les
+              ouvrent avant leur destinataire. D'où le « lien expiré » à
+              chaque essai. Un code ne s'ouvre pas tout seul. */}
           <Button
-            variant="outline"
             size="sm"
-            className="h-10 rounded-xl"
-            disabled={pending || !member.email}
-            title={
-              member.email
-                ? "Copier un lien d'activation (sans e-mail)"
-                : 'Ce compte n’a pas d’adresse e-mail'
-            }
+            className="h-10 rounded-xl font-bold"
+            disabled={pending}
             onClick={() =>
               startTransition(async () => {
-                if (!member.email) return;
-                setMessage('Création du lien…');
-                const result = await genererLienActivation(member.email);
-
-                if (result.error || !result.lien) {
-                  setLien(null);
-                  setMessage(result.error ?? 'Lien impossible à créer.');
+                setCode(null);
+                const resultat = await creerCodeActivation(member.id);
+                if (resultat.error || !resultat.code) {
+                  setMessage(resultat.error ?? 'Code impossible à créer.');
                   return;
                 }
-
-                setLien(result.lien);
-                // Le presse-papiers n'est pas toujours accessible (Safari
-                // le refuse hors interaction directe, et en http). Le lien
-                // reste affiché juste en dessous pour être copié à la main.
+                setCode(resultat.code);
+                setMessage(null);
                 try {
-                  await navigator.clipboard.writeText(result.lien);
-                  setMessage('Lien copié. Il est valable une heure.');
+                  await navigator.clipboard.writeText(resultat.code);
                 } catch {
-                  setMessage('Lien prêt — copiez-le ci-dessous.');
+                  // Safari refuse le presse-papiers hors interaction
+                  // directe : le code reste affiché juste en dessous.
                 }
               })
             }
           >
-            <Link2 className="size-4" />
-          </Button>
-
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-10 rounded-xl"
-            disabled={pending || !member.email}
-            title={
-              member.email
-                ? "Envoyer un lien d'activation par e-mail (2 par heure)"
-                : 'Ce compte n’a pas d’adresse e-mail'
-            }
-            onClick={() =>
-              startTransition(async () => {
-                if (!member.email) return;
-                setMessage('Envoi du lien…');
-                const result = await envoyerLienActivation(member.email);
-                setMessage(result.error ?? result.success ?? null);
-              })
-            }
-          >
-            <Mail className="size-4" />
+            Code d&apos;accès
           </Button>
 
           <Button
@@ -315,6 +284,22 @@ function MemberRow({ member }: { member: TeamMember }) {
           >
             <KeyRound className="size-4" />
           </Button>
+
+          {/* Désactiver suffit dans la plupart des cas ; supprimer efface
+              l'adresse et libère le compte. Les deux gestes cohabitent,
+              le second derrière une confirmation. */}
+          {!member.isMe ? (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="text-destructive hover:bg-destructive/10 hover:text-destructive h-10 rounded-xl"
+              disabled={pending}
+              title="Supprimer définitivement ce compte"
+              onClick={() => setConfirmeSuppression((actuel) => !actuel)}
+            >
+              <Trash2 className="size-4" />
+            </Button>
+          ) : null}
 
           <Switch
             checked={member.isActive}
@@ -366,24 +351,64 @@ function MemberRow({ member }: { member: TeamMember }) {
         </div>
       ) : null}
 
-      {lien ? (
-        <div className="bg-muted/60 mt-3 space-y-2 rounded-2xl p-3">
-          <p className="text-xs font-bold">Lien d’activation pour {member.fullName}</p>
-          <p className="bg-background rounded-xl border p-2.5 font-mono text-[11px] break-all">
-            {lien}
+      {code ? (
+        <div className="bg-primary/10 border-primary/25 mt-3 space-y-2 rounded-2xl border p-3.5">
+          <p className="text-primary text-xs font-black tracking-wide uppercase">
+            Code pour {member.fullName}
+          </p>
+          <p className="bg-background rounded-xl border px-3 py-2.5 text-center font-mono text-2xl font-black tracking-widest">
+            {code}
+          </p>
+          <p className="text-muted-foreground text-[11px] leading-relaxed font-semibold">
+            Valable 24 h, une seule fois. Dictez-le ou envoyez-le par SMS. La personne va sur le
+            site, touche « Première connexion » et saisit son adresse e-mail avec ce code.
           </p>
           <div className="flex gap-2">
             <Button
               size="sm"
               variant="outline"
               className="h-9 rounded-xl"
-              onClick={() => void navigator.clipboard?.writeText(lien).catch(() => {})}
+              onClick={() => void navigator.clipboard?.writeText(code).catch(() => {})}
             >
               <Copy className="size-3.5" />
               Copier
             </Button>
-            <Button size="sm" variant="ghost" className="h-9" onClick={() => setLien(null)}>
+            <Button size="sm" variant="ghost" className="h-9" onClick={() => setCode(null)}>
               Masquer
+            </Button>
+          </div>
+        </div>
+      ) : null}
+
+      {confirmeSuppression ? (
+        <div className="border-destructive/30 bg-destructive/[0.06] mt-3 space-y-2.5 rounded-2xl border p-3.5">
+          <p className="text-destructive text-[13px] leading-relaxed font-bold">
+            Supprimer définitivement le compte de {member.fullName} ? Ses comptages passés
+            restent dans l&apos;historique.
+          </p>
+          <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="destructive"
+              className="h-9 rounded-xl font-bold"
+              disabled={pending}
+              onClick={() =>
+                startTransition(async () => {
+                  const resultat = await supprimerCompte(member.id);
+                  setMessage(resultat.error ?? resultat.success ?? null);
+                  if (!resultat.error) setConfirmeSuppression(false);
+                })
+              }
+            >
+              Oui, supprimer
+            </Button>
+            <Button
+              size="sm"
+              variant="ghost"
+              className="h-9"
+              onClick={() => setConfirmeSuppression(false)}
+            >
+              Annuler
             </Button>
           </div>
         </div>

@@ -10,6 +10,9 @@ const AUTH_PATHS = [
   // d'ici la personne est donc anonyme : sans cette entrée, elle serait
   // renvoyée à la connexion avant d'avoir pu choisir son mot de passe.
   '/definir-mot-de-passe',
+  // L'activation par code s'adresse par définition à quelqu'un qui n'est
+  // pas encore connecté : c'est justement ce qu'elle vient réparer.
+  '/activation',
 ];
 
 /**

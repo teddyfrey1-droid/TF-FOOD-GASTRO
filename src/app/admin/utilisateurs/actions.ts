@@ -4,6 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { createClient, createAdminClient, createSignUpClient } from '@/lib/supabase/server';
 import { getCurrentUser, isManagerRole } from '@/lib/auth';
+import { empreinte, genererCode } from '@/lib/activation';
 import type { UserRole } from '@/lib/supabase/database.types';
 
 /**
@@ -140,31 +141,58 @@ export async function createTeamMember(
   return { success: `${parsed.data.fullName} peut se connecter dès maintenant.` };
 }
 
-/** Adresse publique du site, pour le retour du lien d'activation. */
-function adresseDuSite(): string {
-  return (
-    process.env.NEXT_PUBLIC_SITE_URL ??
-    (process.env.VERCEL_PROJECT_PRODUCTION_URL
-      ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}`
-      : 'https://tf-food-gastro.vercel.app')
-  );
+/**
+ * Fabrique un code d'activation pour quelqu'un.
+ *
+ * Le code remplace le lien par courriel, qui ne pouvait pas marcher :
+ * Supabase fait passer ses liens par son propre point de vérification,
+ * lequel CONSOMME le jeton puis redirige vers l'adresse configurée dans
+ * son tableau de bord — restée sur `localhost:3000`, hors de notre
+ * portée. Et les antivirus des messageries ouvrent les liens avant leur
+ * destinataire, ce qui brûle le jeton : d'où le « lien expiré » à chaque
+ * essai, sans que personne ait rien fait de travers.
+ *
+ * Un code ne s'ouvre pas tout seul, se dicte au téléphone, et ne dépend
+ * d'aucun réglage que nous ne maîtrisons pas.
+ */
+export async function creerCodeActivation(
+  userId: string,
+): Promise<{ error?: string; code?: string; expireLe?: string }> {
+  try {
+    await requireManagerOrThrow();
+  } catch (error) {
+    return { error: error instanceof Error ? error.message : 'Accès refusé.' };
+  }
+
+  const code = genererCode();
+
+  const supabase = await createClient();
+  const { data, error } = await supabase.rpc('mep_creer_code_activation', {
+    p_user_id: userId,
+    p_code_hash: empreinte(code),
+    p_heures: 24,
+  });
+
+  if (error) return { error: error.message };
+
+  revalidatePath('/admin/utilisateurs');
+  // Le code n'existe en clair QUE dans cette réponse : il n'est stocké
+  // nulle part, et ne pourra pas être réaffiché.
+  return { code, expireLe: data };
 }
 
 /**
- * Envoie à l'employé un lien pour choisir son mot de passe.
+ * Supprime définitivement un compte.
  *
- * On passe par le courriel de RÉINITIALISATION plutôt que par une
- * invitation : le résultat est le même pour la personne qui le reçoit, et
- * le message part même si le compte a déjà servi.
+ * Les droits sont vérifiés EN BASE (`mep_peut_supprimer_compte`) avant
+ * d'employer la clé de service, qui ne connaît aucune règle : on ne lui
+ * confie le geste qu'une fois l'autorisation établie.
  *
- * ⚠️ Le service d'envoi intégré à Supabase plafonne à DEUX messages par
- * heure pour tout le projet. Au-delà il répond 429 et n'envoie rien : le
- * lien semblait parti et n'arrivait jamais. On réserve donc le créneau en
- * base AVANT d'appeler Supabase, et on le rend si l'envoi échoue quand
- * même. Le directeur sait ainsi toujours où il en est de son quota.
+ * Les comptages réalisés par la personne survivent. L'historique du
+ * restaurant ne se réécrit pas parce qu'un salarié est parti.
  */
-export async function envoyerLienActivation(
-  email: string,
+export async function supprimerCompte(
+  userId: string,
 ): Promise<{ error?: string; success?: string }> {
   try {
     await requireManagerOrThrow();
@@ -172,145 +200,24 @@ export async function envoyerLienActivation(
     return { error: error instanceof Error ? error.message : 'Accès refusé.' };
   }
 
-  const parsed = z.email().safeParse(email.trim());
-  if (!parsed.success) return { error: 'Adresse e-mail invalide.' };
-
   const supabase = await createClient();
-  const { data: creneau, error: quota } = await supabase.rpc('mep_reserver_envoi_activation', {
-    p_email: parsed.data,
+  const { error: refus } = await supabase.rpc('mep_peut_supprimer_compte', {
+    p_user_id: userId,
   });
+  if (refus) return { error: refus.message };
 
-  // Le message de la base porte déjà l'heure du prochain créneau : on le
-  // montre tel quel plutôt que de le réécrire en moins précis.
-  if (quota) return { error: quota.message };
-
-  const { error } = await createSignUpClient().auth.resetPasswordForEmail(parsed.data, {
-    redirectTo: `${adresseDuSite()}/definir-mot-de-passe`,
-  });
-
-  if (error) {
-    if (creneau) await supabase.rpc('mep_annuler_envoi_activation', { p_id: creneau });
-
-    if (/rate|limit|too many|seconds/i.test(error.message)) {
-      return {
-        error:
-          'Supabase a refusé l’envoi : son quota horaire est déjà atteint. ' +
-          'Utilisez « Copier le lien » — il fonctionne sans e-mail.',
-      };
-    }
-    return { error: `Envoi impossible : ${error.message}` };
+  let admin;
+  try {
+    admin = createAdminClient();
+  } catch {
+    return { error: 'La clé de service manque sur l’hébergement : suppression impossible.' };
   }
+
+  const { error } = await admin.auth.admin.deleteUser(userId);
+  if (error) return { error: `Suppression impossible : ${error.message}` };
 
   revalidatePath('/admin/utilisateurs');
-  return {
-    success: `Lien envoyé à ${parsed.data}. Il est valable une heure.`,
-  };
-}
-
-/**
- * Fabrique le lien d'activation sans envoyer aucun courriel.
- *
- * C'est le chemin fiable, et il n'a aucun quota : la clé de service
- * demande à Supabase un jeton à usage unique, et on le pose sur NOTRE
- * adresse. Le directeur transmet ensuite le lien par SMS ou WhatsApp —
- * souvent plus sûr qu'un courriel qui finit en indésirables.
- *
- * Le lien ne passe pas par `/auth/v1/verify` de Supabase, dont la
- * redirection retombe sur l'« adresse du site » configurée dans le tableau
- * de bord. Il pointe droit sur `/definir-mot-de-passe`, qui échange le
- * jeton lui-même : rien à régler ailleurs pour que ça marche.
- */
-/**
- * Vérifie où atterrit RÉELLEMENT le lien envoyé par courriel.
- *
- * Supabase n'accepte une adresse de retour que si elle figure dans sa
- * liste blanche ; sinon il retombe silencieusement sur l'« adresse du
- * site » configurée dans son tableau de bord. Quand celle-ci est restée
- * sur `http://localhost:3000`, le courriel part, arrive — et son lien
- * mène à une machine de développement. Vu de l'écran Équipe, tout allait
- * bien.
- *
- * `generateLink` renvoie l'adresse que Supabase a retenue : on la lit et
- * on la compare à la nôtre. Le diagnostic remonte donc du serveur, au
- * lieu de rester dans les journaux.
- */
-export async function verifierRetourCourriel(): Promise<{
-  correct?: boolean;
-  retenue?: string;
-  attendue?: string;
-  error?: string;
-}> {
-  try {
-    await requireManagerOrThrow();
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Accès refusé.' };
-  }
-
-  const attendue = adresseDuSite();
-
-  let admin;
-  try {
-    admin = createAdminClient();
-  } catch {
-    return { error: 'La clé de service manque : impossible de vérifier.' };
-  }
-
-  const { data: equipe } = await (await createClient()).rpc('mep_equipe');
-  const cobaye = (equipe ?? []).find((membre) => membre.email)?.email;
-  if (!cobaye) return { error: 'Aucune adresse en base pour faire le test.' };
-
-  // `generateLink` n'envoie aucun courriel : la vérification ne coûte
-  // rien au quota, et peut donc se faire à chaque ouverture de l'écran.
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: 'recovery',
-    email: cobaye,
-    options: { redirectTo: `${attendue}/definir-mot-de-passe` },
-  });
-
-  if (error) return { error: error.message };
-
-  const lien = data.properties?.action_link;
-  if (!lien) return { error: 'Supabase n’a pas renvoyé de lien.' };
-
-  const retenue = new URL(lien).searchParams.get('redirect_to') ?? '(aucune)';
-  return { correct: retenue.startsWith(attendue), retenue, attendue };
-}
-
-export async function genererLienActivation(
-  email: string,
-): Promise<{ error?: string; lien?: string }> {
-  try {
-    await requireManagerOrThrow();
-  } catch (error) {
-    return { error: error instanceof Error ? error.message : 'Accès refusé.' };
-  }
-
-  const parsed = z.email().safeParse(email.trim());
-  if (!parsed.success) return { error: 'Adresse e-mail invalide.' };
-
-  let admin;
-  try {
-    admin = createAdminClient();
-  } catch {
-    return {
-      error:
-        'La clé de service manque sur l’hébergement : seul l’envoi par e-mail est possible.',
-    };
-  }
-
-  const { data, error } = await admin.auth.admin.generateLink({
-    type: 'recovery',
-    email: parsed.data,
-  });
-
-  if (error) return { error: `Lien impossible à créer : ${error.message}` };
-
-  const jeton = data.properties?.hashed_token;
-  if (!jeton) return { error: 'Supabase n’a pas renvoyé de jeton utilisable.' };
-
-  return {
-    lien: `${adresseDuSite()}/definir-mot-de-passe?token_hash=${encodeURIComponent(jeton)}&type=recovery`,
-  };
+  return { success: 'Compte supprimé.' };
 }
 
 export async function setMemberRole(userId: string, role: UserRole): Promise<{ error?: string }> {

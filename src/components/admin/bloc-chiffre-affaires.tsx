@@ -53,19 +53,22 @@ export function BlocChiffreAffaires({
              dernier, avant majoration — sans lui, le taux de croissance ne
              se contrôle pas. */
           <div className="border-primary/20 mt-3 border-t pt-3">
-            <p className="text-muted-foreground text-[11px] font-black tracking-wide uppercase">
+            {/* Surligné : c'est le point de comparaison, et il doit se
+                repérer sans être cherché. */}
+            <p className="bg-primary/15 text-primary inline-block rounded-md px-1.5 py-0.5 text-[12px] font-black tracking-wide uppercase">
               L&apos;an dernier, avant majoration
             </p>
-            <p className="mt-0.5 text-[15px] leading-snug font-bold">
-              {anDernier ? formatEuro(anDernier.revenueHt) : '—'}{' '}
-              <span className="text-muted-foreground font-semibold">
-                {anDernier
-                  ? `le ${formatDateLong(anDernier.jour).replace(/ \d{4}$/, '')}`
-                  : 'aucune journée comparable'}
+            {/* Dans une pastille, plus gros que l'intitulé : le nombre
+                prime sur son étiquette. */}
+            <p className="mt-1.5">
+              <span className="bg-muted ring-border inline-block rounded-full px-3 py-1 text-[17px] leading-snug font-black ring-1">
+                {anDernier ? formatEuro(anDernier.revenueHt) : '—'}
+                <span className="text-muted-foreground ml-1.5 text-[15px] font-bold">
+                  {anDernier
+                    ? `le ${formatDateLong(anDernier.jour).replace(/ \d{4}$/, '')}`
+                    : 'aucune journée comparable'}
+                </span>
               </span>
-            </p>
-            <p className="text-muted-foreground mt-1 text-[13px] leading-snug font-semibold">
-              Majoré du taux de croissance ci-contre pour donner la prévision.
             </p>
           </div>
         )}

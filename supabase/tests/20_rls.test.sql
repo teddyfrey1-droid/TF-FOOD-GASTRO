@@ -1209,4 +1209,101 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 19. LES CODES D''ACTIVATION ---'
+
+-- Un code d'activation ouvre un compte : la table qui les porte ne doit
+-- être lisible par personne depuis le navigateur, pas même le directeur.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('La table des codes est fermée, même au directeur',
+  'select * from public.activation_codes');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Un employé ne crée pas de code',
+  'select public.mep_creer_code_activation(''a0000000-0000-0000-0000-00000000000e''::uuid, ''x'', 24)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000a1';
+select pg_temp.check_denied('...ni un assistant manager',
+  'select public.mep_creer_code_activation(''a0000000-0000-0000-0000-00000000000e''::uuid, ''x'', 24)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+
+select pg_temp.check_equal('Le directeur crée un code qui expire dans le futur',
+  (select public.mep_creer_code_activation(
+     'a0000000-0000-0000-0000-00000000000e'::uuid, 'empreinte-1', 24) > now()),
+  true);
+
+-- Deux codes valides en circulation, c'est un code de trop : le premier
+-- doit être neutralisé par le second.
+select public.mep_creer_code_activation(
+  'a0000000-0000-0000-0000-00000000000e'::uuid, 'empreinte-2', 24);
+
+reset role;
+reset "request.jwt.claim.sub";
+
+select pg_temp.check_equal('Un seul code reste valide après renouvellement',
+  (select count(*)::int from public.activation_codes
+   where user_id = 'a0000000-0000-0000-0000-00000000000e' and used_at is null),
+  1);
+
+select pg_temp.check_equal('...et c''est bien le dernier',
+  (select code_hash from public.activation_codes
+   where user_id = 'a0000000-0000-0000-0000-00000000000e' and used_at is null),
+  'empreinte-2');
+
+-- Une durée absurde est refusée : un code valable un an n'est plus un
+-- code d'activation, c'est un mot de passe partagé.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('Une validité d''un an est refusée',
+  'select public.mep_creer_code_activation(''a0000000-0000-0000-0000-00000000000e''::uuid, ''x'', 9000)');
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
+\echo '--- 20. LA SUPPRESSION D''UN COMPTE ---'
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Un employé ne supprime aucun compte',
+  'select public.mep_peut_supprimer_compte(''a0000000-0000-0000-0000-0000000000a1''::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+
+select pg_temp.check_denied('On ne supprime pas son propre compte',
+  'select public.mep_peut_supprimer_compte(''a0000000-0000-0000-0000-00000000000d''::uuid)');
+
+select pg_temp.check_denied('Un directeur ne supprime pas le propriétaire',
+  'select public.mep_peut_supprimer_compte(''a0000000-0000-0000-0000-00000000000f''::uuid)');
+
+select pg_temp.check_denied('Un compte inexistant est refusé proprement',
+  'select public.mep_peut_supprimer_compte(''00000000-0000-0000-0000-0000000000ff''::uuid)');
+
+-- Le cas passant : un salarié ordinaire. La fonction ne renvoie rien —
+-- réussir, c'est ne pas lever d'erreur.
+do $$
+begin
+  perform public.mep_peut_supprimer_compte('a0000000-0000-0000-0000-00000000000e'::uuid);
+  raise notice 'OK   — Le directeur peut supprimer un salarié';
+exception when others then
+  raise exception 'ÉCHEC — Le directeur peut supprimer un salarié : %', sqlerrm;
+end;
+$$;
+
+reset role;
+reset "request.jwt.claim.sub";
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

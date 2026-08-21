@@ -1,16 +1,9 @@
 import { requireManager, ROLE_LABELS } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { TeamManager, type TeamMember } from '@/components/admin/team-manager';
-import { verifierRetourCourriel } from './actions';
 import { Card } from '@/components/ui/card';
 
 export const dynamic = 'force-dynamic';
-
-const HEURE = new Intl.DateTimeFormat('fr-FR', {
-  hour: '2-digit',
-  minute: '2-digit',
-  timeZone: 'Europe/Paris',
-});
 
 export default async function UsersPage() {
   const me = await requireManager();
@@ -31,24 +24,6 @@ export default async function UsersPage() {
     isMe: row.id === me.id,
     lastSignInAt: row.derniere_connexion,
   }));
-
-  // Le quota d'envoi appartient au projet Supabase entier, pas à un
-  // destinataire : deux courriels par heure, tous employés confondus.
-  const ilYAUneHeure = new Date(Date.now() - 60 * 60 * 1000).toISOString();
-  const { data: envois } = await supabase
-    .from('activation_email_sends')
-    .select('sent_at')
-    .gt('sent_at', ilYAUneHeure)
-    .order('sent_at');
-
-  // Où le lien d'un courriel atterrit vraiment. Ne consomme aucun quota.
-  const retour = await verifierRetourCourriel();
-
-  const envoisRestants = Math.max(0, 2 - (envois?.length ?? 0));
-  const prochainCreneau =
-    envoisRestants === 0 && envois?.[0]
-      ? new Date(new Date(envois[0].sent_at).getTime() + 60 * 60 * 1000)
-      : null;
 
   const jamaisConnectes = members.filter(
     (member) => member.isActive && member.lastSignInAt === null,
@@ -80,72 +55,25 @@ export default async function UsersPage() {
         </p>
       ) : null}
 
-      {retour.correct === false ? (
-        <Card className="border-destructive/30 bg-destructive/[0.06] rounded-3xl p-5">
-          <h2 className="text-destructive text-[17px] font-black">
-            Les e-mails ne mènent pas au site
-          </h2>
-          <p className="mt-2 text-sm leading-relaxed">
-            Supabase renvoie les liens de ses e-mails vers{' '}
-            <code className="bg-background rounded px-1.5 py-0.5 text-[12px] font-bold">
-              {retour.retenue}
-            </code>{' '}
-            au lieu de{' '}
-            <code className="bg-background rounded px-1.5 py-0.5 text-[12px] font-bold">
-              {retour.attendue}
-            </code>
-            . L’e-mail part bien, mais son lien ne mène nulle part depuis un téléphone.
-          </p>
-          <p className="mt-3 text-sm leading-relaxed font-semibold">
-            À corriger une fois pour toutes dans Supabase → Authentication → URL Configuration :
-            mettre <b>Site URL</b> à{' '}
-            <code className="bg-background rounded px-1.5 py-0.5 text-[12px] font-bold">
-              {retour.attendue}
-            </code>{' '}
-            et ajouter{' '}
-            <code className="bg-background rounded px-1.5 py-0.5 text-[12px] font-bold">
-              {retour.attendue}
-              {'/**'}
-            </code>{' '}
-            dans <b>Redirect URLs</b>. En attendant, « Copier le lien » fonctionne parfaitement.
-          </p>
-        </Card>
-      ) : null}
-
       <Card className="rounded-3xl p-5">
-        <h2 className="text-[17px] font-black">Donner son accès à quelqu’un</h2>
+        <h2 className="text-[17px] font-black">Donner son accès à quelqu&apos;un</h2>
         <ul className="text-muted-foreground mt-2 space-y-1.5 text-sm leading-relaxed">
           <li>
-            <span className="text-foreground font-bold">🔗 Copier le lien</span> — le plus sûr.
-            Aucun e-mail, aucune limite : collez-le dans un SMS ou un WhatsApp. Il vaut une
-            heure et ne sert qu’une fois.
+            <span className="text-foreground font-bold">Code d&apos;accès</span> — la façon
+            normale. Un code de 8 caractères, valable 24 h, à dicter ou à envoyer par SMS. La
+            personne va sur le site, touche « Première connexion » et choisit son mot de passe.
           </li>
           <li>
-            <span className="text-foreground font-bold">✉️ Envoyer par e-mail</span> — plus
-            confortable, mais Supabase n’accepte que{' '}
-            <span className="text-foreground font-bold">2 envois par heure</span> pour tout le
-            restaurant.
-          </li>
-          <li>
-            <span className="text-foreground font-bold">🔑 Mot de passe à la main</span> — à
-            dicter de vive voix, la personne le changera ensuite.
+            <span className="text-foreground font-bold">🔑 Mot de passe à la main</span> — si
+            vous préférez le lui donner vous-même de vive voix.
           </li>
         </ul>
 
-        <p
-          className={
-            envoisRestants > 0
-              ? 'bg-muted mt-4 rounded-2xl px-4 py-2.5 text-sm font-bold'
-              : 'bg-alert text-alert-foreground mt-4 rounded-2xl px-4 py-2.5 text-sm font-bold'
-          }
-        >
-          {envoisRestants > 0
-            ? `${envoisRestants} e-mail${envoisRestants > 1 ? 's' : ''} encore possible${
-                envoisRestants > 1 ? 's' : ''
-              } cette heure-ci.`
-            : `Quota d’e-mails atteint. Prochain envoi possible à ${HEURE.format(
-                prochainCreneau!,
-              )} — d’ici là, utilisez « Copier le lien ».`}
+        <p className="text-muted-foreground mt-3 border-t pt-3 text-[13px] leading-relaxed">
+          Les liens par e-mail ont été retirés : Supabase les fait passer par sa propre page de
+          vérification, qui consomme le jeton avant que la personne clique — les antivirus des
+          messageries l&apos;ouvrent les premiers. D&apos;où le « lien expiré » systématique. Un
+          code ne s&apos;ouvre pas tout seul.
         </p>
       </Card>
 

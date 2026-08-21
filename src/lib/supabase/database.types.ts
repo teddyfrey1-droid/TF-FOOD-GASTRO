@@ -317,6 +317,24 @@ export type Database = {
         { id: string; email: string; sent_by: string; sent_at: string },
         'id' | 'sent_at'
       >;
+      /**
+       * Codes d'activation. Aucune clé publique n'y accède : seule la clé
+       * de service peut les lire, puisqu'un code doit pouvoir être validé
+       * par quelqu'un qui n'est justement pas encore connecté.
+       */
+      activation_codes: Table<
+        {
+          id: string;
+          user_id: string;
+          code_hash: string;
+          expires_at: string;
+          used_at: string | null;
+          attempts: number;
+          created_by: string;
+          created_at: string;
+        },
+        'id' | 'used_at' | 'attempts' | 'created_at'
+      >;
     };
     Views: {
       products_for_count: { Row: ProductForCountRow; Relationships: [] };
@@ -390,6 +408,13 @@ export type Database = {
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /** Crée un code d'activation et invalide les précédents. */
+      mep_creer_code_activation: {
+        Args: { p_user_id: string; p_code_hash: string; p_heures?: number };
+        Returns: string;
+      };
+      /** Lève une erreur si l'appelant ne peut pas supprimer ce compte. */
+      mep_peut_supprimer_compte: { Args: { p_user_id: string }; Returns: undefined };
       /** Heures d'ouverture des comptages. Lisibles par toute l'équipe. */
       mep_heures_comptage: {
         Args: Record<string, never>;

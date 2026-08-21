@@ -21,6 +21,7 @@ import { formatDateLong, todayInParis } from '@/lib/format';
 import { Card } from '@/components/ui/card';
 import { GroupeMenu, RangeeMenu } from '@/components/rangee-menu';
 import { HorairesComptage } from '@/components/admin/horaires-comptage';
+import { SignOutButton } from '@/components/pwa/sign-out-button';
 
 export const dynamic = 'force-dynamic';
 
@@ -180,6 +181,14 @@ export default async function DashboardPage() {
           </ul>
         </Card>
       ) : null}
+
+      {/* Se déconnecter depuis Gestion, comme depuis « Mon compte ».
+          Sur un téléphone partagé entre plusieurs postes, c'est le geste
+          qu'on cherche en partant — il ne doit pas obliger à passer par
+          l'avatar en haut de l'écran. */}
+      <div className="pt-2">
+        <SignOutButton variant="outline" />
+      </div>
     </div>
   );
 }

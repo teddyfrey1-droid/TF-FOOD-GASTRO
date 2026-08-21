@@ -1,5 +1,7 @@
 'use client';
 
+import Link from 'next/link';
+
 import { useActionState, useState } from 'react';
 import { useFormStatus } from 'react-dom';
 import { Eye, EyeOff, LoaderCircle } from 'lucide-react';
@@ -105,9 +107,20 @@ export function LoginForm({ suite }: { suite?: string }) {
 
       <SubmitButton />
 
-      <p className="text-muted-foreground pt-2 text-center text-xs leading-relaxed">
-        Mot de passe oublié ? Demandez à votre directeur de le réinitialiser.
-      </p>
+      {/* Premier accès et mot de passe oublié passent par le même chemin :
+          un code donné par le directeur. C'est le seul mécanisme qui ne
+          dépende d'aucun courriel — donc le seul qui marche à tous les
+          coups. */}
+      <Link
+        href="/activation"
+        className="text-muted-foreground hover:text-foreground block pt-2 text-center text-xs leading-relaxed font-semibold transition-colors"
+      >
+        Première connexion ou mot de passe oublié ?
+        <br />
+        <span className="text-primary font-black underline underline-offset-2">
+          Entrer un code d’activation
+        </span>
+      </Link>
     </form>
   );
 }
