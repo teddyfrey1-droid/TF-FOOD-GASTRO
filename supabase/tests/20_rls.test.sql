@@ -1306,4 +1306,107 @@ reset role;
 reset "request.jwt.claim.sub";
 
 \echo ''
+\echo '--- 21. ANNULER UN COMPTAGE ---'
+
+do $$
+declare v_encours uuid;
+begin
+  delete from public.count_sessions where date = current_date and session = 'afternoon';
+
+  insert into public.count_sessions (date, session, user_id, status)
+  values (current_date, 'afternoon', 'a0000000-0000-0000-0000-00000000000e', 'draft')
+  returning id into v_encours;
+
+  insert into public.count_lines (session_id, product_id, qty_saladbar, qty_fridge)
+  select v_encours, p.id, 1, 1 from public.products p where p.is_active limit 3;
+
+  perform set_config('mep.session_encours', v_encours::text, false);
+end;
+$$;
+
+-- Un collègue qui n'a pas commencé ce comptage n'a pas à le jeter. Il
+-- doit être ACTIF et salarié, sinon le refus viendrait d'ailleurs et ne
+-- prouverait rien de la règle qu'on teste ici.
+insert into auth.users (id, email) values
+  ('a0000000-0000-0000-0000-0000000000c2', 'collegue-annulation@lafayette.test')
+on conflict (id) do nothing;
+update public.profiles set role = 'employee', is_active = true
+  where id = 'a0000000-0000-0000-0000-0000000000c2';
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-0000000000c2';
+select pg_temp.check_denied('Un autre employé ne peut pas annuler le comptage',
+  'select public.mep_annuler_comptage(current_setting(''mep.session_encours'')::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- La personne qui l'a commencé, oui — et tout son relevé part avec.
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select public.mep_annuler_comptage(current_setting('mep.session_encours')::uuid);
+reset role;
+reset "request.jwt.claim.sub";
+
+select pg_temp.check_equal('Le comptage annulé a disparu',
+  (select count(*)::int from public.count_sessions
+   where id = current_setting('mep.session_encours')::uuid),
+  0);
+
+select pg_temp.check_equal('...et ses lignes aussi',
+  (select count(*)::int from public.count_lines
+   where session_id = current_setting('mep.session_encours')::uuid),
+  0);
+
+-- Un comptage VALIDÉ ne s'annule jamais : le rapport de production s'y
+-- adosse, et l'historique du restaurant ne se réécrit pas.
+do $$
+declare v_valide uuid;
+begin
+  insert into public.count_sessions (date, session, user_id, status, submitted_at)
+  values (current_date, 'afternoon', 'a0000000-0000-0000-0000-00000000000e',
+          'submitted', now())
+  returning id into v_valide;
+  perform set_config('mep.session_validee', v_valide::text, false);
+end;
+$$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000e';
+select pg_temp.check_denied('Un comptage validé ne s''annule pas, même par son auteur',
+  'select public.mep_annuler_comptage(current_setting(''mep.session_validee'')::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select pg_temp.check_denied('...ni par le directeur',
+  'select public.mep_annuler_comptage(current_setting(''mep.session_validee'')::uuid)');
+reset role;
+reset "request.jwt.claim.sub";
+
+-- L'encadrement peut débloquer un comptage laissé en plan par quelqu'un
+-- d'autre : c'est tout l'intérêt pour une journée qui doit avancer.
+do $$
+declare v_autre uuid;
+begin
+  delete from public.count_sessions where date = current_date and session = 'afternoon';
+  insert into public.count_sessions (date, session, user_id, status)
+  values (current_date, 'afternoon', 'a0000000-0000-0000-0000-00000000000e', 'draft')
+  returning id into v_autre;
+  perform set_config('mep.session_autre', v_autre::text, false);
+end;
+$$;
+
+set role authenticated;
+set request.jwt.claim.sub = 'a0000000-0000-0000-0000-00000000000d';
+select public.mep_annuler_comptage(current_setting('mep.session_autre')::uuid);
+reset role;
+reset "request.jwt.claim.sub";
+
+select pg_temp.check_equal('Le directeur débloque un comptage laissé en plan',
+  (select count(*)::int from public.count_sessions
+   where id = current_setting('mep.session_autre')::uuid),
+  0);
+
+\echo ''
 \echo '===== TESTS DE SÉCURITÉ : TOUS PASSÉS ====='

@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '2.0.0';
+export const VERSION = '2.1.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,14 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '2.1.0',
+    date: '2026-08-23',
+    points: [
+      'Avant son heure, la carte du comptage devient entièrement grise et ne s’ouvre pour personne.',
+      'Un comptage commencé puis abandonné s’annule d’un appui, et repart à « À faire ».',
+    ],
+  },
   {
     version: '2.0.0',
     date: '2026-08-23',

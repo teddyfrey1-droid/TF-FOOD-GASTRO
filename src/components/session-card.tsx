@@ -1,7 +1,12 @@
+'use client';
+
+import { useState, useTransition } from 'react';
 import Link from 'next/link';
-import { Check, ChevronRight, Clock } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import { Check, ChevronRight, Clock, Loader2, X } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
+import { annulerComptage } from '@/app/comptage/annuler';
 import type { SessionKind, SessionStatus } from '@/lib/supabase/database.types';
 
 const TIME_FORMAT = new Intl.DateTimeFormat('fr-FR', { hour: '2-digit', minute: '2-digit' });
@@ -25,23 +30,25 @@ export function SessionCard({
   title,
   session,
   ouvreA,
-  contournable = false,
 }: {
   kind: SessionKind;
   title: string;
   session: SessionSummary | null;
   /** Heure d'ouverture « HH:MM », si elle n'est pas encore passée. */
   ouvreA?: string | null;
-  /** L'encadrement peut ouvrir avant l'heure : un service peut déborder. */
-  contournable?: boolean;
 }) {
-  // Un comptage lancé trop tôt décrit des frigos qui n'ont pas encore
-  // vécu la journée. On grise donc avant l'heure — mais on n'enferme
-  // personne : un chef de service passe outre, parce que la réalité du
-  // terrain prime sur un réglage.
-  const enAttente = Boolean(ouvreA) && session === null;
-  const verrouille = enAttente && !contournable;
   const status = session?.status ?? null;
+
+  // Un comptage lancé trop tôt décrit des frigos qui n'ont pas encore
+  // vécu la journée : avant l'heure, la carte est fermée pour TOUT LE
+  // MONDE. L'encadrement passait outre jusqu'ici ; en pratique le
+  // réglage semblait ne servir à rien, puisque celui qui le pose est
+  // précisément celui qui pouvait l'ignorer.
+  //
+  // La condition ne regarde plus si un comptage existe : un comptage
+  // déjà commencé avant l'heure rouvrait la carte, ce qui vidait le
+  // réglage de son sens dès le premier essai.
+  const verrouille = Boolean(ouvreA) && status !== 'submitted';
 
   const label = status === 'submitted' ? 'Fait' : status === 'draft' ? 'En cours' : 'À faire';
 
@@ -69,11 +76,16 @@ export function SessionCard({
   const carte = (
       <Card
         className={cn(
-          'bg-card flex flex-col justify-between gap-3.5 rounded-3xl border p-5 shadow-md transition-all',
-          verrouille ? 'opacity-55 shadow-sm' : 'active:scale-[0.99] active:shadow-sm',
-          status === 'submitted' && tasks.pending === 0
+          'flex flex-col justify-between gap-3.5 rounded-3xl border p-5 transition-all',
+          // Fermée : tout passe en gris, y compris les pastilles de
+          // couleur. Une carte à moitié colorée se lit encore comme
+          // disponible ; celle-ci doit se voir fermée d'un coup d'œil.
+          verrouille
+            ? 'bg-muted/50 border-border/60 shadow-none grayscale [&_*]:!text-muted-foreground'
+            : 'bg-card shadow-md active:scale-[0.99] active:shadow-sm',
+          !verrouille && status === 'submitted' && tasks.pending === 0
             ? 'border-primary/25 shadow-primary/5'
-            : 'border-border/80',
+            : !verrouille && 'border-border/80',
         )}
       >
         <div className="flex items-start justify-between gap-3">
@@ -84,7 +96,7 @@ export function SessionCard({
               rend lisible de loin sans avoir à l'agrandir davantage — et
               elle reste lisible pour qui distingue mal les couleurs, le mot
               disant déjà tout. */}
-          {enAttente ? (
+          {verrouille ? (
             <span className="bg-muted text-muted-foreground ring-border flex h-8 shrink-0 items-center gap-1.5 rounded-full px-3.5 text-[13px] font-black ring-1">
               <Clock className="size-3.5" strokeWidth={2.8} />
               {ouvreA}
@@ -116,6 +128,11 @@ export function SessionCard({
           )}
         </div>
 
+        {verrouille ? (
+          <p className="text-muted-foreground text-[13px] font-semibold">
+            Ce comptage ouvre à {ouvreA}.
+          </p>
+        ) : (
         <div className="flex flex-wrap items-center gap-2">
           <span
             className={cn(
@@ -142,7 +159,14 @@ export function SessionCard({
           {heure ? (
             <span className="text-muted-foreground text-[13px] font-semibold">{heure}</span>
           ) : null}
+
+          {/* Un comptage abandonné bloque la journée au nom de quelqu'un
+              qui ne le finira pas. Un appui le rend à l'équipe. */}
+          {status === 'draft' && session ? (
+            <BoutonAnnuler sessionId={session.id} />
+          ) : null}
         </div>
+        )}
 
         {status === 'submitted' && totalTasks > 0 ? (
           <div
@@ -176,5 +200,88 @@ export function SessionCard({
     <Link href={`/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}`} className="block">
       {carte}
     </Link>
+  );
+}
+
+/**
+ * Rend un comptage commencé à l'équipe.
+ *
+ * Un employé ouvre le comptage, saisit trois produits, puis part en
+ * livraison : la journée reste bloquée sur « En cours » à son nom, et le
+ * collègue qui prend la suite hérite d'un relevé partiel dont il ne sait
+ * pas ce qu'il vaut. Mieux vaut repartir de zéro que de continuer à
+ * l'aveugle — mais c'est destructeur, d'où la confirmation.
+ *
+ * Le bouton vit à l'intérieur d'un lien : sans `preventDefault`, chaque
+ * appui ouvrirait aussi le comptage qu'on cherche à annuler.
+ */
+function BoutonAnnuler({ sessionId }: { sessionId: string }) {
+  const router = useRouter();
+  const [confirme, setConfirme] = useState(false);
+  const [pending, demarrer] = useTransition();
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  function arreter(evenement: React.MouseEvent) {
+    evenement.preventDefault();
+    evenement.stopPropagation();
+  }
+
+  if (!confirme) {
+    return (
+      <button
+        type="button"
+        onClick={(evenement) => {
+          arreter(evenement);
+          setConfirme(true);
+        }}
+        className="text-muted-foreground hover:text-destructive ml-auto flex h-8 items-center gap-1 rounded-full px-2.5 text-[12px] font-bold transition-colors"
+      >
+        <X className="size-3.5" strokeWidth={3} />
+        Annuler
+      </button>
+    );
+  }
+
+  return (
+    <span className="ml-auto flex items-center gap-1.5">
+      {erreur ? (
+        <span className="text-destructive text-[11px] font-bold">{erreur}</span>
+      ) : (
+        <span className="text-muted-foreground text-[11px] font-bold">Tout effacer ?</span>
+      )}
+
+      <button
+        type="button"
+        disabled={pending}
+        onClick={(evenement) => {
+          arreter(evenement);
+          demarrer(async () => {
+            const resultat = await annulerComptage(sessionId);
+            if (resultat.error) {
+              setErreur(resultat.error);
+              return;
+            }
+            setConfirme(false);
+            router.refresh();
+          });
+        }}
+        className="bg-destructive text-destructive-foreground flex h-8 items-center gap-1 rounded-full px-3 text-[12px] font-black"
+      >
+        {pending ? <Loader2 className="size-3 animate-spin" /> : null}
+        Oui
+      </button>
+
+      <button
+        type="button"
+        onClick={(evenement) => {
+          arreter(evenement);
+          setConfirme(false);
+          setErreur(null);
+        }}
+        className="text-muted-foreground h-8 rounded-full px-2 text-[12px] font-bold"
+      >
+        Non
+      </button>
+    </span>
   );
 }

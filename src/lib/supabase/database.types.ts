@@ -408,6 +408,8 @@ export type Database = {
         Returns: number | null;
       };
       mep_reference_date: { Args: { d: string }; Returns: string };
+      /** Efface un comptage EN COURS et ses lignes. Jamais un validé. */
+      mep_annuler_comptage: { Args: { p_session_id: string }; Returns: undefined };
       /** Crée un code d'activation et invalide les précédents. */
       mep_creer_code_activation: {
         Args: { p_user_id: string; p_code_hash: string; p_heures?: number };

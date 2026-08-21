@@ -1,4 +1,9 @@
+import Link from 'next/link';
 import { notFound, redirect } from 'next/navigation';
+import { Clock } from 'lucide-react';
+import { buttonVariants } from '@/components/ui/button';
+import { getCountHours } from '@/lib/admin/queries';
+import { ouvertureAVenir, todayInParis } from '@/lib/format';
 import { requireUser } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { openSession } from '@/app/comptage/actions';
@@ -15,6 +20,57 @@ export default async function CountPage({ params }: { params: Promise<{ session:
   const { session } = await params;
   const config = SESSION_SLUGS[session as SessionSlug];
   if (!config) notFound();
+
+  // L'heure d'ouverture se vérifie AVANT d'ouvrir quoi que ce soit :
+  // griser la carte de l'accueil ne suffit pas, l'adresse reste tapable
+  // et l'onglet Comptage y mène directement. Un comptage déjà validé
+  // reste consultable — c'est son rapport qu'on vient voir.
+  const heures = await getCountHours();
+  const ouvreA = ouvertureAVenir(
+    config.kind === 'morning' ? heures?.morning : heures?.afternoon,
+  );
+
+  if (ouvreA) {
+    const supabaseVerif = await createClient();
+    const { data: dejaValide } = await supabaseVerif
+      .from('count_sessions')
+      .select('id')
+      .eq('date', todayInParis())
+      .eq('session', config.kind)
+      .eq('status', 'submitted')
+      .maybeSingle();
+
+    if (!dejaValide) {
+      return (
+        <main className="mx-auto flex min-h-dvh w-full max-w-md flex-col justify-center px-5 py-10">
+          <div className="bg-card rounded-3xl border p-8 text-center">
+            <span
+              aria-hidden
+              className="bg-muted text-muted-foreground mx-auto flex size-14 items-center justify-center rounded-2xl"
+            >
+              <Clock className="size-7" strokeWidth={2.4} />
+            </span>
+            <h1 className="mt-4 text-xl font-black tracking-tight">
+              {config.title} — pas encore ouvert
+            </h1>
+            <p className="text-muted-foreground mt-2 text-sm leading-relaxed">
+              Il ouvre à <span className="text-foreground font-black">{ouvreA}</span>. Compter
+              avant l&apos;heure décrirait des frigos qui n&apos;ont pas encore vécu la journée.
+            </p>
+            <Link
+              href="/"
+              className={buttonVariants({
+                variant: 'outline',
+                className: 'mt-6 h-12 w-full rounded-2xl font-bold',
+              })}
+            >
+              Retour à l&apos;accueil
+            </Link>
+          </div>
+        </main>
+      );
+    }
+  }
 
   const opened = await openSession(config.kind);
   if (!opened.sessionId) {

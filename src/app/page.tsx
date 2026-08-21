@@ -190,14 +190,12 @@ export default async function HomePage() {
             kind="morning"
             title="Comptage du matin"
             ouvreA={ouvertureAVenir(heures?.morning)}
-            contournable={isStaffLeadRole(user.role)}
             session={bySession.get('morning') ?? null}
           />
           <SessionCard
             kind="afternoon"
             title="Comptage de l'après-midi"
             ouvreA={ouvertureAVenir(heures?.afternoon)}
-            contournable={isStaffLeadRole(user.role)}
             session={bySession.get('afternoon') ?? null}
           />
         </div>

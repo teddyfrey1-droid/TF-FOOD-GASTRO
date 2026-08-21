@@ -95,14 +95,12 @@ export default async function PageComptages() {
             kind="morning"
             title="Comptage du matin"
             ouvreA={ouvertureAVenir(heures?.morning)}
-            contournable={isStaffLeadRole(user.role)}
             session={carte('morning')}
           />
           <SessionCard
             kind="afternoon"
             title="Comptage de l'après-midi"
             ouvreA={ouvertureAVenir(heures?.afternoon)}
-            contournable={isStaffLeadRole(user.role)}
             session={carte('afternoon')}
           />
         </div>
