@@ -84,6 +84,14 @@ export default async function HomePage() {
   const prenom = user.fullName.trim().split(/\s+/)[0] || user.fullName;
   const tousFaits = done === 2 && pendingTasks === 0;
 
+  // La session qui porte encore des relances : l'après-midi d'abord,
+  // puisque c'est le relevé le plus récent.
+  const sessionAvecRelances =
+    (bySession.get('afternoon')?.pendingTasks ?? 0) > 0 ? 'apres-midi' : 'matin';
+
+  const versRelances =
+    pendingTasks > 0 && done > 0 ? `/comptage/${sessionAvecRelances}/rapport` : null;
+
   // Le chiffre d'affaires n'est pas une donnée d'équipe : il ne se charge
   // que si l'appelant est directeur ou propriétaire. La base refuserait de
   // toute façon de le servir, mais on ne le DEMANDE même pas — un employé
@@ -141,31 +149,48 @@ export default async function HomePage() {
             doublon : la seconde répétait la première, et le compteur `0/2`
             juste en dessous la répétait une troisième fois. Une seule
             phrase, un liseré plutôt qu'un aplat plein. */}
-        <div
-          className={cn(
+        {(() => {
+          const contenu = (
+            <>
+              <span aria-hidden className="shrink-0">
+                {tousFaits ? (
+                  <Check className="size-5" strokeWidth={3} />
+                ) : (
+                  <CircleAlert className="size-5" strokeWidth={2.6} />
+                )}
+              </span>
+              <p className="min-w-0 flex-1 text-[15px] leading-snug font-black">
+                {tousFaits
+                  ? 'Tout est à jour.'
+                  : done === 2
+                    ? `${pendingTasks} relance${pendingTasks > 1 ? 's' : ''} encore à produire.`
+                    : done === 1
+                      ? 'Il reste un comptage à faire.'
+                      : 'Les deux comptages sont à faire.'}
+              </p>
+              {versRelances ? (
+                <ChevronRight className="size-5 shrink-0 opacity-70" strokeWidth={2.6} />
+              ) : null}
+            </>
+          );
+
+          const classes = cn(
             'mb-6 flex items-center gap-3 rounded-2xl border px-4 py-3.5',
             tousFaits
               ? 'border-primary/25 bg-primary/10 text-primary'
               : 'border-alert-border bg-alert text-alert-foreground',
-          )}
-        >
-          <span aria-hidden className="shrink-0">
-            {tousFaits ? (
-              <Check className="size-5" strokeWidth={3} />
-            ) : (
-              <CircleAlert className="size-5" strokeWidth={2.6} />
-            )}
-          </span>
-          <p className="text-[15px] leading-snug font-black">
-            {tousFaits
-              ? 'Tout est à jour.'
-              : done === 2
-                ? `${pendingTasks} relance${pendingTasks > 1 ? 's' : ''} encore à produire.`
-                : done === 1
-                  ? 'Il reste un comptage à faire.'
-                  : 'Les deux comptages sont à faire.'}
-          </p>
-        </div>
+          );
+
+          // Quand il reste des relances, le bandeau MÈNE à la liste :
+          // c'est la première chose qu'on cherche en le lisant.
+          return versRelances ? (
+            <Link href={versRelances} className={classes}>
+              {contenu}
+            </Link>
+          ) : (
+            <div className={classes}>{contenu}</div>
+          );
+        })()}
 
         {/* Ce qui est annoncé pour aujourd'hui, avant les comptages : le
             directeur juge la cohérence de la prévision en ouvrant

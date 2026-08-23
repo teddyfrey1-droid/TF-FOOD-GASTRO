@@ -53,6 +53,13 @@ export default async function ReportPage({ params }: { params: Promise<{ session
 
   const taskIdByProduct = new Map((taskRows ?? []).map((row) => [row.product_id, row.id]));
 
+  // Le stock relevé, produit par produit : il permet de distinguer
+  // « il n'y en a plus » de « il en reste juste un peu », deux situations
+  // que la liste mettait au même plan.
+  const stockPar = new Map(
+    (stocks ?? []).map((ligne) => [ligne.product_id, Number(ligne.qty_total)]),
+  );
+
   const reorderTasks: ReportTask[] = (tasks ?? []).map((row) => ({
     taskId: taskIdByProduct.get(row.product_id) ?? row.product_id,
     productName: row.product_name,
@@ -64,6 +71,7 @@ export default async function ReportPage({ params }: { params: Promise<{ session
     isDone: row.is_done,
     imageUrl: row.image_url,
     categoryName: row.category_name,
+    qtyTotal: stockPar.get(row.product_id) ?? 0,
   }));
 
   const reorderedIds = new Set((tasks ?? []).map((row) => row.product_id));

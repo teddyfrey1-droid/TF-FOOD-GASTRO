@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '3.2.2';
+export const VERSION = '3.3.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,15 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '3.3.0',
+    date: '2026-08-25',
+    points: [
+      'Toucher « N relances à produire » ouvre directement la liste, plus le comptage.',
+      'La liste se lit en trois blocs : il n’y en a plus, il va en manquer, à refaire.',
+      'Chaque relance urgente annonce ce qu’il reste — « VIDE » ou « IL RESTE 1 ».',
+    ],
+  },
   {
     version: '3.2.2',
     date: '2026-08-25',

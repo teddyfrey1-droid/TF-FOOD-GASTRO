@@ -197,7 +197,17 @@ export function SessionCard({
   }
 
   return (
-    <Link href={`/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}`} className="block">
+    <Link
+      // Comptage validé : c'est le RAPPORT qu'on vient chercher, pas la
+      // saisie. On y allait par une redirection, ce qui rendait le
+      // chemin fragile et donnait l'impression de repartir compter.
+      href={
+        status === 'submitted'
+          ? `/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}/rapport`
+          : `/comptage/${kind === 'morning' ? 'matin' : 'apres-midi'}`
+      }
+      className="block"
+    >
       {carte}
     </Link>
   );

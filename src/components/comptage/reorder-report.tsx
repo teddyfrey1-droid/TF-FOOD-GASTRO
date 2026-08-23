@@ -21,6 +21,8 @@ export interface ReportTask {
   priority: number;
   /** Sous le seuil critique : arrive en tête, en rouge. */
   isCritical: boolean;
+  /** Ce qu'il reste en stock, toutes zones confondues. */
+  qtyTotal: number;
   isDone: boolean;
   imageUrl: string | null;
   categoryName: string;
@@ -93,13 +95,46 @@ export function ReorderReport({
    * casser en sections le masquerait.
    */
   const groupes = useMemo(() => {
-    if (groupement === 'urgence') return [{ titre: null, items: tasks }] as const;
+    if (groupement === 'urgence') {
+      // Trois questions différentes, trois blocs. Une liste unique triée
+      // par urgence portait bien l'ordre, mais rien ne disait OÙ passe la
+      // frontière entre « c'est déjà vide » et « ça tiendra le service ».
+      const vide = tasks.filter((task) => task.qtyTotal <= 0);
+      const critique = tasks.filter((task) => task.qtyTotal > 0 && task.isCritical);
+      const bientot = tasks.filter((task) => task.qtyTotal > 0 && !task.isCritical);
+
+      return [
+        {
+          titre: 'Il n’y en a plus',
+          detail: 'zéro en stock — le service est déjà exposé',
+          ton: 'rupture' as const,
+          items: vide,
+        },
+        {
+          titre: 'Il va en manquer',
+          detail: 'sous le seuil critique — ça ne tiendra pas le service',
+          ton: 'critique' as const,
+          items: critique,
+        },
+        {
+          titre: 'À refaire',
+          detail: 'sous le minimum de relance, sans risque immédiat',
+          ton: 'normal' as const,
+          items: bientot,
+        },
+      ].filter((groupe) => groupe.items.length > 0);
+    }
 
     const parPoste = new Map<string, ReportTask[]>();
     for (const task of tasks) {
       parPoste.set(task.categoryName, [...(parPoste.get(task.categoryName) ?? []), task]);
     }
-    return [...parPoste.entries()].map(([titre, items]) => ({ titre, items }));
+    return [...parPoste.entries()].map(([titre, items]) => ({
+      titre,
+      detail: null,
+      ton: 'normal' as const,
+      items,
+    }));
   }, [tasks, groupement]);
 
   if (tasks.length === 0) {
@@ -177,12 +212,39 @@ export function ReorderReport({
           la quantité en très gros. C'est la seule chose qu'on lit en cuisine,
           une gastro dans les mains. */}
       {groupes.map((groupe) => (
-        <section key={groupe.titre ?? 'tout'} className={groupe.titre ? 'pt-2' : undefined}>
+        <section key={groupe.titre ?? 'tout'} className={groupe.titre ? 'pt-1' : undefined}>
           {groupe.titre ? (
-            <h2 className="mb-2.5 text-xl font-black tracking-tight">
-              {groupe.titre}{' '}
-              <span className="text-muted-foreground">({groupe.items.length})</span>
-            </h2>
+            <header className="mb-2.5 flex items-baseline gap-2">
+              <span
+                aria-hidden
+                className={cn(
+                  'size-2.5 shrink-0 translate-y-[-1px] rounded-full',
+                  groupe.ton === 'rupture'
+                    ? 'bg-destructive'
+                    : groupe.ton === 'critique'
+                      ? 'bg-alert-foreground/70'
+                      : 'bg-muted-foreground/40',
+                )}
+              />
+              <span className="min-w-0">
+                <h2
+                  className={cn(
+                    'text-lg leading-tight font-black tracking-tight',
+                    groupe.ton === 'rupture' && 'text-destructive',
+                  )}
+                >
+                  {groupe.titre}{' '}
+                  <span className="text-muted-foreground tabular-nums">
+                    ({groupe.items.length})
+                  </span>
+                </h2>
+                {groupe.detail ? (
+                  <p className="text-muted-foreground mt-0.5 text-[11px] font-semibold">
+                    {groupe.detail}
+                  </p>
+                ) : null}
+              </span>
+            </header>
           ) : null}
 
           <ul className="space-y-2.5">
@@ -220,10 +282,18 @@ export function ReorderReport({
                     <span
                       className={cn(
                         'absolute -top-1.5 -left-1.5 rounded-full px-2 py-0.5 text-[10px] font-black',
-                        task.isCritical ? 'bg-red-600 text-white' : priorite.pastille,
+                        task.qtyTotal <= 0
+                          ? 'bg-red-700 text-white'
+                          : task.isCritical
+                            ? 'bg-red-600 text-white'
+                            : priorite.pastille,
                       )}
                     >
-                      {task.isCritical ? 'CRITIQUE' : priorite.label}
+                      {task.qtyTotal <= 0
+                        ? 'VIDE'
+                        : task.isCritical
+                          ? `IL RESTE ${formatQty(task.qtyTotal)}`
+                          : priorite.label}
                     </span>
                   )}
                 </span>
