@@ -295,7 +295,6 @@ function CarteProduit({
           </div>
           <p className="text-muted-foreground mt-0.5 text-[11px] font-semibold">
             {product.unit === 'piece' ? 'pièce' : 'gastro'}
-            {Number(product.base_qty) > 0 ? ` · base ${formatQty(Number(product.base_qty))}` : ''}
             {product.shelf_life_label ? ` · DLC ${product.shelf_life_label}` : ''}
           </p>
         </div>
@@ -319,9 +318,17 @@ function CarteProduit({
         ) : null}
       </div>
 
-      {/* 2. À partir de quand faut-il en refaire ? Les deux seuils
-             côte à côte, chacun sous son intitulé en toutes lettres. */}
-      <div className="mt-3 grid grid-cols-2 gap-2">
+      {/* 2. Combien en produire, et à partir de quand ?
+
+             La base « VENTE POUR » est le moteur : elle dit pour quel
+             chiffre d'affaires une gastro tient, et toute la cible en
+             découle. Elle vivait derrière « Modifier », deux écrans plus
+             loin que les seuils qu'elle commande. */}
+      <div className="mt-3">
+        <BaseProduit product={product} />
+      </div>
+
+      <div className="mt-2 grid grid-cols-2 gap-2">
         <SeuilProduit product={product} type="minimum" />
         <SeuilProduit product={product} type="critique" />
       </div>
@@ -649,5 +656,90 @@ function BoutonSupprimer({ product }: { product: ProductWithCategory }) {
     >
       <Trash2 className="size-4" />
     </Button>
+  );
+}
+
+/**
+ * La base « VENTE POUR », modifiable sur place.
+ *
+ * C'est LE réglage du moteur : il dit pour quel chiffre d'affaires une
+ * gastro (ou une pièce) tient une journée. La cible du jour en découle
+ * entièrement — CA prévu ÷ base — et donc les seuils, et donc les
+ * relances.
+ *
+ * Une base à zéro donne une cible à zéro : le produit ne sera JAMAIS
+ * relancé, quoi qu'on relève. C'est le trou le plus grave possible dans
+ * cet écran, d'où le bandeau rouge plutôt qu'un champ vide de plus.
+ */
+function BaseProduit({ product }: { product: ProductWithCategory }) {
+  const [pending, demarrer] = useTransition();
+  const valeur = Number(product.base_qty);
+  const [draft, setDraft] = useState(valeur > 0 ? String(valeur) : '');
+  const [erreur, setErreur] = useState<string | null>(null);
+
+  const manquante = valeur <= 0;
+
+  function enregistrer() {
+    const nombre = Number(draft.replace(',', '.'));
+    if (!Number.isFinite(nombre) || nombre < 0) return;
+    if (nombre === valeur) return;
+
+    setErreur(null);
+    demarrer(async () => {
+      const resultat = await updateProductInline(product.id, { baseQty: nombre });
+      if (resultat.error) setErreur(resultat.error);
+    });
+  }
+
+  return (
+    <div
+      className={cn(
+        'rounded-xl border p-2.5',
+        manquante ? 'border-destructive/40 bg-destructive/[0.06]' : 'border-primary/30 bg-primary/[0.05]',
+      )}
+    >
+      <div className="flex items-center gap-2">
+        <span className="min-w-0 flex-1">
+          <span
+            className={cn(
+              'block text-[10px] font-black tracking-wide uppercase',
+              manquante ? 'text-destructive' : 'text-primary',
+            )}
+          >
+            Une {product.unit === 'piece' ? 'pièce' : 'gastro'} tient pour
+          </span>
+          <span className="text-muted-foreground mt-0.5 block text-[11px] leading-snug font-semibold">
+            {manquante
+              ? 'Sans cette valeur, la cible reste à zéro : jamais relancé.'
+              : 'de chiffre d’affaires. C’est ce qui fixe la cible du jour.'}
+          </span>
+        </span>
+
+        <span className="flex shrink-0 items-center gap-1">
+          <Input
+            value={draft}
+            inputMode="decimal"
+            placeholder="—"
+            disabled={pending}
+            aria-label={`Base « vente pour » de ${product.name}`}
+            onFocus={(evenement) => evenement.target.select()}
+            onChange={(evenement) => setDraft(evenement.target.value)}
+            onBlur={enregistrer}
+            onKeyDown={(evenement) => {
+              if (evenement.key === 'Enter') evenement.currentTarget.blur();
+            }}
+            className={cn(
+              'h-11 w-20 rounded-lg text-center text-xl font-black tabular-nums',
+              manquante && 'border-destructive/50',
+            )}
+          />
+          <span className="text-muted-foreground text-sm font-black">€</span>
+        </span>
+      </div>
+
+      {erreur ? (
+        <p className="text-destructive mt-1 text-[11px] font-semibold">{erreur}</p>
+      ) : null}
+    </div>
   );
 }

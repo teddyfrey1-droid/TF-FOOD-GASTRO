@@ -184,43 +184,38 @@ export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
 
             {ouvert ? (
               <>
-                <div className="text-muted-foreground bg-background/60 flex items-center gap-2 border-y px-3 py-1.5 text-[10px] font-black tracking-wide uppercase">
-                  <span className="min-w-0 flex-1">Produit</span>
-                  <span className="w-10 text-right">Salad.</span>
-                  <span className="w-10 text-right">Bas</span>
-                  <span className="w-10 text-right">Des.</span>
-                  <span className="w-11 text-right">Total</span>
-                </div>
-
-                <ul className="divide-y">
+                <ul className="divide-y border-t">
                   {groupe.items.map((ligne) => (
-                    <li key={ligne.productId} className="flex items-center gap-2 px-3 py-2">
-                      <span className="min-w-0 flex-1">
-                        <span className="block truncate text-[13px] leading-tight font-bold">
-                          {ligne.productName}
-                        </span>
-                        <span className="text-muted-foreground block truncate text-[10px] font-semibold">
-                          {ligne.categoryName}
-                          {ligne.etat === 'surplus' || ligne.etat === 'surplus_fort'
-                            ? ` · ${formatQty(ligne.surplus)} de trop`
-                            : ''}
-                        </span>
-                      </span>
-
-                      <Quantite valeur={ligne.qtySaladbar} presente={ligne.inSaladbar} />
-                      <Quantite valeur={ligne.qtyFridge} presente={ligne.inFridge} />
-                      <Quantite valeur={ligne.qtyDesserts} presente={ligne.inDesserts} />
-
+                    <li key={ligne.productId} className="flex items-center gap-3 px-3 py-2.5">
+                      {/* Le TOTAL d'abord, en gros : c'est la réponse à
+                          « il y en a combien ? ». Le détail par meuble
+                          suit en petit, et seulement là où le produit
+                          est rangé — trois colonnes de points alignés
+                          faisaient un tableau qu'il fallait déchiffrer. */}
                       <span
                         className={cn(
-                          'w-11 text-right text-[15px] font-black tabular-nums',
+                          'w-12 shrink-0 text-right text-[22px] leading-none font-black tabular-nums',
                           ligne.etat === 'rupture' && 'text-destructive',
                           ligne.etat === 'surplus_fort' && 'text-destructive',
+                          (ligne.etat === 'absent' || ligne.etat === 'reporte') &&
+                            'text-muted-foreground/40',
                         )}
                       >
                         {ligne.etat === 'absent' || ligne.etat === 'reporte'
                           ? '—'
                           : formatQty(ligne.qtyTotal)}
+                      </span>
+
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate text-[14px] leading-tight font-bold">
+                          {ligne.productName}
+                        </span>
+                        <span className="text-muted-foreground mt-0.5 block truncate text-[11px] font-semibold">
+                          <Repartition ligne={ligne} />
+                          {ligne.etat === 'surplus' || ligne.etat === 'surplus_fort'
+                            ? ` · ${formatQty(ligne.surplus)} de trop`
+                            : ''}
+                        </span>
                       </span>
                     </li>
                   ))}
@@ -234,18 +229,26 @@ export function ListeStocks({ lignes }: { lignes: LigneStock[] }) {
   );
 }
 
-/** Un point vaut mieux qu'un zéro là où le produit n'est pas rangé. */
-function Quantite({ valeur, presente }: { valeur: number; presente: boolean }) {
-  return (
-    <span
-      className={cn(
-        'w-10 text-right text-[13px] font-bold tabular-nums',
-        presente ? 'text-muted-foreground' : 'text-muted-foreground/30',
-      )}
-    >
-      {presente ? formatQty(valeur) : '·'}
-    </span>
-  );
+/**
+ * Où se trouvent ces quantités, en une phrase.
+ *
+ * « 3 saladbar · 2 frigo » se lit d'un trait, là où trois colonnes
+ * chiffrées demandaient de retenir l'ordre des meubles. Un produit rangé
+ * dans un seul meuble n'affiche rien : le total suffit, et répéter le
+ * même nombre deux fois brouille plus qu'il n'informe.
+ */
+function Repartition({ ligne }: { ligne: LigneStock }) {
+  if (ligne.etat === 'absent') return <>Non applicable · {ligne.categoryName}</>;
+  if (ligne.etat === 'reporte') return <>Reporté · {ligne.categoryName}</>;
+
+  const meubles = [
+    ligne.inSaladbar && `${formatQty(ligne.qtySaladbar)} saladbar`,
+    ligne.inFridge && `${formatQty(ligne.qtyFridge)} frigo`,
+    ligne.inDesserts && `${formatQty(ligne.qtyDesserts)} desserts`,
+  ].filter(Boolean) as string[];
+
+  if (meubles.length <= 1) return <>{ligne.categoryName}</>;
+  return <>{meubles.join(' · ')}</>;
 }
 
 /**

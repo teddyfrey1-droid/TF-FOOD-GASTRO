@@ -292,7 +292,7 @@ export function ReorderReport({
                       {task.qtyTotal <= 0
                         ? 'VIDE'
                         : task.isCritical
-                          ? `IL RESTE ${formatQty(task.qtyTotal)}`
+                          ? 'CRITIQUE'
                           : priorite.label}
                     </span>
                   )}
@@ -307,12 +307,28 @@ export function ReorderReport({
                   >
                     {task.productName}
                   </span>
-                  <span className="mt-1 block">
+                  {/* Combien produire, et combien il en reste. Le second
+                      manquait : sans lui on ne savait pas si la relance
+                      était urgente ou confortable, quel que soit le
+                      groupe où elle se trouvait. */}
+                  <span className="mt-1 flex items-baseline gap-2">
                     <span className="text-3xl leading-none font-black tabular-nums">
-                      {task.qtyToProduce.toLocaleString('fr-FR')}
-                    </span>{' '}
+                      +{task.qtyToProduce.toLocaleString('fr-FR')}
+                    </span>
                     <span className="text-muted-foreground text-sm font-bold">
                       {unitLabel(task.unit, task.qtyToProduce)}
+                    </span>
+                    <span
+                      className={cn(
+                        'ml-auto shrink-0 rounded-lg px-2 py-0.5 text-[13px] font-black tabular-nums',
+                        task.qtyTotal <= 0
+                          ? 'bg-destructive/15 text-destructive'
+                          : 'bg-background text-muted-foreground',
+                      )}
+                    >
+                      {task.qtyTotal <= 0
+                        ? 'stock 0'
+                        : `stock ${formatQty(task.qtyTotal)}`}
                     </span>
                   </span>
                   {task.notes ? (

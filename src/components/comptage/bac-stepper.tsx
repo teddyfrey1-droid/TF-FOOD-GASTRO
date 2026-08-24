@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useState } from 'react';
+import { useState } from 'react';
 import { Minus, Plus } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -42,7 +42,6 @@ export function BacStepper({
 }) {
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState('');
-  const longPress = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   /** Recale sur le pas et efface la dérive flottante (0,1 + 0,2). */
   function snap(next: number): number {
@@ -56,9 +55,19 @@ export function BacStepper({
     setEditing(true);
   }
 
+  /**
+   * Une valeur TAPÉE est prise telle quelle.
+   *
+   * `snap` recale sur le pas de comptage : avec un pas de 1, taper 4,5
+   * donnait 5. Or c'est précisément pour saisir un demi-bac qu'on ouvre
+   * le clavier. Le recalage reste sur « + » et « − », où il empêche la
+   * dérive des flottants.
+   */
   function commitDraft() {
     const parsed = Number(draft.trim().replace(',', '.'));
-    if (Number.isFinite(parsed) && parsed >= 0) onChange(snap(parsed));
+    if (Number.isFinite(parsed) && parsed >= 0) {
+      onChange(Math.max(0, Math.round(parsed * 1000) / 1000));
+    }
     setEditing(false);
   }
 
@@ -130,21 +139,9 @@ export function BacStepper({
         ) : (
           <button
             type="button"
-            aria-label={`Quantité ${label} : ${value}. Appui long pour saisir au clavier.`}
+            aria-label={`Quantité ${label} : ${value}. Toucher pour saisir au clavier.`}
             disabled={disabled}
-            onPointerDown={() => {
-              longPress.current = setTimeout(openKeypad, 500);
-            }}
-            onPointerUp={() => {
-              if (longPress.current) clearTimeout(longPress.current);
-            }}
-            onPointerLeave={() => {
-              if (longPress.current) clearTimeout(longPress.current);
-            }}
-            onContextMenu={(event) => {
-              event.preventDefault();
-              openKeypad();
-            }}
+            onClick={openKeypad}
             className={cn(
               'h-full min-w-0 flex-1 touch-manipulation font-black tabular-nums',
               compact ? 'text-2xl' : 'text-3xl',
