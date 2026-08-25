@@ -59,9 +59,9 @@ begin
   select count(*)::int into v_before from public.audit_log where table_name = 'products';
   update public.products set base_qty = 9.9 where name = 'Saumon';
   perform pg_temp.check_equal(
-    'Modifier une base « VENTE POUR » est tracé',
+    'Modifier la base d''un produit est tracé',
     (select count(*)::int from public.audit_log where table_name = 'products') - v_before, 1);
-  update public.products set base_qty = 4.6 where name = 'Saumon';
+  update public.products set base_qty = 2.3 where name = 'Saumon';
 end
 $$;
 

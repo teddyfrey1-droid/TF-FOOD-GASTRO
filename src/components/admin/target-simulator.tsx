@@ -5,16 +5,9 @@ import { Info, Search } from 'lucide-react';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { formatEuro, formatQty } from '@/lib/format';
-import { ceilTo } from '@/lib/mep';
+import { ceilTo, TRANCHE_CA } from '@/lib/mep';
 import { cn } from '@/lib/utils';
 import { runSimulation, type SimulationResult } from '@/app/admin/simulateur/simulate';
-
-export interface FamilyInfo {
-  family: string;
-  label: string;
-  referenceRevenue: number;
-  targetMultiplier: number;
-}
 
 /** Des paliers qu'on atteint d'un pouce, sans clavier. */
 const PALIERS = [3000, 4000, 5000, 6000, 7000];
@@ -37,7 +30,7 @@ function parseNumber(raw: string): number {
  *    minimum est une soustraction. Taper un stock donne donc un résultat
  *    instantané, même sur un réseau capricieux.
  */
-export function TargetSimulator({ families }: { families: FamilyInfo[] }) {
+export function TargetSimulator() {
   const [revenue, setRevenue] = useState('4000');
   const [stocks, setStocks] = useState<Record<string, string>>({});
   const [result, setResult] = useState<SimulationResult | null>(null);
@@ -291,17 +284,12 @@ export function TargetSimulator({ families }: { families: FamilyInfo[] }) {
         </button>
 
         {detailsOuverts ? (
-          <dl className="text-muted-foreground mt-3 space-y-2 text-sm">
-            {families.map((family) => (
-              <div key={family.family}>
-                <dt className="text-foreground font-bold">{family.label}</dt>
-                <dd>
-                  base exprimée pour {formatEuro(family.referenceRevenue)}, multipliée par{' '}
-                  {formatQty(family.targetMultiplier)}
-                </dd>
-              </div>
-            ))}
-          </dl>
+          <p className="text-muted-foreground mt-3 text-sm">
+            Chaque produit porte une base : la quantité à avoir par tranche de{' '}
+            {formatEuro(TRANCHE_CA)} de chiffre d&apos;affaires. La cible du jour, c&apos;est cette
+            base multipliée par le nombre de tranches, arrondi au-dessus. Une base de 4 donne 6 à
+            1 500 €.
+          </p>
         ) : null}
       </div>
     </div>

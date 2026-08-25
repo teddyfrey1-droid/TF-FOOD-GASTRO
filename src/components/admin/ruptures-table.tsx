@@ -56,7 +56,7 @@ export function RupturesTable({ rows, jours }: { rows: RuptureRow[]; jours: numb
           </p>
           <p className="mt-2 text-sm text-red-900/80">
             Sur les {jours} derniers jours, {alertes.length > 1 ? 'ils sont passés' : 'il est passé'}{' '}
-            sous le seuil critique plus d&apos;une fois sur cinq. Leur base « VENTE POUR » est
+            sous le seuil critique plus d&apos;une fois sur cinq. Leur base est
             probablement trop basse : la proposition en face part du taux de rupture observé.
           </p>
         </div>

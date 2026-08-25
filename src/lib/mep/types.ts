@@ -41,7 +41,7 @@ export interface ProductCalcConfig {
   name: string;
   family: ProductFamily;
   unit: ProductUnit;
-  /** Colonne « VENTE POUR » du Google Sheet. Pilote toute la cible. */
+  /** Quantité à avoir par tranche de 1 000 € de CA. Pilote toute la cible. */
   baseQty: number;
   /** Pas de saisie au comptage (0,5 : on constate un stock réel). */
   countStep: number;

@@ -31,7 +31,7 @@ const productSchema = z
     category_id: z.uuid('Choisissez une catégorie.'),
     family: z.enum(['mise_en_place', 'les_plus']),
     unit: z.enum(['gastro', 'piece']),
-    /** Colonne « VENTE POUR » du Sheet. */
+    /** Quantité à avoir par tranche de 1 000 € de CA. */
     base_qty: positiveNumber,
     count_step: positiveNumber,
     min_mode: z.enum(['auto', 'manual']),

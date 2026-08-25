@@ -161,7 +161,7 @@ export interface ConsumptionRow {
   completeDays: number;
   /** Nombre de journées où seul le midi a pu être mesuré. */
   lunchOnlyDays: number;
-  /** Base « VENTE POUR » en vigueur, pour proposer une correction. */
+  /** Base en vigueur (par tranche de 1 000 €), pour proposer une correction. */
   baseQty: number;
 }
 
@@ -187,7 +187,7 @@ export async function getConsumption(from: string, to: string): Promise<Consumpt
   // matin est nécessaire pour clore le dernier soir.
   const toPlusOne = addDays(to, 1);
 
-  const [{ data: sessions }, { data: actuals }, { data: products }, { data: families }] =
+  const [{ data: sessions }, { data: actuals }, { data: products }] =
     await Promise.all([
       supabase
         .from('count_sessions')
@@ -197,7 +197,6 @@ export async function getConsumption(from: string, to: string): Promise<Consumpt
         .eq('status', 'submitted'),
       supabase.from('revenue_actuals').select('date, revenue_ht').gte('date', from).lte('date', to),
       supabase.from('products').select('id, name, base_qty, family').eq('is_active', true),
-      supabase.from('product_family_settings').select('*'),
     ]);
 
   const sessionRows = sessions ?? [];
@@ -247,22 +246,12 @@ export async function getConsumption(from: string, to: string): Promise<Consumpt
       .filter((task) => task.session_id === session && task.product_id === productId && task.is_done)
       .reduce((sum, task) => sum + toNumber(task.qty_to_produce, 0), 0);
 
-  // Consommation « théorique » pour 1 000 € de CA, déduite de la base du
-  // produit et des réglages de sa famille :
-  //   base × multiplicateur / référence × 1 000
-  const familyByName = new Map((families ?? []).map((f) => [f.family, f] as const));
+  // Consommation « théorique » pour 1 000 € de CA. La base EST cette
+  // quantité : elle s'exprime déjà par tranche de 1 000 €.
   const theoreticalByProduct = new Map(
-    (products ?? []).map((product) => {
-      const family = familyByName.get(product.family);
-      if (!family) return [product.id, null] as const;
-      return [
-        product.id,
-        snap(
-          (toNumber(product.base_qty, 0) * toNumber(family.target_multiplier, 1) * 1000) /
-            toNumber(family.reference_revenue, 1),
-        ),
-      ] as const;
-    }),
+    (products ?? []).map(
+      (product) => [product.id, snap(toNumber(product.base_qty, 0))] as const,
+    ),
   );
 
   let overallLunch = 0;

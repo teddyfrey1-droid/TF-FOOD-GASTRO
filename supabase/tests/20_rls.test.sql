@@ -134,7 +134,7 @@ select pg_temp.check_no_effect('Modification des réglages de CA sans effet',
 select pg_temp.check_no_rows('product_family_settings invisible',
   'select * from public.product_family_settings');
 select pg_temp.check_no_effect('Modifier les réglages de famille sans effet',
-  'update public.product_family_settings set target_multiplier = 99');
+  'update public.product_family_settings set label = ''Triche''');
 select pg_temp.check_denied('Écriture dans audit_log refusée',
   'insert into public.audit_log (action, table_name) values (''triche'', ''products'')');
 
@@ -202,8 +202,8 @@ begin
     -- quantité à produire lui donne DÉJÀ la cible exacte
     -- (cible = quantité + stock) : c'est inhérent à un rapport qui dit
     -- quoi produire. Et la cible seule ne rend pas le chiffre d'affaires :
-    -- il y faudrait la base « VENTE POUR » et le multiplicateur de
-    -- famille, qui ne quittent jamais le back-office.
+    -- il y faudrait la base du produit — la quantité par tranche de
+    -- 1 000 € —, qui ne quitte jamais le back-office.
     and p.parameter_name not in ('product_id', 'product_name', 'notes',
                                  'qty_to_produce', 'unit', 'priority',
                                  'is_critical', 'image_url', 'category_name');
@@ -344,7 +344,7 @@ select pg_temp.check_equal('Le directeur lit le CA de l''an dernier',
   (select count(*) > 0 from public.revenue_history), true);
 select pg_temp.check_equal('Le directeur lit les réglages de famille',
   (select count(*) > 0 from public.product_family_settings), true);
-select pg_temp.check_equal('Le directeur lit les bases « VENTE POUR »',
+select pg_temp.check_equal('Le directeur lit les bases des produits',
   (select count(*) > 0 from public.products where base_qty > 0), true);
 select pg_temp.check_equal('Le directeur lit la table products complète',
   (select count(*) > 0 from public.products), true);

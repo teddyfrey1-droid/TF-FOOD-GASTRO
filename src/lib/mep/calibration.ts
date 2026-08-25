@@ -1,5 +1,5 @@
 /**
- * Recalibrer une base « VENTE POUR » à partir du réel.
+ * Recalibrer une base à partir du réel.
  *
  * La base vient du Google Sheet : c'est une estimation, faite une fois.
  * Après quelques semaines de comptages, la base de données sait mieux —
@@ -82,7 +82,7 @@ export function suggestBaseQty(sample: CalibrationSample): number | null {
   return null;
 }
 
-/** Les bases du Sheet s'écrivent avec une décimale : on s'y tient. */
+/** Une base se lit avec une décimale : on s'y tient. */
 function arrondiBase(value: number): number {
   return snap(Math.round(value * 10) / 10);
 }
@@ -94,8 +94,8 @@ function arrondiBase(value: number): number {
  * Ce n'est pas un chiffre tiré au sort. La production a lieu deux fois par
  * jour, et il faut tenir jusqu'à la suivante sans jamais tomber à zéro : une
  * cible égale à la consommation d'une journée serait vide avant la fin du
- * second service. C'est aussi le facteur qu'appliquent déjà les réglages
- * actuels — le multiplicateur ×2 de la mise en place.
+ * second service. C'est aussi le facteur que portent déjà les bases de la
+ * mise en place, héritées du Sheet.
  */
 export const FACTEUR_SECURITE_VISE = 2;
 

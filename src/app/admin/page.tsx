@@ -194,7 +194,7 @@ export default async function DashboardPage() {
           <ul className="text-muted-foreground mt-2 list-disc space-y-1 pl-5 text-sm">
             {sansBase > 0 ? (
               <li>
-                {sansBase} produit{sansBase > 1 ? 's' : ''} sans base « VENTE POUR » : leur cible
+                {sansBase} produit{sansBase > 1 ? 's' : ''} sans base : leur cible
                 reste à zéro, ils ne seront jamais relancés.
               </li>
             ) : null}

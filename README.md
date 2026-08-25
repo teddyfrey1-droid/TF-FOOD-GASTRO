@@ -134,19 +134,21 @@ Après-midi : CA de référence = CA prévu × (1 + marge) × coefficient de l'a
 
 ### Étape 3 — La cible de chaque produit
 
-Une seule donnée pilote un produit : sa valeur **« VENTE POUR »**, reprise du
-Google Sheet. Tout le reste en découle.
+Une seule donnée pilote un produit : sa **base**, la quantité à avoir par
+tranche de **1 000 €** de chiffre d'affaires. Tout le reste en découle.
 
 ```
-cible = « VENTE POUR » × multiplicateur × (CA de référence / CA de la famille)
+cible = base × (CA de référence / 1 000)
 ```
 
-Chaque produit appartient à l'une des deux familles :
+Quatre puddings par tranche de 1 000 € : à 1 500 €, la cible est de 6 puddings.
+La même échelle vaut pour tous les produits — la famille ne sert plus qu'à
+ranger, et à savoir en quoi on compte :
 
-| Famille | Base exprimée pour | Multiplicateur | Compté en |
-|---|---|---|---|
-| **Mise en place** — protéines, ingrédients | 4 000 € | × 2 | gastros |
-| **Les plus** — gyozas, baos, desserts | 1 000 € | × 1 | pièces |
+| Famille | Compté en |
+|---|---|
+| **Mise en place** — protéines, ingrédients | gastros |
+| **Les plus** — gyozas, baos, desserts | pièces |
 
 **Exemple.** Le saumon a une base de 4,6. À 4 000 € :
 4,6 × 2 × (4 000 / 4 000) = 9,2 → **cible 10 gastros**. À 5 000 € : 11,5 → **12**.
@@ -346,7 +348,7 @@ trop basse — on a consommé plus que prévu, donc frôlé la rupture.
 | Liste des produits à compter | ✅ | ✅ |
 | Liste de ce qu'il faut relancer | ✅ | ✅ |
 | Chiffre d'affaires, prévisions | ❌ | ✅ |
-| Valeurs « VENTE POUR » et familles | ❌ | ✅ |
+| Bases par tranche de 1 000 € et familles | ❌ | ✅ |
 | Cibles et minimums | ❌ | ✅ |
 | Historique complet, exports | ❌ | ✅ |
 
@@ -530,6 +532,9 @@ pnpm import:produits --file data/produits.csv             # pour de vrai
 Seules deux colonnes sont obligatoires : **Produit** et **VENTE POUR**. Les
 colonnes `DLC`, `Famille`, `Catégorie` et `Unité` sont reconnues si elles sont
 présentes. Modèle de fichier : `data/produits.example.csv`.
+
+> Le Sheet exprime « VENTE POUR » pour 2 000 € en mise en place. L'import la
+> ramène à la tranche de 1 000 € de l'application, en la divisant par deux.
 
 > La colonne **`conso/1000`** du Sheet est **ignorée volontairement** : elle
 > vaut la base divisée par deux et fausserait le calcul du minimum. Le script

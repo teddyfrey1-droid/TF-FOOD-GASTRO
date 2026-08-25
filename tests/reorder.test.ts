@@ -16,7 +16,7 @@ function product(overrides: Partial<ProductCalcConfig> = {}): ProductCalcConfig 
     name: 'Saumon',
     family: 'mise_en_place',
     unit: 'gastro',
-    baseQty: 4.6,
+    baseQty: 2.3,
     countStep: 0.5,
     minMode: 'auto',
     minDivisor: DEFAULT_MIN_DIVISOR,

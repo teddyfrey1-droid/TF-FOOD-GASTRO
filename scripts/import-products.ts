@@ -9,6 +9,11 @@
  *
  * Seules « Produit » et « VENTE POUR » sont obligatoires.
  *
+ * ⚠️ Le Sheet exprime « VENTE POUR » pour 2 000 € en mise en place et pour
+ * 1 000 € pour les plus. L'application, elle, ne connaît qu'une échelle : la
+ * quantité PAR TRANCHE DE 1 000 €. Les valeurs de la mise en place sont donc
+ * divisées par deux à l'import, sans quoi toutes les cibles doubleraient.
+ *
  * ⚠️ La colonne « conso/1000 » du Sheet est IGNORÉE volontairement : elle
  * vaut la base divisée par deux et fausserait le calcul du minimum. Le script
  * le signale si elle est présente dans le fichier.
@@ -118,6 +123,9 @@ async function main(): Promise<void> {
 
     const family = parseFamily(familyHeader ? row[familyHeader] : undefined);
     const unit = parseUnit(unitHeader ? row[unitHeader] : undefined, family);
+    // Mise à l'échelle « par tranche de 1 000 € » (voir l'en-tête du fichier).
+    const basePour1000 =
+      family === 'mise_en_place' ? Math.round((baseQty / 2) * 1000) / 1000 : baseQty;
     const categoryName = categoryHeader ? row[categoryHeader] : undefined;
     const category = categoryName
       ? categoryByName.get(normalizeName(categoryName))
@@ -125,7 +133,7 @@ async function main(): Promise<void> {
 
     const payload = {
       name,
-      base_qty: baseQty,
+      base_qty: basePour1000,
       family,
       unit,
       shelf_life_label: dlcHeader ? (row[dlcHeader]?.trim() || null) : null,

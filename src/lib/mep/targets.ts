@@ -1,28 +1,27 @@
 /**
  * Cible du jour et minimum de relance.
  *
- * Une seule donnée pilote un produit : sa `base_qty`, reprise de la colonne
- * « VENTE POUR » du Google Sheet. Tout le reste en découle.
+ * Une seule donnée pilote un produit : sa `base_qty`, la quantité à avoir
+ * par tranche de 1 000 € de chiffre d'affaires. Tout le reste en découle.
  */
 
-import { familySettings } from './families';
+import { TRANCHE_CA } from './families';
 import { ceilTo, clamp, PRODUCTION_STEP } from './rounding';
 import { DEFAULT_CRIT_DIVISOR, type ProductCalcConfig, type ProductTarget } from './types';
 
 /**
  * Cible du jour :
  *
- *   cible = base_qty × target_multiplier × (CA_ref / reference_revenue)
+ *   cible = base_qty × (CA_ref / 1000)
  *   cible = clamp(cible, floor_qty, ceiling_qty)
  *   cible = PLAFOND(cible)
  *
- * Saumon, base 4,6, mise en place, CA 4 000 € :
- *   4,6 × 2 × (4 000 / 4 000) = 9,2  ->  10
+ * La base est une quantité PAR TRANCHE DE 1 000 €, la même échelle pour
+ * tous les produits. Pudding chia, base 4, CA 1 500 € :
+ *   4 × (1 500 / 1 000) = 6  ->  6
  */
 export function computeTarget(product: ProductCalcConfig, caRef: number): number {
-  const { referenceRevenue, targetMultiplier } = familySettings(product.family);
-
-  const raw = product.baseQty * targetMultiplier * (caRef / referenceRevenue);
+  const raw = product.baseQty * (caRef / TRANCHE_CA);
   const bounded = clamp(Math.max(raw, 0), product.floorQty, product.ceilingQty);
 
   return ceilTo(Math.max(bounded, 0), PRODUCTION_STEP);

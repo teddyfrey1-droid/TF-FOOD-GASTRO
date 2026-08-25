@@ -12,7 +12,7 @@ Projet Supabase **`mep-heiko`**, région Paris.
 | | |
 |---|---|
 | Schéma | appliqué, sécurités comprises |
-| Produits | 39, avec leurs valeurs « VENTE POUR » |
+| Produits | 39, avec leurs bases par tranche de 1 000 € |
 | Historique de CA | 691 journées, du 9 sept. 2024 au 31 juil. 2026, en **HT** |
 | Réalisé | les 365 derniers jours, pour le calibrage de croissance |
 | Taux de croissance | réglé à **+28 %** (voir §4) |
@@ -95,7 +95,7 @@ Dans **Gestion → Produits** :
 
 Dans **Gestion → Simulateur** : saisir un chiffre d'affaires typique et vérifier
 que les cibles correspondent à ce que vous produisez réellement. C'est le moment
-de rattraper une valeur « VENTE POUR » qui ne colle pas.
+de rattraper une base qui ne colle pas.
 
 ---
 

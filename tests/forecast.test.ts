@@ -118,7 +118,7 @@ describe('scénario du restaurant — anticiper la production sur le CA estimé'
     name: 'Saumon',
     family: 'mise_en_place' as const,
     unit: 'gastro' as const,
-    baseQty: 4.6,
+    baseQty: 2.3,
     countStep: 0.5,
     minMode: 'auto' as const,
     minDivisor: 2,

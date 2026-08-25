@@ -62,12 +62,6 @@ export async function getCategories(): Promise<Tables<'product_categories'>[]> {
   return data ?? [];
 }
 
-export async function getFamilySettings(): Promise<Tables<'product_family_settings'>[]> {
-  const supabase = await createClient();
-  const { data } = await supabase.from('product_family_settings').select('*').order('family');
-  return data ?? [];
-}
-
 /** CA prévisionnel d'un jour, calculé côté base (§5.1). */
 export async function getForecastRevenue(date: string): Promise<number | null> {
   const supabase = await createClient();

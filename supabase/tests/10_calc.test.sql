@@ -163,15 +163,15 @@ end
 $$;
 
 -- ---------------------------------------------------------------------
--- Cible et minimum — modèle « base_qty »
+-- Cible et minimum — modèle « base par tranche de 1 000 € »
 --
---   cible   = base × multiplicateur × (CA_ref / référence), PLAFOND à l'entier
+--   cible   = base × (CA_ref / 1000), PLAFOND à l'entier
 --   minimum = cible / diviseur, PLAFOND au pas de comptage, borné par la cible
 -- ---------------------------------------------------------------------
 
 -- CA de référence calé à 4 000 € pour rejouer le tableau de vérification.
--- La marge de sécurité est à 0 : le multiplicateur de famille (x2) porte
--- déjà la sécurité.
+-- La marge de sécurité est à 0 : la sécurité est déjà portée par les bases
+-- de la mise en place, qui couvrent deux services.
 update public.revenue_settings
 set growth_rate = 0, safety_margin = 0, afternoon_target_ratio = 1.0, default_min_divisor = 2;
 
@@ -186,7 +186,7 @@ select pg_temp.check_equal(
 );
 
 select pg_temp.check_equal(
-  'Saumon (base 4,6) @ 4 000 € -> 9,2 -> cible 10',
+  'Saumon (base 2,3) @ 4 000 € -> 9,2 -> cible 10',
   (select target from public.mep_targets_internal(current_date, 'morning') where product_name = 'Saumon'),
   10::numeric
 );
@@ -198,7 +198,7 @@ select pg_temp.check_equal(
 );
 
 select pg_temp.check_equal(
-  'Thon (base 0,4) @ 4 000 € -> 0,8 -> cible 1',
+  'Thon (base 0,2) @ 4 000 € -> 0,8 -> cible 1',
   (select target from public.mep_targets_internal(current_date, 'morning') where product_name = 'Thon'),
   1::numeric
 );
@@ -223,7 +223,7 @@ select pg_temp.check_equal(
 );
 
 select pg_temp.check_equal(
-  'Gyoza Poulet (base 4,8, les_plus) @ 5 000 € -> cible 24',
+  'Gyoza Poulet (base 4,8) @ 5 000 € -> cible 24',
   (select target from public.mep_targets_internal(current_date + 1, 'morning') where product_name = 'Gyoza Poulet'),
   24::numeric
 );
@@ -233,6 +233,52 @@ select pg_temp.check_equal(
   (select minimum from public.mep_targets_internal(current_date + 1, 'morning') where product_name = 'Gyoza Poulet'),
   12::numeric
 );
+
+-- ---------------------------------------------------------------------
+-- La tranche de 1 000 €, telle qu'elle a été demandée
+--
+-- « 4 puddings par tranche de 1 000 €, donc 6 puddings à 1 500 € ». C'est
+-- l'exemple qui définit le modèle : s'il tombe, plus rien ne veut dire ce
+-- que l'écran Produits annonce.
+--
+-- Le second contrôle est le garde-fou de la migration : la famille ne doit
+-- plus peser sur la cible. Deux produits de familles différentes avec la
+-- même base doivent sortir la même cible — c'était faux avant, la mise en
+-- place étant exprimée pour 2 000 € et les plus pour 1 000 €.
+-- ---------------------------------------------------------------------
+do $$
+declare
+  v_cat_mep  uuid;
+  v_cat_plus uuid;
+begin
+  insert into public.revenue_history (date, revenue_ht, is_closed_day)
+  values (public.mep_reference_date(current_date + 2), 1500, false)
+  on conflict (date) do update set revenue_ht = 1500, is_closed_day = false;
+
+  select id into v_cat_mep  from public.product_categories where name = 'Protéines';
+  select id into v_cat_plus from public.product_categories where name = 'Desserts';
+
+  insert into public.products (name, category_id, family, unit, base_qty, count_step,
+                               min_mode, min_divisor, priority, in_saladbar, in_fridge)
+  values
+    ('ZZ Pudding tranche', v_cat_plus, 'les_plus',      'piece',  4, 1, 'auto', 2, 3, true, false),
+    ('ZZ Témoin mep',      v_cat_mep,  'mise_en_place', 'gastro', 4, 1, 'auto', 2, 3, true, true);
+
+  perform pg_temp.check_equal(
+    '4 par tranche de 1 000 € @ 1 500 € -> cible 6',
+    (select target from public.mep_targets_internal(current_date + 2, 'morning')
+     where product_name = 'ZZ Pudding tranche'),
+    6::numeric);
+
+  perform pg_temp.check_equal(
+    'La famille n''entre plus dans le calcul : même base, même cible',
+    (select target from public.mep_targets_internal(current_date + 2, 'morning')
+     where product_name = 'ZZ Témoin mep'),
+    6::numeric);
+
+  delete from public.products where name in ('ZZ Pudding tranche', 'ZZ Témoin mep');
+end
+$$;
 
 -- Toutes les cibles tombent sur des entiers, et aucun minimum ne dépasse sa cible.
 do $$
@@ -421,7 +467,7 @@ begin
   from public.count_lines where session_id = v_session and product_id = v_saumon;
 
   -- On change la base APRÈS la validation.
-  update public.products set base_qty = 9.2 where id = v_saumon;
+  update public.products set base_qty = 4.6 where id = v_saumon;
 
   perform pg_temp.check_equal(
     'Modifier la base ne réécrit pas l''historique',
@@ -432,9 +478,9 @@ begin
   perform pg_temp.check_equal(
     'Modifier la base change la cible du jour même',
     (select target from public.mep_targets_internal(current_date, 'morning') where product_name = 'Saumon'),
-    19::numeric);  -- 9,2 x 2 x 1 = 18,4 -> 19
+    19::numeric);  -- 4,6 x (4 000 / 1 000) = 18,4 -> 19
 
-  update public.products set base_qty = 4.6 where id = v_saumon;
+  update public.products set base_qty = 2.3 where id = v_saumon;
 end
 $$;
 

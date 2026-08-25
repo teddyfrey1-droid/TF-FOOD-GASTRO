@@ -8,7 +8,7 @@
 
 | Sujet | Décision |
 |---|---|
-| Modèle de cible | `base_qty` (« VENTE POUR ») × multiplicateur × (CA / référence) |
+| Modèle de cible | `base_qty` × (CA / 1 000) — la base est une quantité par tranche de 1 000 € |
 | `conso/1000` | **ignorée** — c'est la base divisée par deux, elle fausse le minimum |
 | Arrondis | à l'**entier supérieur** pour tout ce qui est visé ou produit ; demis au comptage seulement |
 | Minimum | `auto` (cible / 2 par défaut) ou `manual`, réglable par produit |

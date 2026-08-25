@@ -73,7 +73,7 @@ export default async function RupturesPage({
         </h1>
         <p className="text-muted-foreground mt-1.5 text-sm">
           Combien de fois chaque produit est passé sous son seuil critique. C&apos;est la seule
-          façon de savoir si une base « VENTE POUR » est juste : trois semaines de mesures valent
+          façon de savoir si une base est juste : trois semaines de mesures valent
           mieux qu&apos;une impression. Les propositions se comparent au réglage actuel — rien
           n&apos;est appliqué sans votre appui.
         </p>

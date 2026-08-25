@@ -14,7 +14,7 @@
  * changer À CHAQUE publication, et écrire la ligne du journal au passage —
  * un numéro qui n'avance pas ne dit plus rien.
  */
-export const VERSION = '3.4.0';
+export const VERSION = '4.0.0';
 
 export interface EntreeJournal {
   version: string;
@@ -31,6 +31,16 @@ export interface EntreeJournal {
  * ce qui change à l'écran, jamais de code.
  */
 export const JOURNAL: EntreeJournal[] = [
+  {
+    version: '4.0.0',
+    date: '2026-08-25',
+    points: [
+      'La base d’un produit se lit désormais PAR TRANCHE DE 1 000 € : 4 puddings par tranche, donc 6 à 1 500 €.',
+      'Une seule échelle pour tous les produits — la famille n’entre plus dans le calcul.',
+      'Toutes les bases ont été converties : les cibles du jour ne bougent pas.',
+      'Le Riz et le Pudding chia, saisis sur l’ancien libellé, ont été remis à l’endroit.',
+    ],
+  },
   {
     version: '3.4.0',
     date: '2026-08-25',

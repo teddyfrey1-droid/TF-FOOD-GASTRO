@@ -9,7 +9,7 @@ function product(overrides: Partial<ProductCalcConfig> = {}): ProductCalcConfig 
     name: 'Saumon',
     family: 'mise_en_place',
     unit: 'gastro',
-    baseQty: 4.6,
+    baseQty: 2.3,
     countStep: 1,
     minMode: 'auto',
     minDivisor: DEFAULT_MIN_DIVISOR,
@@ -25,7 +25,7 @@ function product(overrides: Partial<ProductCalcConfig> = {}): ProductCalcConfig 
 }
 
 const SAUMON = product();
-const THON = product({ id: 'thon', name: 'Thon', baseQty: 0.4 });
+const THON = product({ id: 'thon', name: 'Thon', baseQty: 0.2 });
 const GYOZA = product({
   id: 'gyoza',
   name: 'Gyoza Poulet',
@@ -34,8 +34,19 @@ const GYOZA = product({
   baseQty: 4.8,
 });
 
-describe('cible — base × multiplicateur × (CA / référence)', () => {
-  it('Saumon, base 4,6, CA 4 000 € -> 9,2 -> cible 10', () => {
+describe('cible — base par tranche de 1 000 €', () => {
+  it('4 puddings par tranche, CA 1 500 € -> 6 puddings', () => {
+    // L'exemple qui fixe le modèle : 1 500 / 1 000 × 4 = 6, pile.
+    const pudding = product({ name: 'Pudding', family: 'les_plus', unit: 'piece', baseQty: 4 });
+    expect(computeTarget(pudding, 1500)).toBe(6);
+  });
+
+  it('la famille n’entre plus dans le calcul : même base, même cible', () => {
+    expect(computeTarget(product({ baseQty: 3, family: 'mise_en_place' }), 2000)).toBe(6);
+    expect(computeTarget(product({ baseQty: 3, family: 'les_plus' }), 2000)).toBe(6);
+  });
+
+  it('Saumon, base 2,3, CA 4 000 € -> 9,2 -> cible 10', () => {
     expect(computeTarget(SAUMON, 4000)).toBe(10);
   });
 
@@ -43,12 +54,12 @@ describe('cible — base × multiplicateur × (CA / référence)', () => {
     expect(computeTarget(SAUMON, 5000)).toBe(12);
   });
 
-  it('Gyoza Poulet, base 4,8, les_plus, CA 5 000 € -> 24 -> cible 24', () => {
-    // 4,8 × 1 × (5 000 / 1 000) = 24 pile : une valeur entière ne remonte pas.
+  it('Gyoza Poulet, base 4,8, CA 5 000 € -> 24 -> cible 24', () => {
+    // 4,8 × (5 000 / 1 000) = 24 pile : une valeur entière ne remonte pas.
     expect(computeTarget(GYOZA, 5000)).toBe(24);
   });
 
-  it('Thon, base 0,4, CA 4 000 € -> 0,8 -> cible 1', () => {
+  it('Thon, base 0,2, CA 4 000 € -> 0,8 -> cible 1', () => {
     expect(computeTarget(THON, 4000)).toBe(1);
   });
 
@@ -56,8 +67,8 @@ describe('cible — base × multiplicateur × (CA / référence)', () => {
     // Le Google Sheet arrondit au plus proche (Bao 8,3 -> 8). L'app monte.
     const bao = product({ name: 'Bao', family: 'les_plus', unit: 'piece', baseQty: 1.7 });
     expect(computeTarget(bao, 4882)).toBe(9); // 8,3 -> 9
-    expect(computeTarget(product({ baseQty: 2 }), 4000)).toBe(4); // 4,0 reste 4
-    expect(computeTarget(product({ baseQty: 2.05 }), 4000)).toBe(5); // 4,1 -> 5
+    expect(computeTarget(product({ baseQty: 1 }), 4000)).toBe(4); // 4,0 reste 4
+    expect(computeTarget(product({ baseQty: 1.025 }), 4000)).toBe(5); // 4,1 -> 5
   });
 
   it('ne renvoie jamais de cible négative', () => {

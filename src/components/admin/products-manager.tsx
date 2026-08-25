@@ -8,6 +8,7 @@ import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { formatQty } from '@/lib/format';
+import { unitLabel } from '@/lib/mep';
 import { cn } from '@/lib/utils';
 import {
   setCategoryZones,
@@ -320,8 +321,8 @@ function CarteProduit({
 
       {/* 2. Combien en produire, et à partir de quand ?
 
-             La base « VENTE POUR » est le moteur : elle dit pour quel
-             chiffre d'affaires une gastro tient, et toute la cible en
+             La base est le moteur : elle dit combien il en faut par
+             tranche de 1 000 € de chiffre d'affaires, et toute la cible en
              découle. Elle vivait derrière « Modifier », deux écrans plus
              loin que les seuils qu'elle commande. */}
       <div className="mt-3">
@@ -660,12 +661,12 @@ function BoutonSupprimer({ product }: { product: ProductWithCategory }) {
 }
 
 /**
- * La base « VENTE POUR », modifiable sur place.
+ * La base du produit, modifiable sur place.
  *
- * C'est LE réglage du moteur : il dit pour quel chiffre d'affaires une
- * gastro (ou une pièce) tient une journée. La cible du jour en découle
- * entièrement — CA prévu ÷ base — et donc les seuils, et donc les
- * relances.
+ * C'est LE réglage du moteur : la quantité à avoir par tranche de 1 000 €
+ * de chiffre d'affaires. Quatre puddings par tranche, c'est six puddings à
+ * 1 500 €. La cible du jour en découle entièrement — CA prévu ÷ 1 000 ×
+ * base — et donc les seuils, et donc les relances.
  *
  * Une base à zéro donne une cible à zéro : le produit ne sera JAMAIS
  * relancé, quoi qu'on relève. C'est le trou le plus grave possible dans
@@ -706,12 +707,12 @@ function BaseProduit({ product }: { product: ProductWithCategory }) {
               manquante ? 'text-destructive' : 'text-primary',
             )}
           >
-            Une {product.unit === 'piece' ? 'pièce' : 'gastro'} tient pour
+            Par tranche de 1 000 €
           </span>
           <span className="text-muted-foreground mt-0.5 block text-[11px] leading-snug font-semibold">
             {manquante
               ? 'Sans cette valeur, la cible reste à zéro : jamais relancé.'
-              : 'de chiffre d’affaires. C’est ce qui fixe la cible du jour.'}
+              : 'à avoir en stock. C’est ce qui fixe la cible du jour.'}
           </span>
         </span>
 
@@ -721,7 +722,7 @@ function BaseProduit({ product }: { product: ProductWithCategory }) {
             inputMode="decimal"
             placeholder="—"
             disabled={pending}
-            aria-label={`Base « vente pour » de ${product.name}`}
+            aria-label={`Base de ${product.name}, par tranche de 1 000 €`}
             onFocus={(evenement) => evenement.target.select()}
             onChange={(evenement) => setDraft(evenement.target.value)}
             onBlur={enregistrer}
@@ -733,7 +734,9 @@ function BaseProduit({ product }: { product: ProductWithCategory }) {
               manquante && 'border-destructive/50',
             )}
           />
-          <span className="text-muted-foreground text-sm font-black">€</span>
+          <span className="text-muted-foreground text-[11px] font-black">
+            {unitLabel(product.unit, 2)}
+          </span>
         </span>
       </div>
 

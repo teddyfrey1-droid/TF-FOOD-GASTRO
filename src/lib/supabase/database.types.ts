@@ -41,7 +41,7 @@ type ProductRow = {
   category_id: string;
   family: ProductFamily;
   unit: ProductUnit;
-  /** Colonne « VENTE POUR » du Sheet : seule donnée qui pilote la cible. */
+  /** Quantité par tranche de 1 000 € de CA : seule donnée qui pilote la cible. */
   base_qty: number;
   count_step: number;
   production_step: number;
@@ -76,8 +76,6 @@ type ProductRow = {
 type ProductFamilySettingsRow = {
   family: ProductFamily;
   label: string;
-  reference_revenue: number;
-  target_multiplier: number;
   updated_at: string;
 };
 

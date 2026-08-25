@@ -63,8 +63,8 @@ export function ProductForm({
               {product ? `Modifier « ${product.name} »` : 'Nouveau produit'}
             </h2>
             <p className="text-muted-foreground mt-1 text-sm">
-              La valeur « VENTE POUR » et la famille pilotent la cible. Elles ne sont jamais
-              visibles d&apos;un employé.
+              La base — la quantité à avoir par tranche de 1 000 € de chiffre d&apos;affaires —
+              pilote la cible. Elle n&apos;est jamais visible d&apos;un employé.
             </p>
           </div>
           <Button type="button" variant="ghost" onClick={onClose}>
@@ -98,16 +98,17 @@ export function ProductForm({
           </div>
 
           <div className="space-y-2">
-            <Label htmlFor="base_qty">Valeur « VENTE POUR »</Label>
+            <Label htmlFor="base_qty">Base, par tranche de 1 000 €</Label>
             <Input
               id="base_qty"
               name="base_qty"
               inputMode="decimal"
               defaultValue={value(product?.base_qty)}
-              placeholder="4,6"
+              placeholder="2,3"
             />
             <p className="text-muted-foreground text-xs">
-              Reprise du Google Sheet. C&apos;est la seule donnée qui pilote la cible.
+              4 par tranche de 1 000 € donne 6 à 1 500 €. C&apos;est la seule donnée qui pilote la
+              cible.
             </p>
             <FieldError message={errors.base_qty} />
           </div>
